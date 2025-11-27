@@ -103,7 +103,7 @@ with st.sidebar:
 # 1. DASHBOARD
 if choice == "Dashboard":
     st.subheader("Tablero de Control")
-    df_ordenes = run_query("ordenes")
+    df_ordenes = run_query("órdenes")
     
     if not df_ordenes.empty:
         col1, col2, col3 = st.columns(3)
