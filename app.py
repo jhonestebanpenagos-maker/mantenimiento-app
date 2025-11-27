@@ -234,6 +234,14 @@ elif choice == "Gestión de Activos":
     st.markdown("### 📋 Listado General")
     st.dataframe(df_activos, use_container_width=True)
 
+st.markdown("---")
+    with st.expander("📂 Ver Historial de Eliminados (Auditoría)"):
+        df_audit = run_query("auditoria_eliminados")
+        if not df_audit.empty:
+            st.dataframe(df_audit[['fecha_eliminacion', 'nombre_referencia', 'datos_respaldo']], use_container_width=True)
+        else:
+            st.info("La bitácora de auditoría está vacía.")
+
 # 3. CREAR ORDEN (AQUÍ ESTÁ LA INTEGRACIÓN VISTOSA)
 elif choice == "Crear Orden":
     st.subheader("Reportar Falla")
