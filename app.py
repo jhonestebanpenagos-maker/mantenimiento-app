@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 from supabase import create_client, Client
 from datetime import datetime
+from streamlit_option_menu import option_menu
 import io
 
 # --- CONFIGURACIÓN ---
@@ -50,11 +51,24 @@ def subir_imagen(archivo):
             return None
     return None
 
-# --- INTERFAZ ---
-st.title("🛠️ Sistema CMMS (Supabase)")
+# --- INTERFAZ (MENÚ MODERNO) ---
+st.title("🛠️ Sistema CMMS (JEP)")
 
-menu = ["Dashboard", "Gestión de Activos", "Crear Orden", "Cierre de OTs"]
-choice = st.sidebar.selectbox("Menú", menu)
+# Menú lateral estático y colorido
+with st.sidebar:
+    choice = option_menu(
+        menu_title="Navegación",      # Título del menú
+        options=["Dashboard", "Gestión de Activos", "Crear Orden", "Cierre de OTs"], # Las opciones
+        icons=["speedometer2", "box-seam", "plus-circle", "check2-circle"], # Iconos de Bootstrap
+        menu_icon="cast",             # Icono del título
+        default_index=0,              # Opción seleccionada por defecto
+        styles={
+            "container": {"padding": "5!important", "background-color": "#262730"},
+            "icon": {"color": "orange", "font-size": "25px"}, 
+            "nav-link": {"font-size": "16px", "text-align": "left", "margin":"0px", "--hover-color": "#444"},
+            "nav-link-selected": {"background-color": "#02ab21"}, # Color verde al seleccionar
+        }
+    )
 
 # 1. DASHBOARD
 if choice == "Dashboard":
