@@ -175,13 +175,19 @@ elif choice == "Gestión de Activos":
 
             # Zona de Peligro (Eliminar) fuera del formulario para evitar conflictos
         
+            # Zona de Peligro (Eliminar) fuera del formulario
             st.markdown("---")
-            with st.expander("🗑️ Zona de Peligro (Eliminar Activo)"):
-                st.warning(f"Estás intentando eliminar: **{datos_actuales['nombre']}**")
+            with st.expander("🗑️ Zona de Peligro (Auditoría y Eliminación)"):
+                st.warning(f"Estás gestionando la baja de: **{datos_actuales['nombre']}**")
+                
+                motivo_baja = st.text_input("Motivo de la eliminación (Obligatorio para auditoría):", placeholder="Ej: Equipo vendido, Desechado por daño total...")
                 
                 col_a, col_b = st.columns([1, 4])
-                if col_a.button("Eliminar Definitivamente", type="primary"):
-                    # 1. VERIFICACIÓN DE SEGURIDAD: ¿Tiene órdenes ABIERTAS?
+                
+                # Botón desactivado si no hay motivo escrito
+                if col_a.button("Confirmar Baja del Activo", type="primary", disabled=(not motivo_baja)):
+                    
+                    # 1. VERIFICACIÓN: OTs ABIERTAS
                     ots_abiertas = supabase.table("ordenes")\
                         .select("*")\
                         .eq("activo_id", int(id_seleccionado))\
@@ -189,26 +195,40 @@ elif choice == "Gestión de Activos":
                         .execute()
                     
                     if len(ots_abiertas.data) > 0:
-                        # CASO 1: TIENE PENDIENTES -> NO BORRAMOS
-                        st.error(f"⛔ NO SE PUEDE ELIMINAR. Este equipo tiene {len(ots_abiertas.data)} Orden(es) de Trabajo ABIERTAS.")
-                        st.info("Primero debes cerrar o cancelar las órdenes pendientes antes de borrar el equipo.")
+                        st.error(f"⛔ NO SE PUEDE ELIMINAR. Tiene {len(ots_abiertas.data)} órdenes abiertas.")
                     
                     else:
-                        # CASO 2: SOLO TIENE HISTORIAL (CERRADAS) O ESTÁ NUEVO -> PROCEDEMOS
                         try:
-                            # Paso A: Borrar el historial de órdenes cerradas (Limpieza de hijos)
-                            # Si no hacemos esto, la base de datos bloqueará el borrado del activo
-                            supabase.table("ordenes").delete().eq("activo_id", int(id_seleccionado)).execute()
-                            
-                            # Paso B: Ahora sí, borrar el activo (El padre)
-                            supabase.table("activos").delete().eq("id", int(id_seleccionado)).execute()
-                            
-                            st.success("✅ Activo y su historial de mantenimientos han sido eliminados correctamente.")
-                            st.rerun()
-                            
+                            with st.spinner("Generando respaldo y eliminando..."):
+                                # --- PASO A: RESPALDO (AUDITORÍA) ---
+                                # Convertimos los datos del activo a un diccionario simple
+                                datos_backup = {
+                                    "id_original": int(id_seleccionado),
+                                    "nombre": datos_actuales['nombre'],
+                                    "ubicacion": datos_actuales['ubicacion'],
+                                    "categoria": datos_actuales['categoria'],
+                                    "motivo_baja": motivo_baja
+                                }
+                                
+                                # Insertamos en la tabla de auditoría
+                                supabase.table("auditoria_eliminados").insert({
+                                    "tipo_registro": "Activo",
+                                    "nombre_referencia": datos_actuales['nombre'],
+                                    "datos_respaldo": datos_backup
+                                }).execute()
+                                
+                                # --- PASO B: ELIMINACIÓN ---
+                                # 1. Borrar historial de órdenes (ya respaldadas indirectamente o podrías respaldarlas también)
+                                supabase.table("ordenes").delete().eq("activo_id", int(id_seleccionado)).execute()
+                                
+                                # 2. Borrar el activo
+                                supabase.table("activos").delete().eq("id", int(id_seleccionado)).execute()
+                                
+                                st.success("✅ Activo dado de baja. El registro ha quedado guardado en Auditoría.")
+                                st.rerun()
+                                
                         except Exception as e:
-                            st.error(f"Ocurrió un error inesperado: {e}")
-
+                            st.error(f"Error en el proceso: {e}")
     # Tabla general siempre visible abajo
     st.markdown("---")
     st.markdown("### 📋 Listado General")
