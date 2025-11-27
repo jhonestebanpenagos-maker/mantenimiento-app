@@ -1,156 +1,175 @@
 import streamlit as st
 import pandas as pd
-import sqlite3
+from supabase import create_client, Client
 from datetime import datetime
 import io
 
-# 1. Configuración y Conexión a Base de Datos
+# --- CONFIGURACIÓN ---
 st.set_page_config(page_title="Gestión de Mantenimiento", layout="wide")
 
-def init_db():
-    conn = sqlite3.connect('mantenimiento.db')
-    c = conn.cursor()
-    # Tabla Activos
-    c.execute('''CREATE TABLE IF NOT EXISTS activos
-                (id INTEGER PRIMARY KEY, nombre TEXT, ubicacion TEXT, categoria TEXT)''')
-    # Tabla Ordenes de Trabajo (OT)
-    c.execute('''CREATE TABLE IF NOT EXISTS ordenes
-                (id INTEGER PRIMARY KEY, activo_id INTEGER, descripcion TEXT, 
-                 criticidad TEXT, estado TEXT, fecha_creacion DATE, 
-                 comentarios_cierre TEXT, evidencia BLOB)''')
-    conn.commit()
-    conn.close()
+# Inicializar conexión a Supabase
+# Usamos st.cache_resource para no reconectar cada vez que algo cambia
+@st.cache_resource
+def init_supabase():
+    url = st.secrets["SUPABASE_URL"]
+    key = st.secrets["SUPABASE_KEY"]
+    return create_client(url, key)
 
-init_db()
+supabase = init_supabase()
 
-# Funciones Auxiliares
-def run_query(query, params=()):
-    conn = sqlite3.connect('mantenimiento.db')
-    c = conn.cursor()
-    c.execute(query, params)
-    if query.lower().startswith("select"):
-        data = c.fetchall()
-        conn.close()
-        return data
-    else:
-        conn.commit()
-        conn.close()
+# --- FUNCIONES AUXILIARES ---
 
-# --- INTERFAZ DE USUARIO ---
+def run_query(table_name):
+    """Trae todos los datos de una tabla"""
+    response = supabase.table(table_name).select("*").execute()
+    return pd.DataFrame(response.data)
 
-st.title("🛠️ Sistema de Gestión de Mantenimiento (CMMS)")
+def subir_imagen(archivo):
+    """Sube imagen al Bucket 'evidencias' y devuelve la URL pública"""
+    if archivo:
+        try:
+            # Crear nombre único: timestamp_nombrearchivo
+            file_name = f"{datetime.now().strftime('%Y%m%d%H%M%S')}_{archivo.name}"
+            bucket_name = "evidencias"
+            
+            # Leer el archivo en bytes
+            file_bytes = archivo.getvalue()
+            
+            # Subir a Supabase Storage
+            supabase.storage.from_(bucket_name).upload(
+                path=file_name,
+                file=file_bytes,
+                file_options={"content-type": archivo.type}
+            )
+            
+            # Obtener URL pública
+            public_url = supabase.storage.from_(bucket_name).get_public_url(file_name)
+            return public_url
+        except Exception as e:
+            st.error(f"Error subiendo imagen: {e}")
+            return None
+    return None
 
-menu = ["Dashboard", "Gestión de Activos", "Crear Orden de Trabajo", "Mis OTs (Cierre)"]
-choice = st.sidebar.selectbox("Menú Principal", menu)
+# --- INTERFAZ ---
+st.title("🛠️ Sistema CMMS (Supabase)")
 
-# --- 1. DASHBOARD INTERACTIVO ---
+menu = ["Dashboard", "Gestión de Activos", "Crear Orden", "Cierre de OTs"]
+choice = st.sidebar.selectbox("Menú", menu)
+
+# 1. DASHBOARD
 if choice == "Dashboard":
     st.subheader("Tablero de Control")
+    df_ordenes = run_query("ordenes")
     
-    # Obtener datos
-    data_ots = run_query("SELECT criticidad, estado FROM ordenes")
-    if data_ots:
-        df = pd.DataFrame(data_ots, columns=['Criticidad', 'Estado'])
-        
+    if not df_ordenes.empty:
         col1, col2, col3 = st.columns(3)
-        col1.metric("Total OTs", len(df))
-        col2.metric("OTs Abiertas", len(df[df['Estado']=='Abierta']))
-        col3.metric("OTs Concluidas", len(df[df['Estado']=='Concluida']))
+        col1.metric("Total OTs", len(df_ordenes))
+        col2.metric("Abiertas", len(df_ordenes[df_ordenes['estado']=='Abierta']))
+        col3.metric("Concluidas", len(df_ordenes[df_ordenes['estado']=='Concluida']))
         
-        st.markdown("---")
-        
+        st.divider()
         c1, c2 = st.columns(2)
-        with c1:
-            st.write("### OTs por Estado")
-            st.bar_chart(df['Estado'].value_counts())
-            
-        with c2:
-            st.write("### Criticidad de Intervenciones")
-            st.bar_chart(df['Criticidad'].value_counts())
+        c1.bar_chart(df_ordenes['estado'].value_counts())
+        c2.bar_chart(df_ordenes['criticidad'].value_counts())
     else:
-        st.info("Aún no hay datos para mostrar en el Dashboard.")
+        st.info("Sin datos para mostrar.")
 
-    # La línea de imagen anterior ha sido eliminada.
-    # st.markdown("-> Gráficos de barras y KPIs se muestran arriba.")
-
-# --- 2. GESTIÓN DE ACTIVOS ---
+# 2. ACTIVOS
 elif choice == "Gestión de Activos":
-    st.subheader("Registrar Nuevo Activo")
-    nombre = st.text_input("Nombre del Equipo")
-    ubicacion = st.text_input("Ubicación")
-    categoria = st.selectbox("Categoría", ["Eléctrico", "Mecánico", "Infraestructura", "HVAC"])
+    st.subheader("Inventario de Equipos")
     
-    if st.button("Guardar Activo"):
-        run_query("INSERT INTO activos (nombre, ubicacion, categoria) VALUES (?,?,?)", 
-                  (nombre, ubicacion, categoria))
-        st.success(f"Activo **{nombre}** creado correctamente")
-
-    st.markdown("---")
-    st.write("### Inventario Actual")
-    activos = run_query("SELECT * FROM activos")
-    df_activos = pd.DataFrame(activos, columns=['ID', 'Nombre', 'Ubicación', 'Categoría'])
-    st.dataframe(df_activos)
-
-# --- 3. CREAR ORDEN DE TRABAJO ---
-elif choice == "Crear Orden de Trabajo":
-    st.subheader("Generar Nueva OT")
-    
-    activos = run_query("SELECT id, nombre FROM activos")
-    lista_activos = {f"{a[1]} (ID: {a[0]})": a[0] for a in activos}
-    
-    if lista_activos:
-        activo_selec = st.selectbox("Seleccionar Activo", list(lista_activos.keys()))
-        id_activo = lista_activos[activo_selec]
+    with st.form("form_activo"):
+        c1, c2 = st.columns(2)
+        nombre = c1.text_input("Nombre")
+        ubicacion = c2.text_input("Ubicación")
+        categoria = st.selectbox("Categoría", ["Mecánico", "Eléctrico", "Infraestructura"])
         
-        descripcion = st.text_area("Descripción de la Falla / Plan")
-        criticidad = st.select_slider("Criticidad", options=["Baja", "Media", "Alta", "Crítica"])
-        
-        if st.button("Generar OT"):
-            run_query("INSERT INTO ordenes (activo_id, descripcion, criticidad, estado, fecha_creacion) VALUES (?,?,?,?,?)",
-                      (id_activo, descripcion, criticidad, "Abierta", datetime.now()))
-            st.success("Orden de trabajo generada y notificada.")
-    else:
-        st.warning("Primero debes crear activos.")
-
-# --- 4. GESTIÓN DE OTs (Cierre y Soportes) ---
-elif choice == "Mis OTs (Cierre)":
-    st.subheader("Gestión y Cierre de Órdenes")
-    
-    # Filtro para ver solo abiertas
-    ver_todas = st.checkbox("Ver OTs Concluidas también")
-    query = "SELECT * FROM ordenes" if ver_todas else "SELECT * FROM ordenes WHERE estado != 'Concluida'"
-    ots = run_query(query)
-    
-    if ots:
-        df_ots = pd.DataFrame(ots, columns=['ID', 'Activo ID', 'Descripción', 'Criticidad', 'Estado', 'Fecha', 'Cierre', 'Evidencia'])
-        st.dataframe(df_ots[['ID', 'Descripción', 'Criticidad', 'Estado', 'Fecha']])
-        
-        # Uso de st.data_editor para seleccionar una fila
-        ot_ids = df_ots['ID'].tolist()
-        
-        # Asegurarse de que el input tenga un valor por defecto válido
-        default_ot_id = ot_ids[0] if ot_ids else 1
-        ot_id = st.number_input("ID de OT a gestionar", min_value=1, step=1, value=default_ot_id)
-
-        action = st.radio("Acción", ["Actualizar Estado", "Adjuntar Soporte y Cerrar"])
-        
-        if action == "Actualizar Estado":
-            nuevo_estado = st.selectbox("Nuevo Estado", ["En Proceso", "En Espera de Repuestos"])
-            if st.button("Actualizar"):
-                run_query("UPDATE ordenes SET estado=? WHERE id=?", (nuevo_estado, ot_id))
-                st.success(f"OT **{ot_id}** actualizada a: **{nuevo_estado}**")
-                # st.rerun() # Descomentar si quieres que se recargue la lista automáticamente
-                
-        elif action == "Adjuntar Soporte y Cerrar":
-            comentario = st.text_area("Informe Técnico de Cierre")
-            archivo = st.file_uploader("Adjuntar Foto/PDF de soporte")
+        if st.form_submit_button("Guardar Activo"):
+            datos = {"nombre": nombre, "ubicacion": ubicacion, "categoria": categoria}
+            supabase.table("activos").insert(datos).execute()
+            st.success("Activo creado!")
+            st.rerun()
             
-            if st.button("Cerrar Orden"):
-                # Se lee el binario del archivo
-                blob_data = archivo.read() if archivo else None
-                run_query("UPDATE ordenes SET estado='Concluida', comentarios_cierre=?, evidencia=? WHERE id=?", 
-                          (comentario, blob_data, ot_id))
-                st.balloons()
-                st.success(f"OT **{ot_id}** Cerrada exitosamente. Verifique el Dashboard para las estadísticas actualizadas.")
+    st.dataframe(run_query("activos"))
+
+# 3. CREAR ORDEN
+elif choice == "Crear Orden":
+    st.subheader("Reportar Falla")
+    
+    df_activos = run_query("activos")
+    
+    if not df_activos.empty:
+        # Diccionario para el Selectbox: "Nombre (ID)" -> ID
+        activos_dict = {f"{row['nombre']} - {row['ubicacion']}": row['id'] for i, row in df_activos.iterrows()}
+        
+        seleccion = st.selectbox("Seleccionar Equipo", list(activos_dict.keys()))
+        activo_id = activos_dict[seleccion]
+        
+        descripcion = st.text_area("Descripción del problema")
+        criticidad = st.select_slider("Criticidad", ["Baja", "Media", "Alta", "Crítica"])
+        
+        if st.button("Crear Orden de Trabajo"):
+            datos = {
+                "activo_id": int(activo_id),
+                "descripcion": descripcion,
+                "criticidad": criticidad,
+                "estado": "Abierta",
+                "fecha_creacion": datetime.now().isoformat()
+            }
+            supabase.table("ordenes").insert(datos).execute()
+            st.success("Orden Generada Correctamente")
+            st.rerun()
     else:
-        st.info("No hay órdenes pendientes.")
+        st.warning("Crea activos primero.")
+
+# 4. CIERRE Y EVIDENCIAS
+elif choice == "Cierre de OTs":
+    st.subheader("Cierre Técnico y Evidencias")
+    
+    df_ots = run_query("ordenes")
+    
+    if not df_ots.empty:
+        # Filtros
+        pendientes = df_ots[df_ots['estado'] != 'Concluida']
+        
+        if not pendientes.empty:
+            st.write("### Órdenes Pendientes")
+            # Mostramos tabla resumida
+            st.dataframe(pendientes[['id', 'descripcion', 'criticidad', 'fecha_creacion']])
+            
+            ot_id = st.selectbox("Selecciona ID para cerrar", pendientes['id'].values)
+            
+            st.markdown("---")
+            st.write(f"Gestionando OT ID: **{ot_id}**")
+            
+            with st.form("form_cierre"):
+                comentarios = st.text_area("Informe de Reparación")
+                archivo = st.file_uploader("Foto de Evidencia (Antes/Después)", type=['jpg', 'png', 'jpeg'])
+                
+                if st.form_submit_button("Cerrar Orden"):
+                    with st.spinner("Subiendo evidencia..."):
+                        url_imagen = subir_imagen(archivo)
+                        
+                        update_data = {
+                            "estado": "Concluida",
+                            "comentarios_cierre": comentarios,
+                            "evidencia_url": url_imagen if url_imagen else "Sin evidencia"
+                        }
+                        
+                        supabase.table("ordenes").update(update_data).eq("id", int(ot_id)).execute()
+                        st.balloons()
+                        st.success("OT Cerrada y Guardada en la Nube")
+                        st.rerun()
+        else:
+            st.info("¡Todo al día! No hay órdenes abiertas.")
+            
+        # Opcional: Ver historial de evidencias
+        if st.checkbox("Ver Historial de Evidencias"):
+            concluidas = df_ots[df_ots['estado'] == 'Concluida']
+            for i, row in concluidas.iterrows():
+                with st.expander(f"OT #{row['id']} - {row['descripcion']}"):
+                    st.write(f"**Cierre:** {row['comentarios_cierre']}")
+                    if row['evidencia_url'] and row['evidencia_url'] != "Sin evidencia":
+                        st.image(row['evidencia_url'], caption="Evidencia", width=300)
+    else:
+        st.info("No hay órdenes en el sistema.")
