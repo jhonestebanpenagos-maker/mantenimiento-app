@@ -9,14 +9,17 @@ import io
 st.set_page_config(page_title="Gestión de Mantenimiento", layout="wide")
 
 # Inicializar conexión a Supabase
-# Usamos st.cache_resource para no reconectar cada vez que algo cambia
 @st.cache_resource
 def init_supabase():
     url = st.secrets["SUPABASE_URL"]
     key = st.secrets["SUPABASE_KEY"]
     return create_client(url, key)
 
-supabase = init_supabase()
+try:
+    supabase = init_supabase()
+except Exception as e:
+    st.error("Error conectando a Supabase. Revisa los Secrets.")
+    st.stop()
 
 # --- FUNCIONES AUXILIARES ---
 
@@ -26,7 +29,6 @@ def run_query(table_name):
         response = supabase.table(table_name).select("*").execute()
         return pd.DataFrame(response.data)
     except Exception as e:
-        # AQUÍ ESTÁ EL TRUCO: Mostramos el error en la pantalla si algo falla
         st.error(f"⚠️ Error crítico consultando la tabla '{table_name}'")
         st.code(str(e)) 
         st.stop()
@@ -36,23 +38,16 @@ def subir_imagen(archivo):
     """Sube imagen al Bucket 'evidencias' y devuelve la URL pública"""
     if archivo:
         try:
-            # Crear nombre único: timestamp_nombrearchivo
             file_name = f"{datetime.now().strftime('%Y%m%d%H%M%S')}_{archivo.name}"
             bucket_name = "evidencias"
-            
-            # Leer el archivo en bytes
             file_bytes = archivo.getvalue()
             
-            # Subir a Supabase Storage
             supabase.storage.from_(bucket_name).upload(
                 path=file_name,
                 file=file_bytes,
                 file_options={"content-type": archivo.type}
             )
-            
-            # Obtener URL pública
-            public_url = supabase.storage.from_(bucket_name).get_public_url(file_name)
-            return public_url
+            return supabase.storage.from_(bucket_name).get_public_url(file_name)
         except Exception as e:
             st.error(f"Error subiendo imagen: {e}")
             return None
@@ -69,13 +64,9 @@ with st.sidebar:
         menu_icon="cast",
         default_index=0,
         styles={
-            # 1. ESTILO DEL TÍTULO
             "menu-title": {"color": "white", "font-weight": "bold", "font-size": "20px"},
-            # 2. Fondo del contenedor
             "container": {"padding": "5!important", "background-color": "#262730"},
-            # 3. Iconos
             "icon": {"color": "#ff8c00", "font-size": "25px"},
-            # 4. Letra de las opciones
             "nav-link": {
                 "font-size": "16px",
                 "text-align": "left",
@@ -83,7 +74,6 @@ with st.sidebar:
                 "--hover-color": "#444",
                 "color": "white"
             },
-            # 5. Opción seleccionada
             "nav-link-selected": {"background-color": "#02ab21"},
         }
     )
@@ -93,8 +83,6 @@ with st.sidebar:
 # 1. DASHBOARD
 if choice == "Dashboard":
     st.subheader("Tablero de Control")
-    
-    # CORRECCIÓN AQUÍ: "ordenes" sin tilde
     df_ordenes = run_query("ordenes") 
     
     if not df_ordenes.empty:
@@ -105,11 +93,9 @@ if choice == "Dashboard":
         
         st.divider()
         c1, c2 = st.columns(2)
-        
         with c1:
             st.write("### Estado de Órdenes")
             st.bar_chart(df_ordenes['estado'].value_counts())
-        
         with c2:
             st.write("### Criticidad")
             st.bar_chart(df_ordenes['criticidad'].value_counts())
@@ -127,21 +113,23 @@ elif choice == "Gestión de Activos":
         categoria = st.selectbox("Categoría", ["Mecánico", "Eléctrico", "Infraestructura", "HVAC"])
         
         if st.form_submit_button("Guardar Activo"):
-            datos = {"nombre": nombre, "ubicacion": ubicacion, "categoria": categoria}
-            supabase.table("activos").insert(datos).execute()
-            st.success("Activo creado!")
-            st.rerun()
+            try:
+                datos = {"nombre": nombre, "ubicacion": ubicacion, "categoria": categoria}
+                supabase.table("activos").insert(datos).execute()
+                st.success("Activo creado!")
+                st.rerun()
+            except Exception as e:
+                st.error(f"Error al guardar activo: {e}")
             
-    st.dataframe(run_query("activos"))
+    st.dataframe(run_query("activos"), use_container_width=True)
 
-# 3. CREAR ORDEN
+# 3. CREAR ORDEN (AQUÍ ESTÁ LA INTEGRACIÓN VISTOSA)
 elif choice == "Crear Orden":
     st.subheader("Reportar Falla")
     
     df_activos = run_query("activos")
     
     if not df_activos.empty:
-        # Diccionario para el Selectbox: "Nombre (ID)" -> ID
         activos_dict = {f"{row['nombre']} - {row['ubicacion']}": row['id'] for i, row in df_activos.iterrows()}
         
         seleccion = st.selectbox("Seleccionar Equipo", list(activos_dict.keys()))
@@ -161,26 +149,51 @@ elif choice == "Crear Orden":
                     "fecha_creacion": datetime.now().isoformat()
                 }
                 
-                # Intentamos guardar
-                supabase.table("ordenes").insert(datos).execute()
+                # Intentamos guardar y CAPTURAMOS la respuesta en la variable 'response'
+                response = supabase.table("ordenes").insert(datos).execute()
                 
-                st.success("Orden Generada Correctamente")
-                st.rerun()
+                # Verificamos si Supabase nos devolvió los datos creados
+                if response.data:
+                    # Obtenemos el ID de la nueva orden (está en la primera posición de la lista)
+                    new_id = response.data[0]['id']
+                    
+                    # --- INICIO DEL CUADRO VISTOSO ---
+                    st.balloons() # Lluvia de globos
+                    
+                    st.markdown(f"""
+                        <div style="
+                            background-color: #d4edda; 
+                            color: #155724; 
+                            padding: 20px; 
+                            border-radius: 10px; 
+                            border: 2px solid #c3e6cb; 
+                            text-align: center; 
+                            margin-top: 10px;
+                            box-shadow: 2px 2px 10px rgba(0,0,0,0.1);">
+                            <h2 style="margin:0;">✅ Orden Generada Exitosamente</h2>
+                            <hr style="border-top: 1px solid #155724; margin: 10px 0;">
+                            <p style="font-size: 18px;">Número de Control:</p>
+                            <h1 style="font-size: 60px; margin: 0; font-weight: bold;">OT #{new_id}</h1>
+                            <p style="font-size: 14px; font-style: italic; margin-top: 10px;">
+                                El equipo ha sido notificado y la orden está en estado 'Abierta'.
+                            </p>
+                        </div>
+                    """, unsafe_allow_html=True)
+                    # --- FIN DEL CUADRO VISTOSO ---
+                    
+                else:
+                    st.warning("La orden se guardó, pero no se pudo recuperar el número de ID.")
                 
             except Exception as e:
-                # AQUÍ CAPTURAMOS EL ERROR REAL
+                # Manejo de errores detallado
                 st.error("⚠️ Error al guardar la orden:")
-                # Mostramos los detalles técnicos del error
                 if hasattr(e, 'message'):
                     st.write(f"Mensaje: {e.message}")
                 if hasattr(e, 'details'):
                     st.write(f"Detalles: {e.details}")
-                if hasattr(e, 'hint'):
-                    st.write(f"Pista: {e.hint}")
-                # Mostramos el error crudo por si acaso
                 st.code(str(e))
     else:
-        st.warning("Crea activos primero.")
+        st.warning("Primero debes crear activos en la sección 'Gestión de Activos'.")
 
 # 4. CIERRE Y EVIDENCIAS
 elif choice == "Cierre de OTs":
@@ -189,12 +202,11 @@ elif choice == "Cierre de OTs":
     df_ots = run_query("ordenes")
     
     if not df_ots.empty:
-        # Filtros
         pendientes = df_ots[df_ots['estado'] != 'Concluida']
         
         if not pendientes.empty:
             st.write("### Órdenes Pendientes")
-            st.dataframe(pendientes[['id', 'descripcion', 'criticidad', 'fecha_creacion']])
+            st.dataframe(pendientes[['id', 'descripcion', 'criticidad', 'fecha_creacion']], use_container_width=True)
             
             ot_id = st.selectbox("Selecciona ID para cerrar", pendientes['id'].values)
             
@@ -222,7 +234,6 @@ elif choice == "Cierre de OTs":
         else:
             st.info("¡Todo al día! No hay órdenes abiertas.")
             
-        # Opcional: Ver historial de evidencias
         if st.checkbox("Ver Historial de Evidencias"):
             concluidas = df_ots[df_ots['estado'] == 'Concluida']
             for i, row in concluidas.iterrows():
