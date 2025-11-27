@@ -21,9 +21,25 @@ supabase = init_supabase()
 # --- FUNCIONES AUXILIARES ---
 
 def run_query(table_name):
-    """Trae todos los datos de una tabla"""
-    response = supabase.table(table_name).select("*").execute()
-    return pd.DataFrame(response.data)
+    """Trae todos los datos de una tabla con manejo de errores"""
+    try:
+        response = supabase.table(table_name).select("*").execute()
+        return pd.DataFrame(response.data)
+    except Exception as e:
+        # AQUÍ ESTÁ EL TRUCO: Mostramos el error en la pantalla
+        st.error(f"⚠️ Error crítico consultando la tabla '{table_name}'")
+        st.code(str(e)) # Muestra el mensaje técnico
+        
+        # Si el error tiene detalles adicionales, los mostramos
+        if hasattr(e, 'message'):
+            st.write(f"Mensaje: {e.message}")
+        if hasattr(e, 'code'):
+            st.write(f"Código: {e.code}")
+        if hasattr(e, 'details'):
+            st.write(f"Detalles: {e.details}")
+            
+        st.stop() # Detenemos la app para que leas el error
+        return pd.DataFrame()
 
 def subir_imagen(archivo):
     """Sube imagen al Bucket 'evidencias' y devuelve la URL pública"""
