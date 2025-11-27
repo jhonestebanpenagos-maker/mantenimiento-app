@@ -151,18 +151,36 @@ elif choice == "Crear Orden":
         criticidad = st.select_slider("Criticidad", ["Baja", "Media", "Alta", "Crítica"])
         
         if st.button("Crear Orden de Trabajo"):
-            datos = {
-                "activo_id": int(activo_id),
-                "descripcion": descripcion,
-                "criticidad": criticidad,
-                "estado": "Abierta",
-                "fecha_creacion": datetime.now().isoformat()
-            }
-            supabase.table("ordenes").insert(datos).execute()
-            st.success("Orden Generada Correctamente")
-            st.rerun()
+            try:
+                # Preparamos los datos
+                datos = {
+                    "activo_id": int(activo_id),
+                    "descripcion": descripcion,
+                    "criticidad": criticidad,
+                    "estado": "Abierta",
+                    "fecha_creacion": datetime.now().isoformat()
+                }
+                
+                # Intentamos guardar
+                supabase.table("ordenes").insert(datos).execute()
+                
+                st.success("Orden Generada Correctamente")
+                st.rerun()
+                
+            except Exception as e:
+                # AQUÍ CAPTURAMOS EL ERROR REAL
+                st.error("⚠️ Error al guardar la orden:")
+                # Mostramos los detalles técnicos del error
+                if hasattr(e, 'message'):
+                    st.write(f"Mensaje: {e.message}")
+                if hasattr(e, 'details'):
+                    st.write(f"Detalles: {e.details}")
+                if hasattr(e, 'hint'):
+                    st.write(f"Pista: {e.hint}")
+                # Mostramos el error crudo por si acaso
+                st.code(str(e))
     else:
-        st.warning("Primero debes crear activos en el menú 'Gestión de Activos'.")
+        st.warning("Crea activos primero.")
 
 # 4. CIERRE Y EVIDENCIAS
 elif choice == "Cierre de OTs":
