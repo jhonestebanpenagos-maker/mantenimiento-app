@@ -54,19 +54,31 @@ def subir_imagen(archivo):
 # --- INTERFAZ (MENÚ MODERNO) ---
 st.title("🛠️ Sistema CMMS (Supabase)")
 
-# Menú lateral estático y colorido
 with st.sidebar:
     choice = option_menu(
-        menu_title="Navegación",      # Título del menú
-        options=["Dashboard", "Gestión de Activos", "Crear Orden", "Cierre de OTs"], # Las opciones
-        icons=["speedometer2", "box-seam", "plus-circle", "check2-circle"], # Iconos de Bootstrap
-        menu_icon="cast",             # Icono del título
-        default_index=0,              # Opción seleccionada por defecto
+        menu_title="Navegación",
+        options=["Dashboard", "Gestión de Activos", "Crear Orden", "Cierre de OTs"],
+        icons=["speedometer2", "box-seam", "plus-circle", "check2-circle"],
+        menu_icon="cast",
+        default_index=0,
         styles={
-            "container": {"padding": "5!important", "background-color": "#262730"},
-            "icon": {"color": "orange", "font-size": "25px"}, 
-            "nav-link": {"font-size": "16px", "text-align": "left", "margin":"0px", "--hover-color": "#444"},
-            "nav-link-selected": {"background-color": "#02ab21"}, # Color verde al seleccionar
+            # Fondo del contenedor (Gris oscuro)
+            "container": {"padding": "5!important", "background-color": "#262730"}, 
+            
+            # Iconos (Naranja brillante)
+            "icon": {"color": "#ff8c00", "font-size": "25px"}, 
+            
+            # Letra de las opciones (AQUÍ ESTÁ EL ARREGLO)
+            "nav-link": {
+                "font-size": "16px", 
+                "text-align": "left", 
+                "margin": "0px", 
+                "--hover-color": "#444",
+                "color": "white"  # <--- ESTO FUERZA QUE LA LETRA SEA BLANCA
+            },
+            
+            # Color de fondo cuando seleccionas una opción (Verde)
+            "nav-link-selected": {"background-color": "#02ab21"},
         }
     )
 
