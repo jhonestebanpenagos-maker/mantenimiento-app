@@ -26,19 +26,10 @@ def run_query(table_name):
         response = supabase.table(table_name).select("*").execute()
         return pd.DataFrame(response.data)
     except Exception as e:
-        # AQUÍ ESTÁ EL TRUCO: Mostramos el error en la pantalla
+        # AQUÍ ESTÁ EL TRUCO: Mostramos el error en la pantalla si algo falla
         st.error(f"⚠️ Error crítico consultando la tabla '{table_name}'")
-        st.code(str(e)) # Muestra el mensaje técnico
-        
-        # Si el error tiene detalles adicionales, los mostramos
-        if hasattr(e, 'message'):
-            st.write(f"Mensaje: {e.message}")
-        if hasattr(e, 'code'):
-            st.write(f"Código: {e.code}")
-        if hasattr(e, 'details'):
-            st.write(f"Detalles: {e.details}")
-            
-        st.stop() # Detenemos la app para que leas el error
+        st.code(str(e)) 
+        st.stop()
         return pd.DataFrame()
 
 def subir_imagen(archivo):
@@ -78,16 +69,13 @@ with st.sidebar:
         menu_icon="cast",
         default_index=0,
         styles={
-            # 1. ESTILO DEL TÍTULO ("Navegación") -> AHORA BLANCO Y EN NEGRILLA
+            # 1. ESTILO DEL TÍTULO
             "menu-title": {"color": "white", "font-weight": "bold", "font-size": "20px"},
-            
-            # 2. Fondo del contenedor (Gris oscuro)
+            # 2. Fondo del contenedor
             "container": {"padding": "5!important", "background-color": "#262730"},
-            
-            # 3. Iconos (Naranja brillante)
+            # 3. Iconos
             "icon": {"color": "#ff8c00", "font-size": "25px"},
-            
-            # 4. Letra de las opciones (Blanco)
+            # 4. Letra de las opciones
             "nav-link": {
                 "font-size": "16px",
                 "text-align": "left",
@@ -95,15 +83,19 @@ with st.sidebar:
                 "--hover-color": "#444",
                 "color": "white"
             },
-            
-            # 5. Opción seleccionada (Verde)
+            # 5. Opción seleccionada
             "nav-link-selected": {"background-color": "#02ab21"},
         }
     )
+
+# --- LÓGICA DE PANTALLAS ---
+
 # 1. DASHBOARD
 if choice == "Dashboard":
     st.subheader("Tablero de Control")
-    df_ordenes = run_query("órdenes")
+    
+    # CORRECCIÓN AQUÍ: "ordenes" sin tilde
+    df_ordenes = run_query("ordenes") 
     
     if not df_ordenes.empty:
         col1, col2, col3 = st.columns(3)
@@ -113,10 +105,16 @@ if choice == "Dashboard":
         
         st.divider()
         c1, c2 = st.columns(2)
-        c1.bar_chart(df_ordenes['estado'].value_counts())
-        c2.bar_chart(df_ordenes['criticidad'].value_counts())
+        
+        with c1:
+            st.write("### Estado de Órdenes")
+            st.bar_chart(df_ordenes['estado'].value_counts())
+        
+        with c2:
+            st.write("### Criticidad")
+            st.bar_chart(df_ordenes['criticidad'].value_counts())
     else:
-        st.info("Sin datos para mostrar.")
+        st.info("Aún no hay datos para mostrar en el Dashboard.")
 
 # 2. ACTIVOS
 elif choice == "Gestión de Activos":
@@ -126,7 +124,7 @@ elif choice == "Gestión de Activos":
         c1, c2 = st.columns(2)
         nombre = c1.text_input("Nombre")
         ubicacion = c2.text_input("Ubicación")
-        categoria = st.selectbox("Categoría", ["Mecánico", "Eléctrico", "Infraestructura"])
+        categoria = st.selectbox("Categoría", ["Mecánico", "Eléctrico", "Infraestructura", "HVAC"])
         
         if st.form_submit_button("Guardar Activo"):
             datos = {"nombre": nombre, "ubicacion": ubicacion, "categoria": categoria}
@@ -164,7 +162,7 @@ elif choice == "Crear Orden":
             st.success("Orden Generada Correctamente")
             st.rerun()
     else:
-        st.warning("Crea activos primero.")
+        st.warning("Primero debes crear activos en el menú 'Gestión de Activos'.")
 
 # 4. CIERRE Y EVIDENCIAS
 elif choice == "Cierre de OTs":
@@ -178,7 +176,6 @@ elif choice == "Cierre de OTs":
         
         if not pendientes.empty:
             st.write("### Órdenes Pendientes")
-            # Mostramos tabla resumida
             st.dataframe(pendientes[['id', 'descripcion', 'criticidad', 'fecha_creacion']])
             
             ot_id = st.selectbox("Selecciona ID para cerrar", pendientes['id'].values)
