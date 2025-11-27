@@ -99,7 +99,7 @@ if choice == "Dashboard":
     else:
         st.info("Aún no hay datos para mostrar.")
 
-# === B. GESTIÓN DE ACTIVOS ===
+# === B. GESTIÓN DE ACTIVOS (CON AUDITORÍA INTEGRADA) ===
 elif choice == "Gestión de Activos":
     st.subheader("Inventario de Equipos")
     
@@ -132,7 +132,6 @@ elif choice == "Gestión de Activos":
             seleccion = st.selectbox("Seleccionar Activo", list(activos_dict.keys()))
             id_seleccionado = activos_dict[seleccion]
             
-            # Datos actuales
             datos_actuales = df_activos[df_activos['id'] == id_seleccionado].iloc[0]
             
             st.markdown("---")
@@ -157,10 +156,13 @@ elif choice == "Gestión de Activos":
             st.markdown("---")
             with st.expander("🗑️ Zona de Peligro (Dar de Baja)"):
                 st.warning(f"Estás gestionando la baja de: **{datos_actuales['nombre']}**")
-                motivo = st.text_input("Motivo de la baja (Obligatorio):", placeholder="Ej: Equipo vendido, dañado, obsoleto...")
                 
-                if st.button("Confirmar Baja Definitiva", type="primary", disabled=(not motivo)):
-                    # Verificar si hay OTs abiertas
+                # --- NUEVOS CAMPOS DE TRAZABILIDAD ---
+                usuario_baja = st.text_input("👤 Persona Responsable de la Baja:")
+                motivo = st.text_area("Motivo de la baja (Obligatorio):", placeholder="Ej: Equipo vendido, dañado, obsoleto...")
+                
+                if st.button("Confirmar Baja Definitiva", type="primary", disabled=(not motivo or not usuario_baja)):
+                    # 1. Verificar si hay OTs abiertas
                     ots_abiertas = supabase.table("ordenes").select("*").eq("activo_id", int(id_seleccionado)).eq("estado", "Abierta").execute()
                     
                     if len(ots_abiertas.data) > 0:
@@ -174,12 +176,14 @@ elif choice == "Gestión de Activos":
                                     "nombre": datos_actuales['nombre'],
                                     "ubicacion": datos_actuales['ubicacion'],
                                     "categoria": datos_actuales['categoria'],
-                                    "motivo": motivo
+                                    "motivo_baja": motivo
                                 }
+                                
                                 supabase.table("auditoria_eliminados").insert({
                                     "tipo_registro": "Activo",
                                     "nombre_referencia": datos_actuales['nombre'],
-                                    "datos_respaldo": backup
+                                    "datos_respaldo": backup,
+                                    "usuario_responsable": usuario_baja # <--- NUEVO CAMPO AQUI
                                 }).execute()
                                 
                                 # B. Eliminar
@@ -193,17 +197,36 @@ elif choice == "Gestión de Activos":
         else:
             st.info("No hay activos para editar.")
 
-    # Tabla general y Auditoría (ESTA PARTE ESTABA MAL INDENTADA, YA LA ARREGLÉ)
+    # Tabla general y Auditoría
     st.markdown("---")
     st.markdown("### 📋 Inventario Activo")
     st.dataframe(df_activos, use_container_width=True)
     
+    # --- VISUALIZACIÓN ORDENADA DEL HISTORIAL ---
     with st.expander("📂 Ver Historial de Eliminados (Auditoría)"):
         df_audit = run_query("auditoria_eliminados")
+        
         if not df_audit.empty:
-            st.dataframe(df_audit, use_container_width=True)
+            st.markdown("#### Registros de Baja:")
+            # Iteramos sobre cada fila del historial
+            for i, row in df_audit.iterrows():
+                # Accedemos al diccionario guardado
+                datos = row['datos_respaldo']
+                
+                # Usamos un expander para cada registro borrado
+                with st.expander(f"❌ BAJA #{datos.get('id_original')} - {datos.get('nombre_referencia', 'Activo Desconocido')} ({row['fecha_eliminacion'][:10]})"):
+                    st.markdown(f"""
+                        - **Tipo de Registro:** `{row['tipo_registro']}`
+                        - **Responsable de Baja:** **`{row['usuario_responsable']}`**
+                        - **Motivo Detallado:** *{datos.get('motivo_baja')}*
+                        - **ID Original:** `{datos.get('id_original')}`
+                        - **Ubicación Original:** `{datos.get('ubicacion')}`
+                        - **Categoría:** `{datos.get('categoria')}`
+                        ---
+                        <small>Fecha de Eliminación: {row['fecha_eliminacion']}</small>
+                    """, unsafe_allow_html=True)
         else:
-            st.info("No hay registros eliminados aún.")
+            st.info("La bitácora de auditoría está vacía.")
 
 # === C. CREAR ORDEN ===
 elif choice == "Crear Orden":
