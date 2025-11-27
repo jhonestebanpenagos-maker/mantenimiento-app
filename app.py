@@ -52,7 +52,7 @@ def subir_imagen(archivo):
     return None
 
 # --- INTERFAZ (MENÚ MODERNO) ---
-st.title("🛠️ Sistema CMMS (JEP)")
+st.title("🛠️ Sistema CMMS (Supabase)")
 
 # Menú lateral estático y colorido
 with st.sidebar:
