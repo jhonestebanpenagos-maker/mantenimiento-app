@@ -103,25 +103,99 @@ if choice == "Dashboard":
         st.info("Aún no hay datos para mostrar en el Dashboard.")
 
 # 2. ACTIVOS
+
 elif choice == "Gestión de Activos":
     st.subheader("Inventario de Equipos")
     
-    with st.form("form_activo"):
-        c1, c2 = st.columns(2)
-        nombre = c1.text_input("Nombre")
-        ubicacion = c2.text_input("Ubicación")
-        categoria = st.selectbox("Categoría", ["Mecánico", "Eléctrico", "Infraestructura", "HVAC"])
-        
-        if st.form_submit_button("Guardar Activo"):
-            try:
-                datos = {"nombre": nombre, "ubicacion": ubicacion, "categoria": categoria}
-                supabase.table("activos").insert(datos).execute()
-                st.success("Activo creado!")
-                st.rerun()
-            except Exception as e:
-                st.error(f"Error al guardar activo: {e}")
+    # Obtenemos los datos frescos
+    df_activos = run_query("activos")
+    
+    # Usamos Pestañas para organizar la vista
+    tab1, tab2 = st.tabs(["➕ Registrar Nuevo", "✏️ Editar / Eliminar"])
+    
+    # --- PESTAÑA 1: CREAR ---
+    with tab1:
+        with st.form("form_activo"):
+            c1, c2 = st.columns(2)
+            nombre = c1.text_input("Nombre del Equipo")
+            ubicacion = c2.text_input("Ubicación")
+            categoria = st.selectbox("Categoría", ["Mecánico", "Eléctrico", "Infraestructura", "HVAC", "Otros"])
             
-    st.dataframe(run_query("activos"), use_container_width=True)
+            if st.form_submit_button("Guardar Activo"):
+                if nombre and ubicacion:
+                    try:
+                        datos = {"nombre": nombre, "ubicacion": ubicacion, "categoria": categoria}
+                        supabase.table("activos").insert(datos).execute()
+                        st.success(f"Activo '{nombre}' creado correctamente!")
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"Error al guardar: {e}")
+                else:
+                    st.warning("El nombre y la ubicación son obligatorios.")
+
+    # --- PESTAÑA 2: EDITAR / ELIMINAR ---
+    with tab2:
+        if not df_activos.empty:
+            # Selector de Activo
+            activos_dict = {f"{row['nombre']} - {row['ubicacion']}": row['id'] for i, row in df_activos.iterrows()}
+            seleccion = st.selectbox("Seleccionar Activo a Gestionar", list(activos_dict.keys()))
+            id_seleccionado = activos_dict[seleccion]
+            
+            # Obtener datos actuales del activo seleccionado
+            datos_actuales = df_activos[df_activos['id'] == id_seleccionado].iloc[0]
+            
+            st.markdown("---")
+            st.write("### Modificar Datos")
+            
+            # Formulario de Edición
+            with st.form("form_editar"):
+                c1, c2 = st.columns(2)
+                # Pre-llenamos los campos con value=...
+                nuevo_nombre = c1.text_input("Nombre", value=datos_actuales['nombre'])
+                nueva_ubicacion = c2.text_input("Ubicación", value=datos_actuales['ubicacion'])
+                
+                # Para el selectbox, hay que encontrar el índice actual
+                opciones_cat = ["Mecánico", "Eléctrico", "Infraestructura", "HVAC", "Otros"]
+                index_cat = opciones_cat.index(datos_actuales['categoria']) if datos_actuales['categoria'] in opciones_cat else 0
+                nueva_categoria = st.selectbox("Categoría", opciones_cat, index=index_cat)
+                
+                if st.form_submit_button("💾 Guardar Cambios"):
+                    try:
+                        update_data = {
+                            "nombre": nuevo_nombre,
+                            "ubicacion": nueva_ubicacion,
+                            "categoria": nueva_categoria
+                        }
+                        # UPDATE: Actualizamos donde el ID coincida
+                        supabase.table("activos").update(update_data).eq("id", int(id_seleccionado)).execute()
+                        st.success("¡Datos actualizados correctamente!")
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"Error al actualizar: {e}")
+
+            # Zona de Peligro (Eliminar) fuera del formulario para evitar conflictos
+            st.markdown("---")
+            with st.expander("🗑️ Zona de Peligro (Eliminar Activo)"):
+                st.warning(f"¿Estás seguro que deseas eliminar el activo: **{datos_actuales['nombre']}**? Esta acción no se puede deshacer.")
+                
+                col_a, col_b = st.columns([1, 4])
+                if col_a.button("Sí, Eliminar Definitivamente", type="primary"):
+                    try:
+                        # DELETE: Borramos donde el ID coincida
+                        supabase.table("activos").delete().eq("id", int(id_seleccionado)).execute()
+                        st.success("Activo eliminado.")
+                        st.rerun()
+                    except Exception as e:
+                        # Este error suele salir si el activo ya tiene Órdenes creadas (integridad referencial)
+                        st.error("No se pudo eliminar. Es probable que este activo tenga Órdenes de Trabajo asociadas. Debes borrar las órdenes primero.")
+                        st.code(str(e))
+        else:
+            st.info("No hay activos registrados para editar.")
+
+    # Tabla general siempre visible abajo
+    st.markdown("---")
+    st.markdown("### 📋 Listado General")
+    st.dataframe(df_activos, use_container_width=True)
 
 # 3. CREAR ORDEN (AQUÍ ESTÁ LA INTEGRACIÓN VISTOSA)
 elif choice == "Crear Orden":
