@@ -62,26 +62,28 @@ with st.sidebar:
         menu_icon="cast",
         default_index=0,
         styles={
-            # Fondo del contenedor (Gris oscuro)
-            "container": {"padding": "5!important", "background-color": "#262730"}, 
+            # 1. ESTILO DEL TÍTULO ("Navegación") -> AHORA BLANCO Y EN NEGRILLA
+            "menu-title": {"color": "white", "font-weight": "bold", "font-size": "20px"},
             
-            # Iconos (Naranja brillante)
-            "icon": {"color": "#ff8c00", "font-size": "25px"}, 
+            # 2. Fondo del contenedor (Gris oscuro)
+            "container": {"padding": "5!important", "background-color": "#262730"},
             
-            # Letra de las opciones (AQUÍ ESTÁ EL ARREGLO)
+            # 3. Iconos (Naranja brillante)
+            "icon": {"color": "#ff8c00", "font-size": "25px"},
+            
+            # 4. Letra de las opciones (Blanco)
             "nav-link": {
-                "font-size": "16px", 
-                "text-align": "left", 
-                "margin": "0px", 
+                "font-size": "16px",
+                "text-align": "left",
+                "margin": "0px",
                 "--hover-color": "#444",
-                "color": "white"  # <--- ESTO FUERZA QUE LA LETRA SEA BLANCA
+                "color": "white"
             },
             
-            # Color de fondo cuando seleccionas una opción (Verde)
+            # 5. Opción seleccionada (Verde)
             "nav-link-selected": {"background-color": "#02ab21"},
         }
     )
-
 # 1. DASHBOARD
 if choice == "Dashboard":
     st.subheader("Tablero de Control")
