@@ -174,23 +174,40 @@ elif choice == "Gestión de Activos":
                         st.error(f"Error al actualizar: {e}")
 
             # Zona de Peligro (Eliminar) fuera del formulario para evitar conflictos
+        
             st.markdown("---")
             with st.expander("🗑️ Zona de Peligro (Eliminar Activo)"):
-                st.warning(f"¿Estás seguro que deseas eliminar el activo: **{datos_actuales['nombre']}**? Esta acción no se puede deshacer.")
+                st.warning(f"Estás intentando eliminar: **{datos_actuales['nombre']}**")
                 
                 col_a, col_b = st.columns([1, 4])
-                if col_a.button("Sí, Eliminar Definitivamente", type="primary"):
-                    try:
-                        # DELETE: Borramos donde el ID coincida
-                        supabase.table("activos").delete().eq("id", int(id_seleccionado)).execute()
-                        st.success("Activo eliminado.")
-                        st.rerun()
-                    except Exception as e:
-                        # Este error suele salir si el activo ya tiene Órdenes creadas (integridad referencial)
-                        st.error("No se pudo eliminar. Es probable que este activo tenga Órdenes de Trabajo asociadas. Debes borrar las órdenes primero.")
-                        st.code(str(e))
-        else:
-            st.info("No hay activos registrados para editar.")
+                if col_a.button("Eliminar Definitivamente", type="primary"):
+                    # 1. VERIFICACIÓN DE SEGURIDAD: ¿Tiene órdenes ABIERTAS?
+                    ots_abiertas = supabase.table("ordenes")\
+                        .select("*")\
+                        .eq("activo_id", int(id_seleccionado))\
+                        .eq("estado", "Abierta")\
+                        .execute()
+                    
+                    if len(ots_abiertas.data) > 0:
+                        # CASO 1: TIENE PENDIENTES -> NO BORRAMOS
+                        st.error(f"⛔ NO SE PUEDE ELIMINAR. Este equipo tiene {len(ots_abiertas.data)} Orden(es) de Trabajo ABIERTAS.")
+                        st.info("Primero debes cerrar o cancelar las órdenes pendientes antes de borrar el equipo.")
+                    
+                    else:
+                        # CASO 2: SOLO TIENE HISTORIAL (CERRADAS) O ESTÁ NUEVO -> PROCEDEMOS
+                        try:
+                            # Paso A: Borrar el historial de órdenes cerradas (Limpieza de hijos)
+                            # Si no hacemos esto, la base de datos bloqueará el borrado del activo
+                            supabase.table("ordenes").delete().eq("activo_id", int(id_seleccionado)).execute()
+                            
+                            # Paso B: Ahora sí, borrar el activo (El padre)
+                            supabase.table("activos").delete().eq("id", int(id_seleccionado)).execute()
+                            
+                            st.success("✅ Activo y su historial de mantenimientos han sido eliminados correctamente.")
+                            st.rerun()
+                            
+                        except Exception as e:
+                            st.error(f"Ocurrió un error inesperado: {e}")
 
     # Tabla general siempre visible abajo
     st.markdown("---")
