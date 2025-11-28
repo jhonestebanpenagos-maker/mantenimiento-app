@@ -256,15 +256,14 @@ else:
         else:
             st.warning("No hay activos registrados.")
 
-    # 4. USUARIOS (AQUÍ ESTÁ LA LÓGICA MEJORADA)
+    # 4. USUARIOS (AQUÍ ESTÁ LA LÓGICA DE LIMPIEZA)
     elif choice == "Usuarios":
         st.subheader("Gestión de Personal")
         
-        # --- VERIFICACIÓN DE MENSAJE DE ÉXITO PENDIENTE ---
+        # --- MOSTRAR MENSAJE DE ÉXITO (SI EXISTE) ---
         if 'user_success' in st.session_state:
             exito = st.session_state['user_success']
             st.balloons()
-            # DISEÑO DE TARJETA TIPO "CREDENCIAL"
             st.markdown(f"""
                 <div style="
                     background-color: #f8f9fa; 
@@ -289,7 +288,6 @@ else:
                     </div>
                 </div>
             """, unsafe_allow_html=True)
-            # Limpiamos el mensaje para que no salga siempre
             del st.session_state['user_success']
 
         tab1, tab2 = st.tabs(["Nuevo Usuario", "Lista de Usuarios"])
@@ -297,14 +295,12 @@ else:
         with tab1:
             st.write("#### Paso 1: Definir Perfil")
             
-            # USAMOS KEYS PARA PODER RESETEARLOS DESPUÉS
-            if 'rol_key' not in st.session_state: st.session_state.rol_key = 0
-            
-            # Selector de ROL
+            # 1. SELECTORES CON CLAVE ÚNICA Y OPCIÓN VACÍA INICIAL
+            # Agregamos "" al principio para que puedan seleccionar "nada"
             rol_u = st.selectbox(
                 "Seleccione el Rol", 
-                ["Admin", "Programador", "Tecnico"],
-                key="widget_rol" # Key única
+                ["", "Admin", "Programador", "Tecnico"],
+                key="widget_rol" 
             )
             
             # Lógica Condicional
@@ -312,7 +308,7 @@ else:
             if rol_u == "Tecnico":
                 especialidad_selec = st.selectbox(
                     "Especialidad Técnica (Obligatorio)", 
-                    ["Técnico Infraestructura", "Tecnico Soldadura", "Tecnico Electricista", "Tecnico Aire Acondicionado", "Otros"],
+                    ["", "Técnico Infraestructura", "Tecnico Soldadura", "Tecnico Electricista", "Tecnico Aire Acondicionado", "Otros"],
                     key="widget_esp"
                 )
             
@@ -325,29 +321,40 @@ else:
                 pass_u = c1.text_input("Contraseña", type="password")
                 
                 if st.form_submit_button("Crear Usuario"):
-                    if nombre_u and email_u and pass_u:
-                        try:
-                            supabase.table("usuarios").insert({
-                                "email": email_u, 
-                                "password": pass_u, 
-                                "nombre": nombre_u, 
-                                "rol": rol_u, 
-                                "especialidad": especialidad_selec
-                            }).execute()
-                            
-                            # GUARDAMOS DATOS PARA EL MENSAJE Y RECARGAMOS
-                            st.session_state['user_success'] = {
-                                'nombre': nombre_u,
-                                'rol': rol_u,
-                                'especialidad': especialidad_selec
-                            }
-                            # Esto hace que la página se recargue, limpiando todo
-                            st.rerun()
-                            
-                        except Exception as e:
-                            st.error(f"Error al crear: {e}")
+                    # Validamos que el rol no esté vacío
+                    if nombre_u and email_u and pass_u and rol_u and (rol_u != ""):
+                        # Si es técnico, validamos especialidad
+                        if rol_u == "Tecnico" and especialidad_selec == "":
+                            st.warning("Debes seleccionar una especialidad para el Técnico.")
+                        else:
+                            try:
+                                supabase.table("usuarios").insert({
+                                    "email": email_u, 
+                                    "password": pass_u, 
+                                    "nombre": nombre_u, 
+                                    "rol": rol_u, 
+                                    "especialidad": especialidad_selec
+                                }).execute()
+                                
+                                # GUARDAMOS EXITO
+                                st.session_state['user_success'] = {
+                                    'nombre': nombre_u,
+                                    'rol': rol_u,
+                                    'especialidad': especialidad_selec
+                                }
+                                
+                                # --- AQUÍ ESTÁ EL TRUCO PARA LIMPIAR TODO ---
+                                # Reseteamos manualmente los widgets externos a vacío
+                                st.session_state['widget_rol'] = "" 
+                                if 'widget_esp' in st.session_state:
+                                    st.session_state['widget_esp'] = ""
+                                
+                                st.rerun()
+                                
+                            except Exception as e:
+                                st.error(f"Error al crear: {e}")
                     else:
-                        st.warning("Completa todos los campos.")
+                        st.warning("Completa todos los campos obligatorios.")
         
         with tab2:
             st.dataframe(run_query("usuarios"), use_container_width=True)
