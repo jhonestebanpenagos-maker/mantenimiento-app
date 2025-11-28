@@ -31,7 +31,6 @@ def run_query(table_name):
         response = supabase.table(table_name).select("*").execute()
         return pd.DataFrame(response.data)
     except Exception as e:
-        # Evitamos errores si la tabla no existe aún
         return pd.DataFrame()
 
 def subir_imagen(archivo):
@@ -64,7 +63,6 @@ def login():
             submitted = st.form_submit_button("Entrar", type="primary", use_container_width=True)
             
             if submitted:
-                # Buscar usuario en base de datos
                 try:
                     response = supabase.table("usuarios").select("*").eq("email", email).eq("password", password).execute()
                     if response.data:
@@ -86,7 +84,7 @@ def logout():
 # --- 5. LÓGICA PRINCIPAL (SI ESTÁ LOGUEADO) ---
 
 if st.session_state['usuario'] is None:
-    login() # Si no hay usuario logueado, mostrar pantalla de login
+    login()
 else:
     # --- BARRA LATERAL CON ROLES ---
     rol_actual = st.session_state['rol']
@@ -138,7 +136,7 @@ else:
         else:
             st.info("Sin datos para mostrar.")
 
-    # 2. GESTIÓN DE ACTIVOS (Solo Admin)
+    # 2. GESTIÓN DE ACTIVOS
     elif choice == "Gestión de Activos":
         st.subheader("Inventario de Equipos")
         df_activos = run_query("activos")
@@ -178,7 +176,6 @@ else:
                 with st.expander("🗑️ Zona de Peligro (Baja)"):
                     motivo = st.text_input("Motivo de baja:")
                     if st.button("Dar de Baja", type="primary", disabled=(not motivo)):
-                        # Logica simplificada de baja (puedes pegar la completa de auditoria aqui si gustas)
                         supabase.table("ordenes").delete().eq("activo_id", int(id_seleccionado)).execute()
                         supabase.table("activos").delete().eq("id", int(id_seleccionado)).execute()
                         st.success("Eliminado")
@@ -193,7 +190,6 @@ else:
         
         lista_tecnicos = []
         if not df_usuarios.empty:
-            # Filtrar usuarios que sean Tecnicos, Admins o Programadores
             tecnicos = df_usuarios[df_usuarios['rol'].isin(['Tecnico', 'Admin', 'Programador'])]
             lista_tecnicos = tecnicos['nombre'].tolist()
 
@@ -220,22 +216,30 @@ else:
                 res = supabase.table("ordenes").insert(datos).execute()
                 if res.data:
                     new_id = res.data[0]['id']
-                    st.success(f"OT #{new_id} creada y asignada a {asignado_a}")
-                    
+                    # Link WhatsApp
                     texto = f"*NUEVA ASIGNACIÓN OT #{new_id}*\nResp: {asignado_a}\nEquipo: {seleccion}\nFalla: {descripcion}"
                     texto_enc = urllib.parse.quote(texto)
+                    
+                    st.balloons()
+                    st.markdown(f"""
+                        <div style="background-color:#d4edda; color:#155724; padding:20px; border-radius:10px; text-align:center;">
+                            <h2 style="margin:0;">✅ OT #{new_id} Creada</h2>
+                            <p>Asignada a: <strong>{asignado_a}</strong></p>
+                        </div>
+                    """, unsafe_allow_html=True)
                     st.link_button("📲 Enviar WhatsApp al Técnico", f"https://wa.me/?text={texto_enc}")
         else:
             st.warning("No hay activos registrados.")
 
-    # 4. USUARIOS (Creación de perfiles)
+    # 4. USUARIOS (AQUÍ ESTÁ EL CAMBIO VISTOSO)
     elif choice == "Usuarios":
         st.subheader("Gestión de Personal")
         
         tab1, tab2 = st.tabs(["Nuevo Usuario", "Lista de Usuarios"])
         
         with tab1:
-            with st.form("crear_user"):
+            # AGREGADO: clear_on_submit=True LIMPIA LOS CAMPOS AL GUARDAR
+            with st.form("crear_user", clear_on_submit=True):
                 c1, c2 = st.columns(2)
                 nombre_u = c1.text_input("Nombre Completo")
                 email_u = c2.text_input("Email (Login)")
@@ -252,12 +256,29 @@ else:
                             "rol": rol_u,
                             "especialidad": especialidad
                         }).execute()
-                        st.success("Usuario creado correctamente")
+                        
+                        # --- MENSAJE VISTOSO ---
+                        st.balloons()
+                        st.markdown(f"""
+                            <div style="
+                                background-color: #d1e7dd; 
+                                color: #0f5132; 
+                                padding: 20px; 
+                                border-radius: 10px; 
+                                border: 1px solid #badbcc; 
+                                text-align: center; 
+                                margin-bottom: 20px;">
+                                <h2 style="margin:0;">✅ Usuario Registrado con Éxito</h2>
+                                <h3 style="margin:10px 0;">{nombre_u}</h3>
+                                <p style="font-size: 18px;">Rol asignado: <strong>{rol_u}</strong></p>
+                            </div>
+                        """, unsafe_allow_html=True)
+                        
                     except Exception as e:
-                        st.error(f"Error: {e}")
+                        st.error(f"Error al crear usuario: {e}")
         
         with tab2:
-            st.dataframe(run_query("usuarios"))
+            st.dataframe(run_query("usuarios"), use_container_width=True)
 
     # 5. CIERRE (Técnicos)
     elif choice == "Cierre de OTs":
@@ -265,7 +286,6 @@ else:
         df_ots = run_query("ordenes")
         
         if not df_ots.empty:
-            # FILTRO: Si es tecnico, solo ve lo suyo. Si es admin, ve todo.
             if rol_actual == "Tecnico":
                 mis_ots = df_ots[(df_ots['tecnico_asignado'] == usuario_actual) & (df_ots['estado'] != 'Concluida')]
             else:
