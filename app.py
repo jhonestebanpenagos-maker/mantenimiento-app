@@ -256,26 +256,18 @@ else:
         else:
             st.warning("No hay activos registrados.")
 
-    # 4. USUARIOS (AQUÍ ESTÁ LA LÓGICA DE LIMPIEZA)
+    # 4. USUARIOS (AQUÍ ESTÁ LA CORRECCIÓN)
     elif choice == "Usuarios":
         st.subheader("Gestión de Personal")
         
-        # --- MOSTRAR MENSAJE DE ÉXITO (SI EXISTE) ---
+        # --- MENSAJE DE ÉXITO ---
         if 'user_success' in st.session_state:
             exito = st.session_state['user_success']
             st.balloons()
             st.markdown(f"""
                 <div style="
-                    background-color: #f8f9fa; 
-                    border: 2px solid #28a745; 
-                    border-radius: 15px; 
-                    padding: 20px; 
-                    text-align: center; 
-                    box-shadow: 0 4px 8px rgba(0,0,0,0.1); 
-                    margin-bottom: 20px;
-                    max-width: 600px;
-                    margin-left: auto;
-                    margin-right: auto;">
+                    background-color: #f8f9fa; border: 2px solid #28a745; border-radius: 15px; padding: 20px; 
+                    text-align: center; box-shadow: 0 4px 8px rgba(0,0,0,0.1); margin-bottom: 20px; max-width: 600px; margin-left: auto; margin-right: auto;">
                     <h3 style="color: #28a745; margin: 0;">✅ ¡Usuario Creado con Éxito!</h3>
                     <hr style="border-top: 1px solid #ddd; margin: 15px 0;">
                     <div style="display: flex; justify-content: center; align-items: center; gap: 20px;">
@@ -295,25 +287,28 @@ else:
         with tab1:
             st.write("#### Paso 1: Definir Perfil")
             
-            # 1. SELECTORES CON CLAVE ÚNICA Y OPCIÓN VACÍA INICIAL
-            # Agregamos "" al principio para que puedan seleccionar "nada"
+            # 1. INICIALIZAMOS EL CONTADOR DE RESETEO SI NO EXISTE
+            if 'reset_key' not in st.session_state:
+                st.session_state.reset_key = 0
+            
+            # 2. SELECTORES CON KEY DINÁMICA (Aquí está el truco para que se limpien)
             rol_u = st.selectbox(
                 "Seleccione el Rol", 
                 ["", "Admin", "Programador", "Tecnico"],
-                key="widget_rol" 
+                key=f"rol_{st.session_state.reset_key}" 
             )
             
-            # Lógica Condicional
             especialidad_selec = "Gestión/Admin"
             if rol_u == "Tecnico":
                 especialidad_selec = st.selectbox(
                     "Especialidad Técnica (Obligatorio)", 
                     ["", "Técnico Infraestructura", "Tecnico Soldadura", "Tecnico Electricista", "Tecnico Aire Acondicionado", "Otros"],
-                    key="widget_esp"
+                    key=f"esp_{st.session_state.reset_key}"
                 )
             
             st.write("#### Paso 2: Credenciales")
             
+            # El formulario sigue usando clear_on_submit para los campos de texto
             with st.form("crear_user", clear_on_submit=True):
                 c1, c2 = st.columns(2)
                 nombre_u = c1.text_input("Nombre Completo")
@@ -321,68 +316,15 @@ else:
                 pass_u = c1.text_input("Contraseña", type="password")
                 
                 if st.form_submit_button("Crear Usuario"):
-                    # Validamos que el rol no esté vacío
                     if nombre_u and email_u and pass_u and rol_u and (rol_u != ""):
-                        # Si es técnico, validamos especialidad
                         if rol_u == "Tecnico" and especialidad_selec == "":
                             st.warning("Debes seleccionar una especialidad para el Técnico.")
                         else:
                             try:
                                 supabase.table("usuarios").insert({
-                                    "email": email_u, 
-                                    "password": pass_u, 
-                                    "nombre": nombre_u, 
-                                    "rol": rol_u, 
-                                    "especialidad": especialidad_selec
+                                    "email": email_u, "password": pass_u, "nombre": nombre_u, "rol": rol_u, "especialidad": especialidad_selec
                                 }).execute()
                                 
-                                # GUARDAMOS EXITO
-                                st.session_state['user_success'] = {
-                                    'nombre': nombre_u,
-                                    'rol': rol_u,
-                                    'especialidad': especialidad_selec
-                                }
+                                st.session_state['user_success'] = {'nombre': nombre_u, 'rol': rol_u, 'especialidad': especialidad_selec}
                                 
-                                # --- AQUÍ ESTÁ EL TRUCO PARA LIMPIAR TODO ---
-                                # Reseteamos manualmente los widgets externos a vacío
-                                st.session_state['widget_rol'] = "" 
-                                if 'widget_esp' in st.session_state:
-                                    st.session_state['widget_esp'] = ""
-                                
-                                st.rerun()
-                                
-                            except Exception as e:
-                                st.error(f"Error al crear: {e}")
-                    else:
-                        st.warning("Completa todos los campos obligatorios.")
-        
-        with tab2:
-            st.dataframe(run_query("usuarios"), use_container_width=True)
-
-    # 5. CIERRE
-    elif choice == "Cierre de OTs":
-        st.subheader("Mis Órdenes Pendientes")
-        df_ots = run_query("ordenes")
-        
-        if not df_ots.empty:
-            if rol_actual == "Tecnico":
-                mis_ots = df_ots[(df_ots['tecnico_asignado'] == usuario_actual) & (df_ots['estado'] != 'Concluida')]
-            else:
-                mis_ots = df_ots[df_ots['estado'] != 'Concluida']
-            
-            if not mis_ots.empty:
-                st.dataframe(mis_ots[['id', 'descripcion', 'tecnico_asignado', 'estado']], use_container_width=True)
-                ot_id = st.selectbox("Seleccionar OT", mis_ots['id'].values)
-                with st.form("cierre_form"):
-                    coments = st.text_area("Informe")
-                    foto = st.file_uploader("Evidencia")
-                    if st.form_submit_button("Cerrar Orden"):
-                        with st.spinner("Procesando..."):
-                            url = subir_imagen(foto)
-                            supabase.table("ordenes").update({"estado":"Concluida", "evidencia_url": url, "comentarios_cierre": coments}).eq("id", int(ot_id)).execute()
-                            st.success("Cerrada Correctamente")
-                            st.rerun()
-            else:
-                st.info("No tienes órdenes asignadas pendientes.")
-        else:
-            st.info("Sin registros.")
+                                # 3. INCREMENTAMOS EL CONTADOR PARA "REINICIAR"
