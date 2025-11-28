@@ -260,7 +260,7 @@ else:
         else:
             st.warning("No hay activos registrados.")
 
-    # 4. USUARIOS (CRUD COMPLETO)
+    # 4. USUARIOS (CRUD COMPLETO CON VALIDACIÓN)
     elif choice == "Usuarios":
         st.subheader("Gestión de Personal")
         
@@ -332,24 +332,31 @@ else:
                         if rol_u == "Tecnico" and especialidad_selec == "":
                             st.warning("Debes seleccionar una especialidad.")
                         else:
-                            try:
-                                # SOLUCIÓN APLICADA AQUÍ: Enviamos None si el email está vacío
-                                payload = {
-                                    "documento": documento_u, 
-                                    "email": email_u if email_u else None, 
-                                    "password": pass_u, 
-                                    "nombre": nombre_u, 
-                                    "rol": rol_u, 
-                                    "especialidad": especialidad_selec
-                                }
-                                supabase.table("usuarios").insert(payload).execute()
-                                
-                                st.session_state['user_msg'] = {'tipo': 'create', 'nombre': nombre_u, 'rol': rol_u, 'documento': documento_u}
-                                st.session_state.reset_key += 1
-                                st.session_state['tab_index_usuarios'] = 0
-                                st.rerun()
-                            except Exception as e:
-                                st.error(f"Error al crear: {e}")
+                            # --- 1. VERIFICAR DUPLICADOS ANTES DE GUARDAR ---
+                            existe = supabase.table("usuarios").select("id").eq("documento", documento_u).execute()
+                            
+                            if existe.data:
+                                # Aquí mostramos el mensaje de error básico que pediste
+                                st.error(f"⛔ El número de documento {documento_u} ya está registrado en el sistema.")
+                            else:
+                                # --- 2. Si no existe, procedemos a guardar ---
+                                try:
+                                    payload = {
+                                        "documento": documento_u, 
+                                        "email": email_u if email_u else None, 
+                                        "password": pass_u, 
+                                        "nombre": nombre_u, 
+                                        "rol": rol_u, 
+                                        "especialidad": especialidad_selec
+                                    }
+                                    supabase.table("usuarios").insert(payload).execute()
+                                    
+                                    st.session_state['user_msg'] = {'tipo': 'create', 'nombre': nombre_u, 'rol': rol_u, 'documento': documento_u}
+                                    st.session_state.reset_key += 1
+                                    st.session_state['tab_index_usuarios'] = 0
+                                    st.rerun()
+                                except Exception as e:
+                                    st.error(f"Error al crear: {e}")
                     else:
                         st.warning("Completa los campos obligatorios.")
         
@@ -387,7 +394,6 @@ else:
                     
                     if st.form_submit_button("💾 Guardar Cambios"):
                         try:
-                            # SOLUCIÓN APLICADA AQUÍ TAMBIÉN
                             supabase.table("usuarios").update({
                                 "nombre": new_nombre, 
                                 "documento": new_documento, 
