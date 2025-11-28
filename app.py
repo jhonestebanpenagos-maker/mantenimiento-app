@@ -260,9 +260,13 @@ else:
         else:
             st.warning("No hay activos registrados.")
 
-    # 4. USUARIOS (NAVEGACIÓN MEJORADA CON OPTION_MENU)
+    # 4. USUARIOS (CORREGIDO)
     elif choice == "Usuarios":
         st.subheader("Gestión de Personal")
+        
+        # --- VARIABLE DE CONTROL DE PESTAÑA ---
+        if 'tab_index_usuarios' not in st.session_state:
+            st.session_state['tab_index_usuarios'] = 0 # 0 = Nuevo, 1 = Editar
         
         # --- MENSAJES DE ALERTA ---
         if 'user_msg' in st.session_state:
@@ -295,15 +299,14 @@ else:
 
         df_usuarios = run_query("usuarios")
 
-        # --- NAVEGACIÓN INTERNA CONTROLADA (AQUÍ ESTÁ LA SOLUCIÓN) ---
-        # Reemplazamos st.tabs por option_menu horizontal
+        # --- NAVEGACIÓN ---
+        # Usamos default_index controlado por nuestra variable tab_index_usuarios
         selected_sub_tab = option_menu(
             menu_title=None,
             options=["Nuevo Usuario", "Editar / Eliminar"],
             icons=["person-plus", "pencil-square"],
             orientation="horizontal",
-            # IMPORTANTE: Usamos un key para poder manipularlo desde el estado
-            key="sub_menu_usuarios"
+            default_index=st.session_state['tab_index_usuarios'] 
         )
         
         # --- VISTA 1: CREAR ---
@@ -337,8 +340,8 @@ else:
                                 
                                 st.session_state['user_msg'] = {'tipo': 'create', 'nombre': nombre_u, 'rol': rol_u, 'documento': documento_u}
                                 st.session_state.reset_key += 1
-                                # AL CREAR, NOS QUEDAMOS EN "Nuevo Usuario"
-                                st.session_state['sub_menu_usuarios'] = "Nuevo Usuario"
+                                # AL CREAR, SEGUIMOS EN PESTAÑA 0
+                                st.session_state['tab_index_usuarios'] = 0
                                 st.rerun()
                             except Exception as e:
                                 st.error(f"Error al crear: {e}")
@@ -347,6 +350,9 @@ else:
         
         # --- VISTA 2: EDITAR / ELIMINAR ---
         elif selected_sub_tab == "Editar / Eliminar":
+            # Actualizamos la variable para sincronizar el click manual
+            st.session_state['tab_index_usuarios'] = 1 
+            
             if not df_usuarios.empty:
                 user_map = {f"{row['nombre']} - Doc: {row['documento']}": row['id'] for i, row in df_usuarios.iterrows()}
                 seleccion_user = st.selectbox("🔍 Buscar Usuario", list(user_map.keys()))
@@ -380,8 +386,8 @@ else:
                             }).eq("id", int(id_user_edit)).execute()
                             
                             st.session_state['user_msg'] = {'tipo': 'update', 'nombre': new_nombre}
-                            # TRUCO MAESTRO: Forzamos que se mantenga en esta pestaña
-                            st.session_state['sub_menu_usuarios'] = "Editar / Eliminar"
+                            # FORZAMOS MANTENER PESTAÑA 1
+                            st.session_state['tab_index_usuarios'] = 1
                             st.rerun()
                         except Exception as e:
                             st.error(f"Error al actualizar: {e}")
@@ -395,8 +401,8 @@ else:
                             try:
                                 supabase.table("usuarios").delete().eq("id", int(id_user_edit)).execute()
                                 st.session_state['user_msg'] = {'tipo': 'delete', 'nombre': data_edit['nombre']}
-                                # AL ELIMINAR, TAMBIÉN NOS QUEDAMOS AQUÍ PARA VER LA LISTA
-                                st.session_state['sub_menu_usuarios'] = "Editar / Eliminar"
+                                # FORZAMOS MANTENER PESTAÑA 1
+                                st.session_state['tab_index_usuarios'] = 1
                                 st.rerun()
                             except Exception as e:
                                 st.error(f"Error al eliminar: {e}")
