@@ -256,7 +256,7 @@ else:
         else:
             st.warning("No hay activos registrados.")
 
-    # 4. USUARIOS (AQUÍ ESTÁ LA CORRECCIÓN)
+    # 4. USUARIOS (Lógica corregida de Try/Except)
     elif choice == "Usuarios":
         st.subheader("Gestión de Personal")
         
@@ -287,11 +287,11 @@ else:
         with tab1:
             st.write("#### Paso 1: Definir Perfil")
             
-            # 1. INICIALIZAMOS EL CONTADOR DE RESETEO SI NO EXISTE
+            # Inicializar contador de reseteo
             if 'reset_key' not in st.session_state:
                 st.session_state.reset_key = 0
             
-            # 2. SELECTORES CON KEY DINÁMICA (Aquí está el truco para que se limpien)
+            # Selectores con KEY DINÁMICA
             rol_u = st.selectbox(
                 "Seleccione el Rol", 
                 ["", "Admin", "Programador", "Tecnico"],
@@ -308,7 +308,6 @@ else:
             
             st.write("#### Paso 2: Credenciales")
             
-            # El formulario sigue usando clear_on_submit para los campos de texto
             with st.form("crear_user", clear_on_submit=True):
                 c1, c2 = st.columns(2)
                 nombre_u = c1.text_input("Nombre Completo")
@@ -320,6 +319,7 @@ else:
                         if rol_u == "Tecnico" and especialidad_selec == "":
                             st.warning("Debes seleccionar una especialidad para el Técnico.")
                         else:
+                            # --- BLOQUE TRY/EXCEPT CORREGIDO ---
                             try:
                                 supabase.table("usuarios").insert({
                                     "email": email_u, "password": pass_u, "nombre": nombre_u, "rol": rol_u, "especialidad": especialidad_selec
@@ -327,4 +327,43 @@ else:
                                 
                                 st.session_state['user_success'] = {'nombre': nombre_u, 'rol': rol_u, 'especialidad': especialidad_selec}
                                 
-                                # 3. INCREMENTAMOS EL CONTADOR PARA "REINICIAR"
+                                # Incrementamos el contador para reiniciar los selectores
+                                st.session_state.reset_key += 1
+                                st.rerun()
+                                
+                            except Exception as e:
+                                st.error(f"Error al crear: {e}")
+                            # -----------------------------------
+                    else:
+                        st.warning("Completa todos los campos obligatorios.")
+        
+        with tab2:
+            st.dataframe(run_query("usuarios"), use_container_width=True)
+
+    # 5. CIERRE
+    elif choice == "Cierre de OTs":
+        st.subheader("Mis Órdenes Pendientes")
+        df_ots = run_query("ordenes")
+        
+        if not df_ots.empty:
+            if rol_actual == "Tecnico":
+                mis_ots = df_ots[(df_ots['tecnico_asignado'] == usuario_actual) & (df_ots['estado'] != 'Concluida')]
+            else:
+                mis_ots = df_ots[df_ots['estado'] != 'Concluida']
+            
+            if not mis_ots.empty:
+                st.dataframe(mis_ots[['id', 'descripcion', 'tecnico_asignado', 'estado']], use_container_width=True)
+                ot_id = st.selectbox("Seleccionar OT", mis_ots['id'].values)
+                with st.form("cierre_form"):
+                    coments = st.text_area("Informe")
+                    foto = st.file_uploader("Evidencia")
+                    if st.form_submit_button("Cerrar Orden"):
+                        with st.spinner("Procesando..."):
+                            url = subir_imagen(foto)
+                            supabase.table("ordenes").update({"estado":"Concluida", "evidencia_url": url, "comentarios_cierre": coments}).eq("id", int(ot_id)).execute()
+                            st.success("Cerrada Correctamente")
+                            st.rerun()
+            else:
+                st.info("No tienes órdenes asignadas pendientes.")
+        else:
+            st.info("Sin registros.")
