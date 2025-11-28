@@ -260,7 +260,7 @@ else:
         else:
             st.warning("No hay activos registrados.")
 
-    # 4. USUARIOS (CORREGIDO Y CON REFRESCO AUTOMÁTICO DE DATOS)
+    # 4. USUARIOS (CRUD COMPLETO)
     elif choice == "Usuarios":
         st.subheader("Gestión de Personal")
         
@@ -333,9 +333,16 @@ else:
                             st.warning("Debes seleccionar una especialidad.")
                         else:
                             try:
-                                supabase.table("usuarios").insert({
-                                    "documento": documento_u, "email": email_u, "password": pass_u, "nombre": nombre_u, "rol": rol_u, "especialidad": especialidad_selec
-                                }).execute()
+                                # SOLUCIÓN APLICADA AQUÍ: Enviamos None si el email está vacío
+                                payload = {
+                                    "documento": documento_u, 
+                                    "email": email_u if email_u else None, 
+                                    "password": pass_u, 
+                                    "nombre": nombre_u, 
+                                    "rol": rol_u, 
+                                    "especialidad": especialidad_selec
+                                }
+                                supabase.table("usuarios").insert(payload).execute()
                                 
                                 st.session_state['user_msg'] = {'tipo': 'create', 'nombre': nombre_u, 'rol': rol_u, 'documento': documento_u}
                                 st.session_state.reset_key += 1
@@ -346,7 +353,7 @@ else:
                     else:
                         st.warning("Completa los campos obligatorios.")
         
-        # --- VISTA 2: EDITAR / ELIMINAR (SOLUCIÓN APLICADA AQUÍ) ---
+        # --- VISTA 2: EDITAR / ELIMINAR ---
         elif selected_sub_tab == "Editar / Eliminar":
             st.session_state['tab_index_usuarios'] = 1 
             
@@ -360,8 +367,6 @@ else:
                 st.markdown("---")
                 st.write(f"### Editando a: **{data_edit['nombre']}**")
                 
-                # --- AQUÍ ESTÁ EL TRUCO DE LAS LLAVES DINÁMICAS ---
-                # Agregamos el ID del usuario al KEY del widget para forzar su actualización
                 suffix = id_user_edit 
 
                 new_rol = st.selectbox("Rol", ["Admin", "Programador", "Tecnico"], index=["Admin", "Programador", "Tecnico"].index(data_edit['rol']), key=f"edit_rol_{suffix}")
@@ -375,16 +380,21 @@ else:
 
                 with st.form("editar_usuario_form"):
                     c1, c2 = st.columns(2)
-                    # Agregamos suffix a estos keys también
                     new_nombre = c1.text_input("Nombre", value=data_edit['nombre'], key=f"edit_nom_{suffix}")
                     new_documento = c2.text_input("Número de Documento", value=data_edit['documento'], key=f"edit_doc_{suffix}")
                     new_pass = st.text_input("Contraseña", value=data_edit['password'], type="password", key=f"edit_pass_{suffix}")
-                    new_email = st.text_input("Email (Opcional)", value=data_edit.get('email', ''), key=f"edit_mail_{suffix}")
+                    new_email = st.text_input("Email (Opcional)", value=data_edit.get('email', '') or '', key=f"edit_mail_{suffix}")
                     
                     if st.form_submit_button("💾 Guardar Cambios"):
                         try:
+                            # SOLUCIÓN APLICADA AQUÍ TAMBIÉN
                             supabase.table("usuarios").update({
-                                "nombre": new_nombre, "documento": new_documento, "email": new_email, "password": new_pass, "rol": new_rol, "especialidad": new_esp
+                                "nombre": new_nombre, 
+                                "documento": new_documento, 
+                                "email": new_email if new_email else None, 
+                                "password": new_pass, 
+                                "rol": new_rol, 
+                                "especialidad": new_esp
                             }).eq("id", int(id_user_edit)).execute()
                             
                             st.session_state['user_msg'] = {'tipo': 'update', 'nombre': new_nombre}
