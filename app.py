@@ -52,7 +52,7 @@ if 'usuario' not in st.session_state:
     st.session_state['usuario'] = None
 if 'rol' not in st.session_state:
     st.session_state['rol'] = None
-if 'doc_sesion' not in st.session_state: # CAMBIO: Guardamos el documento en sesión
+if 'doc_sesion' not in st.session_state:
     st.session_state['doc_sesion'] = None
 
 def login():
@@ -60,14 +60,12 @@ def login():
     c1, c2, c3 = st.columns([1,2,1])
     with c2:
         with st.form("login_form"):
-            # CAMBIO: Login con Documento
             documento = st.text_input("Número de Documento")
             password = st.text_input("Contraseña", type="password")
             submitted = st.form_submit_button("Entrar", type="primary", use_container_width=True)
             
             if submitted:
                 try:
-                    # Buscamos por documento y contraseña
                     response = supabase.table("usuarios").select("*").eq("documento", documento).eq("password", password).execute()
                     if response.data:
                         user_data = response.data[0]
@@ -262,11 +260,11 @@ else:
         else:
             st.warning("No hay activos registrados.")
 
-    # 4. USUARIOS (CRUD CON DOCUMENTO)
+    # 4. USUARIOS (NAVEGACIÓN MEJORADA CON OPTION_MENU)
     elif choice == "Usuarios":
         st.subheader("Gestión de Personal")
         
-        # --- MENSAJES VISUALES ---
+        # --- MENSAJES DE ALERTA ---
         if 'user_msg' in st.session_state:
             msg = st.session_state['user_msg']
             tipo = msg['tipo']
@@ -277,9 +275,8 @@ else:
                     <div style="background-color: #d1e7dd; border: 2px solid #28a745; border-radius: 15px; padding: 20px; text-align: center; box-shadow: 0 4px 8px rgba(0,0,0,0.1); margin-bottom: 20px; max-width: 600px; margin: 0 auto;">
                         <h3 style="color: #28a745; margin: 0;">✅ ¡Usuario Creado!</h3>
                         <h2 style="margin: 0; color: #0f5132;">{msg['nombre']}</h2>
-                        <p style="margin: 0;">Doc: {msg['documento']} | Rol: {msg['rol']}</p>
+                        <p style="margin: 0;">Rol: {msg['rol']}</p>
                     </div><br>""", unsafe_allow_html=True)
-            
             elif tipo == 'update':
                 st.balloons()
                 st.markdown(f"""
@@ -287,21 +284,30 @@ else:
                         <h3 style="color: #055160; margin: 0;">🔄 Datos Actualizados</h3>
                         <h2 style="margin: 0; color: #055160;">{msg['nombre']}</h2>
                     </div><br>""", unsafe_allow_html=True)
-            
             elif tipo == 'delete':
                 st.markdown(f"""
                     <div style="background-color: #f8d7da; border: 2px solid #dc3545; border-radius: 15px; padding: 20px; text-align: center; box-shadow: 0 4px 8px rgba(0,0,0,0.1); margin-bottom: 20px; max-width: 600px; margin: 0 auto;">
                         <h3 style="color: #842029; margin: 0;">🗑️ Usuario Eliminado</h3>
                         <h2 style="margin: 0; color: #842029;">{msg['nombre']}</h2>
                     </div><br>""", unsafe_allow_html=True)
-                
+            
             del st.session_state['user_msg']
 
         df_usuarios = run_query("usuarios")
-        tab1, tab2 = st.tabs(["➕ Nuevo Usuario", "✏️ Editar / Eliminar"])
+
+        # --- NAVEGACIÓN INTERNA CONTROLADA (AQUÍ ESTÁ LA SOLUCIÓN) ---
+        # Reemplazamos st.tabs por option_menu horizontal
+        selected_sub_tab = option_menu(
+            menu_title=None,
+            options=["Nuevo Usuario", "Editar / Eliminar"],
+            icons=["person-plus", "pencil-square"],
+            orientation="horizontal",
+            # IMPORTANTE: Usamos un key para poder manipularlo desde el estado
+            key="sub_menu_usuarios"
+        )
         
-        # --- TAB 1: CREAR ---
-        with tab1:
+        # --- VISTA 1: CREAR ---
+        if selected_sub_tab == "Nuevo Usuario":
             st.write("#### Paso 1: Definir Perfil")
             if 'reset_key' not in st.session_state: st.session_state.reset_key = 0
             
@@ -315,9 +321,9 @@ else:
             with st.form("crear_user", clear_on_submit=True):
                 c1, c2 = st.columns(2)
                 nombre_u = c1.text_input("Nombre Completo")
-                documento_u = c2.text_input("Número de Documento (Login)") # CAMPO NUEVO
+                documento_u = c2.text_input("Número de Documento (Login)")
                 pass_u = c1.text_input("Contraseña", type="password")
-                email_u = c2.text_input("Email (Opcional)") # Ahora es opcional
+                email_u = c2.text_input("Email (Opcional)")
                 
                 if st.form_submit_button("Crear Usuario"):
                     if nombre_u and documento_u and pass_u and rol_u and (rol_u != ""):
@@ -329,18 +335,19 @@ else:
                                     "documento": documento_u, "email": email_u, "password": pass_u, "nombre": nombre_u, "rol": rol_u, "especialidad": especialidad_selec
                                 }).execute()
                                 
-                                st.session_state['user_msg'] = {'tipo': 'create', 'nombre': nombre_u, 'rol': rol_u, 'documento': documento_u, 'especialidad': especialidad_selec}
+                                st.session_state['user_msg'] = {'tipo': 'create', 'nombre': nombre_u, 'rol': rol_u, 'documento': documento_u}
                                 st.session_state.reset_key += 1
+                                # AL CREAR, NOS QUEDAMOS EN "Nuevo Usuario"
+                                st.session_state['sub_menu_usuarios'] = "Nuevo Usuario"
                                 st.rerun()
                             except Exception as e:
                                 st.error(f"Error al crear: {e}")
                     else:
-                        st.warning("Completa los campos obligatorios (Nombre, Documento, Clave, Rol).")
+                        st.warning("Completa los campos obligatorios.")
         
-        # --- TAB 2: EDITAR / ELIMINAR ---
-        with tab2:
+        # --- VISTA 2: EDITAR / ELIMINAR ---
+        elif selected_sub_tab == "Editar / Eliminar":
             if not df_usuarios.empty:
-                # Mostramos Nombre y Documento en el selector
                 user_map = {f"{row['nombre']} - Doc: {row['documento']}": row['id'] for i, row in df_usuarios.iterrows()}
                 seleccion_user = st.selectbox("🔍 Buscar Usuario", list(user_map.keys()))
                 
@@ -373,6 +380,8 @@ else:
                             }).eq("id", int(id_user_edit)).execute()
                             
                             st.session_state['user_msg'] = {'tipo': 'update', 'nombre': new_nombre}
+                            # TRUCO MAESTRO: Forzamos que se mantenga en esta pestaña
+                            st.session_state['sub_menu_usuarios'] = "Editar / Eliminar"
                             st.rerun()
                         except Exception as e:
                             st.error(f"Error al actualizar: {e}")
@@ -386,6 +395,8 @@ else:
                             try:
                                 supabase.table("usuarios").delete().eq("id", int(id_user_edit)).execute()
                                 st.session_state['user_msg'] = {'tipo': 'delete', 'nombre': data_edit['nombre']}
+                                # AL ELIMINAR, TAMBIÉN NOS QUEDAMOS AQUÍ PARA VER LA LISTA
+                                st.session_state['sub_menu_usuarios'] = "Editar / Eliminar"
                                 st.rerun()
                             except Exception as e:
                                 st.error(f"Error al eliminar: {e}")
