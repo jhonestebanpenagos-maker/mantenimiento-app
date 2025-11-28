@@ -52,37 +52,39 @@ if 'usuario' not in st.session_state:
     st.session_state['usuario'] = None
 if 'rol' not in st.session_state:
     st.session_state['rol'] = None
-if 'email_sesion' not in st.session_state:
-    st.session_state['email_sesion'] = None
+if 'doc_sesion' not in st.session_state: # CAMBIO: Guardamos el documento en sesión
+    st.session_state['doc_sesion'] = None
 
 def login():
     st.markdown("<h1 style='text-align: center;'>🔐 Iniciar Sesión CMMS</h1>", unsafe_allow_html=True)
     c1, c2, c3 = st.columns([1,2,1])
     with c2:
         with st.form("login_form"):
-            email = st.text_input("Correo Electrónico")
+            # CAMBIO: Login con Documento
+            documento = st.text_input("Número de Documento")
             password = st.text_input("Contraseña", type="password")
             submitted = st.form_submit_button("Entrar", type="primary", use_container_width=True)
             
             if submitted:
                 try:
-                    response = supabase.table("usuarios").select("*").eq("email", email).eq("password", password).execute()
+                    # Buscamos por documento y contraseña
+                    response = supabase.table("usuarios").select("*").eq("documento", documento).eq("password", password).execute()
                     if response.data:
                         user_data = response.data[0]
                         st.session_state['usuario'] = user_data['nombre']
                         st.session_state['rol'] = user_data['rol']
-                        st.session_state['email_sesion'] = user_data['email']
+                        st.session_state['doc_sesion'] = user_data['documento']
                         st.success(f"Bienvenido {user_data['nombre']}")
                         st.rerun()
                     else:
-                        st.error("Usuario o contraseña incorrectos")
+                        st.error("Documento o contraseña incorrectos")
                 except Exception as e:
                     st.error(f"Error de conexión: {e}")
 
 def logout():
     st.session_state['usuario'] = None
     st.session_state['rol'] = None
-    st.session_state['email_sesion'] = None
+    st.session_state['doc_sesion'] = None
     st.rerun()
 
 # --- 5. LÓGICA PRINCIPAL (SI ESTÁ LOGUEADO) ---
@@ -260,60 +262,42 @@ else:
         else:
             st.warning("No hay activos registrados.")
 
-    # 4. USUARIOS (SISTEMA DE MENSAJES UNIFICADO)
+    # 4. USUARIOS (CRUD CON DOCUMENTO)
     elif choice == "Usuarios":
         st.subheader("Gestión de Personal")
         
-        # --- LÓGICA DE MENSAJES (CREAR / EDITAR / ELIMINAR) ---
+        # --- MENSAJES VISUALES ---
         if 'user_msg' in st.session_state:
             msg = st.session_state['user_msg']
-            tipo = msg['tipo'] # create, update, delete
+            tipo = msg['tipo']
             
-            # 1. CASO CREACIÓN (Verde)
             if tipo == 'create':
                 st.balloons()
                 st.markdown(f"""
-                    <div style="background-color: #d1e7dd; border: 2px solid #28a745; border-radius: 15px; padding: 20px; 
-                    text-align: center; box-shadow: 0 4px 8px rgba(0,0,0,0.1); margin-bottom: 20px; max-width: 600px; margin: 0 auto;">
-                        <h3 style="color: #28a745; margin: 0;">✅ ¡Usuario Creado con Éxito!</h3>
-                        <hr style="border-top: 1px solid #a3cfbb; margin: 15px 0;">
+                    <div style="background-color: #d1e7dd; border: 2px solid #28a745; border-radius: 15px; padding: 20px; text-align: center; box-shadow: 0 4px 8px rgba(0,0,0,0.1); margin-bottom: 20px; max-width: 600px; margin: 0 auto;">
+                        <h3 style="color: #28a745; margin: 0;">✅ ¡Usuario Creado!</h3>
                         <h2 style="margin: 0; color: #0f5132;">{msg['nombre']}</h2>
-                        <p style="margin: 0; color: #146c43;">{msg['rol']} - {msg['especialidad']}</p>
-                    </div>
-                    <br>
-                """, unsafe_allow_html=True)
+                        <p style="margin: 0;">Doc: {msg['documento']} | Rol: {msg['rol']}</p>
+                    </div><br>""", unsafe_allow_html=True)
             
-            # 2. CASO EDICIÓN (Azul)
             elif tipo == 'update':
                 st.balloons()
                 st.markdown(f"""
-                    <div style="background-color: #cff4fc; border: 2px solid #0dcaf0; border-radius: 15px; padding: 20px; 
-                    text-align: center; box-shadow: 0 4px 8px rgba(0,0,0,0.1); margin-bottom: 20px; max-width: 600px; margin: 0 auto;">
+                    <div style="background-color: #cff4fc; border: 2px solid #0dcaf0; border-radius: 15px; padding: 20px; text-align: center; box-shadow: 0 4px 8px rgba(0,0,0,0.1); margin-bottom: 20px; max-width: 600px; margin: 0 auto;">
                         <h3 style="color: #055160; margin: 0;">🔄 Datos Actualizados</h3>
-                        <hr style="border-top: 1px solid #9eeaf9; margin: 15px 0;">
                         <h2 style="margin: 0; color: #055160;">{msg['nombre']}</h2>
-                        <p style="margin: 0; color: #055160;">Nuevos datos guardados correctamente.</p>
-                    </div>
-                    <br>
-                """, unsafe_allow_html=True)
+                    </div><br>""", unsafe_allow_html=True)
             
-            # 3. CASO ELIMINACIÓN (Rojo/Naranja)
             elif tipo == 'delete':
                 st.markdown(f"""
-                    <div style="background-color: #f8d7da; border: 2px solid #dc3545; border-radius: 15px; padding: 20px; 
-                    text-align: center; box-shadow: 0 4px 8px rgba(0,0,0,0.1); margin-bottom: 20px; max-width: 600px; margin: 0 auto;">
+                    <div style="background-color: #f8d7da; border: 2px solid #dc3545; border-radius: 15px; padding: 20px; text-align: center; box-shadow: 0 4px 8px rgba(0,0,0,0.1); margin-bottom: 20px; max-width: 600px; margin: 0 auto;">
                         <h3 style="color: #842029; margin: 0;">🗑️ Usuario Eliminado</h3>
-                        <hr style="border-top: 1px solid #f1aeb5; margin: 15px 0;">
                         <h2 style="margin: 0; color: #842029;">{msg['nombre']}</h2>
-                        <p style="margin: 0; color: #842029;">Este usuario ya no tiene acceso al sistema.</p>
-                    </div>
-                    <br>
-                """, unsafe_allow_html=True)
+                    </div><br>""", unsafe_allow_html=True)
                 
             del st.session_state['user_msg']
 
         df_usuarios = run_query("usuarios")
-
         tab1, tab2 = st.tabs(["➕ Nuevo Usuario", "✏️ Editar / Eliminar"])
         
         # --- TAB 1: CREAR ---
@@ -327,41 +311,38 @@ else:
             if rol_u == "Tecnico":
                 especialidad_selec = st.selectbox("Especialidad Técnica", ["", "Técnico Infraestructura", "Tecnico Soldadura", "Tecnico Electricista", "Tecnico Aire Acondicionado", "Otros"], key=f"esp_{st.session_state.reset_key}")
             
-            st.write("#### Paso 2: Credenciales")
+            st.write("#### Paso 2: Datos Personales")
             with st.form("crear_user", clear_on_submit=True):
                 c1, c2 = st.columns(2)
                 nombre_u = c1.text_input("Nombre Completo")
-                email_u = c2.text_input("Email (Login)")
+                documento_u = c2.text_input("Número de Documento (Login)") # CAMPO NUEVO
                 pass_u = c1.text_input("Contraseña", type="password")
+                email_u = c2.text_input("Email (Opcional)") # Ahora es opcional
                 
                 if st.form_submit_button("Crear Usuario"):
-                    if nombre_u and email_u and pass_u and rol_u and (rol_u != ""):
+                    if nombre_u and documento_u and pass_u and rol_u and (rol_u != ""):
                         if rol_u == "Tecnico" and especialidad_selec == "":
                             st.warning("Debes seleccionar una especialidad.")
                         else:
                             try:
                                 supabase.table("usuarios").insert({
-                                    "email": email_u, "password": pass_u, "nombre": nombre_u, "rol": rol_u, "especialidad": especialidad_selec
+                                    "documento": documento_u, "email": email_u, "password": pass_u, "nombre": nombre_u, "rol": rol_u, "especialidad": especialidad_selec
                                 }).execute()
                                 
-                                st.session_state['user_msg'] = {
-                                    'tipo': 'create', 
-                                    'nombre': nombre_u, 
-                                    'rol': rol_u, 
-                                    'especialidad': especialidad_selec
-                                }
+                                st.session_state['user_msg'] = {'tipo': 'create', 'nombre': nombre_u, 'rol': rol_u, 'documento': documento_u, 'especialidad': especialidad_selec}
                                 st.session_state.reset_key += 1
                                 st.rerun()
                             except Exception as e:
                                 st.error(f"Error al crear: {e}")
                     else:
-                        st.warning("Completa todos los campos.")
+                        st.warning("Completa los campos obligatorios (Nombre, Documento, Clave, Rol).")
         
         # --- TAB 2: EDITAR / ELIMINAR ---
         with tab2:
             if not df_usuarios.empty:
-                user_map = {f"{row['nombre']} ({row['email']})": row['id'] for i, row in df_usuarios.iterrows()}
-                seleccion_user = st.selectbox("🔍 Buscar Usuario a Modificar", list(user_map.keys()))
+                # Mostramos Nombre y Documento en el selector
+                user_map = {f"{row['nombre']} - Doc: {row['documento']}": row['id'] for i, row in df_usuarios.iterrows()}
+                seleccion_user = st.selectbox("🔍 Buscar Usuario", list(user_map.keys()))
                 
                 id_user_edit = user_map[seleccion_user]
                 data_edit = df_usuarios[df_usuarios['id'] == id_user_edit].iloc[0]
@@ -369,27 +350,26 @@ else:
                 st.markdown("---")
                 st.write(f"### Editando a: **{data_edit['nombre']}**")
                 
-                # Campos dinámicos de edición
                 new_rol = st.selectbox("Rol", ["Admin", "Programador", "Tecnico"], index=["Admin", "Programador", "Tecnico"].index(data_edit['rol']), key="edit_rol")
                 
                 new_esp = "Gestión/Admin"
                 if new_rol == "Tecnico":
                     opciones_esp = ["Técnico Infraestructura", "Tecnico Soldadura", "Tecnico Electricista", "Tecnico Aire Acondicionado", "Otros"]
                     idx_esp = 0
-                    if data_edit['especialidad'] in opciones_esp:
-                        idx_esp = opciones_esp.index(data_edit['especialidad'])
+                    if data_edit['especialidad'] in opciones_esp: idx_esp = opciones_esp.index(data_edit['especialidad'])
                     new_esp = st.selectbox("Especialidad", opciones_esp, index=idx_esp, key="edit_esp")
 
                 with st.form("editar_usuario_form"):
                     c1, c2 = st.columns(2)
                     new_nombre = c1.text_input("Nombre", value=data_edit['nombre'])
-                    new_email = c2.text_input("Email", value=data_edit['email'])
+                    new_documento = c2.text_input("Número de Documento", value=data_edit['documento'])
                     new_pass = st.text_input("Contraseña", value=data_edit['password'], type="password")
+                    new_email = st.text_input("Email (Opcional)", value=data_edit.get('email', ''))
                     
                     if st.form_submit_button("💾 Guardar Cambios"):
                         try:
                             supabase.table("usuarios").update({
-                                "nombre": new_nombre, "email": new_email, "password": new_pass, "rol": new_rol, "especialidad": new_esp
+                                "nombre": new_nombre, "documento": new_documento, "email": new_email, "password": new_pass, "rol": new_rol, "especialidad": new_esp
                             }).eq("id", int(id_user_edit)).execute()
                             
                             st.session_state['user_msg'] = {'tipo': 'update', 'nombre': new_nombre}
@@ -399,8 +379,7 @@ else:
                 
                 st.markdown("---")
                 with st.expander("🗑️ Zona de Peligro (Eliminar Usuario)"):
-                    st.warning(f"¿Estás seguro de que quieres eliminar a **{data_edit['nombre']}**?")
-                    if data_edit['email'] == st.session_state['email_sesion']:
+                    if data_edit['documento'] == st.session_state['doc_sesion']:
                         st.error("⛔ No puedes eliminar tu propio usuario.")
                     else:
                         if st.button("Sí, Eliminar", type="primary"):
@@ -415,7 +394,8 @@ else:
             
             st.markdown("---")
             st.write("#### 📋 Listado Completo")
-            st.dataframe(df_usuarios[['nombre', 'email', 'rol', 'especialidad']], use_container_width=True)
+            if not df_usuarios.empty:
+                st.dataframe(df_usuarios[['documento', 'nombre', 'rol', 'especialidad']], use_container_width=True)
 
     # 5. CIERRE
     elif choice == "Cierre de OTs":
