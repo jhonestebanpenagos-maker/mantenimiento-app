@@ -28,7 +28,7 @@ except Exception as e:
 def run_query(table_name):
     """Trae todos los datos de una tabla"""
     try:
-        response = supabase.table(table_name).select("*").execute()
+        response = supabase.table(table_name).select("*").order("id").execute()
         return pd.DataFrame(response.data)
     except Exception as e:
         return pd.DataFrame()
@@ -52,6 +52,8 @@ if 'usuario' not in st.session_state:
     st.session_state['usuario'] = None
 if 'rol' not in st.session_state:
     st.session_state['rol'] = None
+if 'email_sesion' not in st.session_state: # NUEVO: Para saber mi propio email
+    st.session_state['email_sesion'] = None
 
 def login():
     st.markdown("<h1 style='text-align: center;'>🔐 Iniciar Sesión CMMS</h1>", unsafe_allow_html=True)
@@ -69,6 +71,7 @@ def login():
                         user_data = response.data[0]
                         st.session_state['usuario'] = user_data['nombre']
                         st.session_state['rol'] = user_data['rol']
+                        st.session_state['email_sesion'] = user_data['email'] # Guardamos el email
                         st.success(f"Bienvenido {user_data['nombre']}")
                         st.rerun()
                     else:
@@ -79,6 +82,7 @@ def login():
 def logout():
     st.session_state['usuario'] = None
     st.session_state['rol'] = None
+    st.session_state['email_sesion'] = None
     st.rerun()
 
 # --- 5. LÓGICA PRINCIPAL (SI ESTÁ LOGUEADO) ---
@@ -256,18 +260,16 @@ else:
         else:
             st.warning("No hay activos registrados.")
 
-    # 4. USUARIOS (Lógica corregida de Try/Except)
+    # 4. USUARIOS (AQUÍ ESTÁ LA NUEVA PESTAÑA DE EDICIÓN)
     elif choice == "Usuarios":
         st.subheader("Gestión de Personal")
         
-        # --- MENSAJE DE ÉXITO ---
+        # Mensaje de éxito de creación
         if 'user_success' in st.session_state:
             exito = st.session_state['user_success']
             st.balloons()
             st.markdown(f"""
-                <div style="
-                    background-color: #f8f9fa; border: 2px solid #28a745; border-radius: 15px; padding: 20px; 
-                    text-align: center; box-shadow: 0 4px 8px rgba(0,0,0,0.1); margin-bottom: 20px; max-width: 600px; margin-left: auto; margin-right: auto;">
+                <div style="background-color: #f8f9fa; border: 2px solid #28a745; border-radius: 15px; padding: 20px; text-align: center; box-shadow: 0 4px 8px rgba(0,0,0,0.1); margin-bottom: 20px; max-width: 600px; margin-left: auto; margin-right: auto;">
                     <h3 style="color: #28a745; margin: 0;">✅ ¡Usuario Creado con Éxito!</h3>
                     <hr style="border-top: 1px solid #ddd; margin: 15px 0;">
                     <div style="display: flex; justify-content: center; align-items: center; gap: 20px;">
@@ -282,32 +284,23 @@ else:
             """, unsafe_allow_html=True)
             del st.session_state['user_success']
 
-        tab1, tab2 = st.tabs(["Nuevo Usuario", "Lista de Usuarios"])
+        # OBTENEMOS USUARIOS PARA AMBAS PESTAÑAS
+        df_usuarios = run_query("usuarios")
+
+        tab1, tab2 = st.tabs(["➕ Nuevo Usuario", "✏️ Editar / Eliminar"])
         
+        # --- TAB 1: CREAR (Igual que antes) ---
         with tab1:
             st.write("#### Paso 1: Definir Perfil")
+            if 'reset_key' not in st.session_state: st.session_state.reset_key = 0
             
-            # Inicializar contador de reseteo
-            if 'reset_key' not in st.session_state:
-                st.session_state.reset_key = 0
-            
-            # Selectores con KEY DINÁMICA
-            rol_u = st.selectbox(
-                "Seleccione el Rol", 
-                ["", "Admin", "Programador", "Tecnico"],
-                key=f"rol_{st.session_state.reset_key}" 
-            )
+            rol_u = st.selectbox("Seleccione el Rol", ["", "Admin", "Programador", "Tecnico"], key=f"rol_{st.session_state.reset_key}")
             
             especialidad_selec = "Gestión/Admin"
             if rol_u == "Tecnico":
-                especialidad_selec = st.selectbox(
-                    "Especialidad Técnica (Obligatorio)", 
-                    ["", "Técnico Infraestructura", "Tecnico Soldadura", "Tecnico Electricista", "Tecnico Aire Acondicionado", "Otros"],
-                    key=f"esp_{st.session_state.reset_key}"
-                )
+                especialidad_selec = st.selectbox("Especialidad Técnica (Obligatorio)", ["", "Técnico Infraestructura", "Tecnico Soldadura", "Tecnico Electricista", "Tecnico Aire Acondicionado", "Otros"], key=f"esp_{st.session_state.reset_key}")
             
             st.write("#### Paso 2: Credenciales")
-            
             with st.form("crear_user", clear_on_submit=True):
                 c1, c2 = st.columns(2)
                 nombre_u = c1.text_input("Nombre Completo")
@@ -319,26 +312,91 @@ else:
                         if rol_u == "Tecnico" and especialidad_selec == "":
                             st.warning("Debes seleccionar una especialidad para el Técnico.")
                         else:
-                            # --- BLOQUE TRY/EXCEPT CORREGIDO ---
                             try:
                                 supabase.table("usuarios").insert({
                                     "email": email_u, "password": pass_u, "nombre": nombre_u, "rol": rol_u, "especialidad": especialidad_selec
                                 }).execute()
-                                
                                 st.session_state['user_success'] = {'nombre': nombre_u, 'rol': rol_u, 'especialidad': especialidad_selec}
-                                
-                                # Incrementamos el contador para reiniciar los selectores
                                 st.session_state.reset_key += 1
                                 st.rerun()
-                                
                             except Exception as e:
                                 st.error(f"Error al crear: {e}")
-                            # -----------------------------------
                     else:
                         st.warning("Completa todos los campos obligatorios.")
         
+        # --- TAB 2: EDITAR / ELIMINAR (NUEVO) ---
         with tab2:
-            st.dataframe(run_query("usuarios"), use_container_width=True)
+            if not df_usuarios.empty:
+                # Selector de usuario a editar
+                user_map = {f"{row['nombre']} ({row['email']})": row['id'] for i, row in df_usuarios.iterrows()}
+                seleccion_user = st.selectbox("🔍 Buscar Usuario a Modificar", list(user_map.keys()))
+                
+                id_user_edit = user_map[seleccion_user]
+                # Datos actuales
+                data_edit = df_usuarios[df_usuarios['id'] == id_user_edit].iloc[0]
+                
+                st.markdown("---")
+                st.write(f"### Editando a: **{data_edit['nombre']}**")
+                
+                # --- ZONA DE EDICIÓN ---
+                # Roles y Especialidad FUERA del form para ser dinámicos
+                new_rol = st.selectbox("Rol", ["Admin", "Programador", "Tecnico"], index=["Admin", "Programador", "Tecnico"].index(data_edit['rol']))
+                
+                new_esp = "Gestión/Admin"
+                if new_rol == "Tecnico":
+                    # Intentamos pre-seleccionar la especialidad que ya tenía si es válida
+                    opciones_esp = ["Técnico Infraestructura", "Tecnico Soldadura", "Tecnico Electricista", "Tecnico Aire Acondicionado", "Otros"]
+                    idx_esp = 0
+                    if data_edit['especialidad'] in opciones_esp:
+                        idx_esp = opciones_esp.index(data_edit['especialidad'])
+                    
+                    new_esp = st.selectbox("Especialidad", opciones_esp, index=idx_esp)
+
+                with st.form("editar_usuario_form"):
+                    c1, c2 = st.columns(2)
+                    new_nombre = c1.text_input("Nombre", value=data_edit['nombre'])
+                    new_email = c2.text_input("Email", value=data_edit['email'])
+                    new_pass = st.text_input("Contraseña", value=data_edit['password'], type="password")
+                    
+                    if st.form_submit_button("💾 Guardar Cambios"):
+                        try:
+                            supabase.table("usuarios").update({
+                                "nombre": new_nombre,
+                                "email": new_email,
+                                "password": new_pass,
+                                "rol": new_rol,
+                                "especialidad": new_esp
+                            }).eq("id", int(id_user_edit)).execute()
+                            st.success("Usuario actualizado correctamente.")
+                            st.rerun()
+                        except Exception as e:
+                            st.error(f"Error al actualizar: {e}")
+                
+                # --- ZONA DE ELIMINACIÓN ---
+                st.markdown("---")
+                with st.expander("🗑️ Zona de Peligro (Eliminar Usuario)"):
+                    st.warning(f"¿Estás seguro de que quieres eliminar a **{data_edit['nombre']}**?")
+                    
+                    # VERIFICACIÓN DE SEGURIDAD: NO BORRARSE A UNO MISMO
+                    if data_edit['email'] == st.session_state['email_sesion']:
+                        st.error("⛔ No puedes eliminar tu propio usuario mientras estás conectado.")
+                        st.caption("Pide a otro administrador que realice esta acción.")
+                    else:
+                        col_a, col_b = st.columns([1,4])
+                        if col_a.button("Sí, Eliminar", type="primary"):
+                            try:
+                                supabase.table("usuarios").delete().eq("id", int(id_user_edit)).execute()
+                                st.success("Usuario eliminado.")
+                                st.rerun()
+                            except Exception as e:
+                                st.error(f"Error al eliminar: {e}")
+
+            else:
+                st.info("No hay usuarios registrados.")
+            
+            st.markdown("---")
+            st.write("#### 📋 Listado Completo")
+            st.dataframe(df_usuarios[['nombre', 'email', 'rol', 'especialidad']], use_container_width=True)
 
     # 5. CIERRE
     elif choice == "Cierre de OTs":
