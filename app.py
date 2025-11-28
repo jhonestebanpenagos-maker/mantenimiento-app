@@ -86,19 +86,26 @@ def logout():
 if st.session_state['usuario'] is None:
     login()
 else:
-    # --- BARRA LATERAL CON ROLES ---
+    # --- BARRA LATERAL CON ROLES Y DISEÑO MEJORADO ---
     rol_actual = st.session_state['rol']
     usuario_actual = st.session_state['usuario']
     
     with st.sidebar:
-        st.write(f"👤 **{usuario_actual}**")
-        st.caption(f"Rol: {rol_actual}")
-        if st.button("Cerrar Sesión"):
+        # Tarjeta de Usuario
+        st.markdown(f"""
+            <div style="background-color: #333; padding: 10px; border-radius: 10px; text-align: center; margin-bottom: 20px;">
+                <h3 style="margin:0; color: white;">👤 {usuario_actual}</h3>
+                <p style="margin:0; color: #aaa; font-size: 14px;">Rol: {rol_actual}</p>
+            </div>
+        """, unsafe_allow_html=True)
+        
+        if st.button("Cerrar Sesión", use_container_width=True):
             logout()
         
+        st.write("") # Espacio
+
         # DEFINIR MENÚ SEGÚN ROL
         options_menu = []
-        
         if rol_actual == "Admin":
             options_menu = ["Dashboard", "Gestión de Activos", "Crear Orden", "Cierre de OTs", "Usuarios"]
         elif rol_actual == "Programador":
@@ -106,15 +113,52 @@ else:
         elif rol_actual == "Tecnico":
             options_menu = ["Cierre de OTs"] 
         
+        # --- MENÚ VISTOSO Y ANIMADO ---
         choice = option_menu(
-            menu_title="Menú",
+            menu_title="MENÚ PRINCIPAL", # Título en mayúsculas
             options=options_menu,
             icons=["speedometer2", "box-seam", "plus-circle", "check2-circle", "people"],
             default_index=0,
             styles={
-                "container": {"padding": "5!important", "background-color": "#262730"},
-                "nav-link": {"font-size": "16px", "text-align": "left", "margin": "0px", "color": "white"},
-                "nav-link-selected": {"background-color": "#02ab21"},
+                # 1. Contenedor general (Fondo oscuro elegante)
+                "container": {
+                    "padding": "0!important", 
+                    "background-color": "#151515", 
+                    "border-radius": "5px"
+                },
+                
+                # 2. Título del Menú (AQUÍ CORREGIMOS QUE NO SE VEÍA)
+                "menu-title": {
+                    "color": "#ffffff",          # Blanco puro
+                    "font-weight": "bold",       # Negrilla
+                    "font-size": "18px",
+                    "text-align": "center",
+                    "padding": "15px",
+                    "letter-spacing": "2px"      # Espacio entre letras para elegancia
+                },
+                
+                # 3. Iconos (Color Cian Eléctrico)
+                "icon": {
+                    "color": "#00d4ff",          # Cian brillante
+                    "font-size": "20px"
+                },
+                
+                # 4. Texto de las opciones (Blanco)
+                "nav-link": {
+                    "font-size": "16px",
+                    "text-align": "left",
+                    "margin": "5px",
+                    "--hover-color": "#2b2b2b",  # Gris oscuro al pasar el mouse
+                    "color": "white"
+                },
+                
+                # 5. Opción Seleccionada (DEGRADADO ANIMADO)
+                "nav-link-selected": {
+                    "background-image": "linear-gradient(to right, #00b09b, #96c93d)", # Degradado Verde-Lima
+                    "color": "white",
+                    "font-weight": "bold",
+                    "box-shadow": "0px 4px 15px rgba(0,0,0,0.3)" # Sombra suave
+                },
             }
         )
 
@@ -126,13 +170,18 @@ else:
         df_ordenes = run_query("ordenes")
         if not df_ordenes.empty:
             c1, c2, c3 = st.columns(3)
-            c1.metric("Total OTs", len(df_ordenes))
-            c2.metric("Abiertas", len(df_ordenes[df_ordenes['estado']=='Abierta']))
-            c3.metric("Concluidas", len(df_ordenes[df_ordenes['estado']=='Concluida']))
+            # Métricas con estilo
+            c1.metric("Total OTs", len(df_ordenes), delta="Global")
+            c2.metric("Abiertas", len(df_ordenes[df_ordenes['estado']=='Abierta']), delta="Pendientes", delta_color="inverse")
+            c3.metric("Concluidas", len(df_ordenes[df_ordenes['estado']=='Concluida']), delta="Finalizadas", delta_color="normal")
+            
             st.divider()
             col_a, col_b = st.columns(2)
-            col_a.bar_chart(df_ordenes['estado'].value_counts())
-            col_b.bar_chart(df_ordenes['criticidad'].value_counts())
+            col_a.write("### Estado de Órdenes")
+            col_a.bar_chart(df_ordenes['estado'].value_counts(), color="#00b09b") # Color verde tema
+            
+            col_b.write("### Criticidad")
+            col_b.bar_chart(df_ordenes['criticidad'].value_counts(), color="#ff6b6b") # Color rojo alerta
         else:
             st.info("Sin datos para mostrar.")
 
@@ -144,7 +193,7 @@ else:
         tab1, tab2 = st.tabs(["➕ Registrar Nuevo", "✏️ Editar / Dar de Baja"])
         
         with tab1:
-            with st.form("form_activo"):
+            with st.form("form_activo", clear_on_submit=True):
                 c1, c2 = st.columns(2)
                 nombre = c1.text_input("Nombre del Equipo")
                 ubicacion = c2.text_input("Ubicación")
@@ -174,13 +223,28 @@ else:
                 
                 st.markdown("---")
                 with st.expander("🗑️ Zona de Peligro (Baja)"):
-                    motivo = st.text_input("Motivo de baja:")
-                    if st.button("Dar de Baja", type="primary", disabled=(not motivo)):
+                    usuario_baja = st.text_input("👤 Responsable de la Baja:")
+                    motivo = st.text_area("Motivo:")
+                    if st.button("Dar de Baja", type="primary", disabled=(not motivo or not usuario_baja)):
+                        backup = {
+                            "id_original": int(id_seleccionado),
+                            "nombre": datos_actuales['nombre'],
+                            "ubicacion": datos_actuales['ubicacion'],
+                            "categoria": datos_actuales['categoria'],
+                            "motivo_baja": motivo
+                        }
+                        supabase.table("auditoria_eliminados").insert({
+                            "tipo_registro": "Activo",
+                            "nombre_referencia": datos_actuales['nombre'],
+                            "datos_respaldo": backup,
+                            "usuario_responsable": usuario_baja
+                        }).execute()
+                        
                         supabase.table("ordenes").delete().eq("activo_id", int(id_seleccionado)).execute()
                         supabase.table("activos").delete().eq("id", int(id_seleccionado)).execute()
                         st.success("Eliminado")
                         st.rerun()
-
+    
     # 3. CREAR ORDEN Y ASIGNAR
     elif choice == "Crear Orden":
         st.subheader("Planificación y Asignación de OTs")
@@ -216,7 +280,6 @@ else:
                 res = supabase.table("ordenes").insert(datos).execute()
                 if res.data:
                     new_id = res.data[0]['id']
-                    # Link WhatsApp
                     texto = f"*NUEVA ASIGNACIÓN OT #{new_id}*\nResp: {asignado_a}\nEquipo: {seleccion}\nFalla: {descripcion}"
                     texto_enc = urllib.parse.quote(texto)
                     
@@ -231,56 +294,40 @@ else:
         else:
             st.warning("No hay activos registrados.")
 
-    # 4. USUARIOS (AQUÍ ESTÁ EL CAMBIO VISTOSO)
+    # 4. USUARIOS
     elif choice == "Usuarios":
         st.subheader("Gestión de Personal")
         
         tab1, tab2 = st.tabs(["Nuevo Usuario", "Lista de Usuarios"])
         
         with tab1:
-            # AGREGADO: clear_on_submit=True LIMPIA LOS CAMPOS AL GUARDAR
             with st.form("crear_user", clear_on_submit=True):
                 c1, c2 = st.columns(2)
                 nombre_u = c1.text_input("Nombre Completo")
                 email_u = c2.text_input("Email (Login)")
                 pass_u = c1.text_input("Contraseña", type="password")
                 rol_u = c2.selectbox("Rol", ["Admin", "Programador", "Tecnico"])
-                especialidad = st.text_input("Especialidad (Ej: Electricista)")
+                especialidad = st.text_input("Especialidad")
                 
                 if st.form_submit_button("Crear Usuario"):
                     try:
                         supabase.table("usuarios").insert({
-                            "email": email_u,
-                            "password": pass_u,
-                            "nombre": nombre_u,
-                            "rol": rol_u,
-                            "especialidad": especialidad
+                            "email": email_u, "password": pass_u, "nombre": nombre_u, "rol": rol_u, "especialidad": especialidad
                         }).execute()
-                        
-                        # --- MENSAJE VISTOSO ---
                         st.balloons()
                         st.markdown(f"""
-                            <div style="
-                                background-color: #d1e7dd; 
-                                color: #0f5132; 
-                                padding: 20px; 
-                                border-radius: 10px; 
-                                border: 1px solid #badbcc; 
-                                text-align: center; 
-                                margin-bottom: 20px;">
-                                <h2 style="margin:0;">✅ Usuario Registrado con Éxito</h2>
-                                <h3 style="margin:10px 0;">{nombre_u}</h3>
-                                <p style="font-size: 18px;">Rol asignado: <strong>{rol_u}</strong></p>
+                            <div style="background-color: #d1e7dd; color: #0f5132; padding: 20px; border-radius: 10px; text-align: center;">
+                                <h2 style="margin:0;">✅ Usuario Registrado</h2>
+                                <h3>{nombre_u} ({rol_u})</h3>
                             </div>
                         """, unsafe_allow_html=True)
-                        
                     except Exception as e:
-                        st.error(f"Error al crear usuario: {e}")
+                        st.error(f"Error: {e}")
         
         with tab2:
             st.dataframe(run_query("usuarios"), use_container_width=True)
 
-    # 5. CIERRE (Técnicos)
+    # 5. CIERRE
     elif choice == "Cierre de OTs":
         st.subheader("Mis Órdenes Pendientes")
         df_ots = run_query("ordenes")
@@ -293,8 +340,7 @@ else:
             
             if not mis_ots.empty:
                 st.dataframe(mis_ots[['id', 'descripcion', 'tecnico_asignado', 'estado']], use_container_width=True)
-                
-                ot_id = st.selectbox("Seleccionar OT para cerrar", mis_ots['id'].values)
+                ot_id = st.selectbox("Seleccionar OT", mis_ots['id'].values)
                 with st.form("cierre_form"):
                     coments = st.text_area("Informe")
                     foto = st.file_uploader("Evidencia")
