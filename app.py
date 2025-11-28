@@ -256,30 +256,68 @@ else:
         else:
             st.warning("No hay activos registrados.")
 
-    # 4. USUARIOS (AQUÍ ESTÁ LA LÓGICA DINÁMICA DE ROLES)
+    # 4. USUARIOS (AQUÍ ESTÁ LA LÓGICA MEJORADA)
     elif choice == "Usuarios":
         st.subheader("Gestión de Personal")
         
+        # --- VERIFICACIÓN DE MENSAJE DE ÉXITO PENDIENTE ---
+        if 'user_success' in st.session_state:
+            exito = st.session_state['user_success']
+            st.balloons()
+            # DISEÑO DE TARJETA TIPO "CREDENCIAL"
+            st.markdown(f"""
+                <div style="
+                    background-color: #f8f9fa; 
+                    border: 2px solid #28a745; 
+                    border-radius: 15px; 
+                    padding: 20px; 
+                    text-align: center; 
+                    box-shadow: 0 4px 8px rgba(0,0,0,0.1); 
+                    margin-bottom: 20px;
+                    max-width: 600px;
+                    margin-left: auto;
+                    margin-right: auto;">
+                    <h3 style="color: #28a745; margin: 0;">✅ ¡Usuario Creado con Éxito!</h3>
+                    <hr style="border-top: 1px solid #ddd; margin: 15px 0;">
+                    <div style="display: flex; justify-content: center; align-items: center; gap: 20px;">
+                        <div style="font-size: 50px;">👤</div>
+                        <div style="text-align: left;">
+                            <h2 style="margin: 0; color: #333;">{exito['nombre']}</h2>
+                            <p style="margin: 0; color: #666; font-size: 18px;">{exito['rol']}</p>
+                            <p style="margin: 0; color: #888; font-size: 14px;">{exito['especialidad']}</p>
+                        </div>
+                    </div>
+                </div>
+            """, unsafe_allow_html=True)
+            # Limpiamos el mensaje para que no salga siempre
+            del st.session_state['user_success']
+
         tab1, tab2 = st.tabs(["Nuevo Usuario", "Lista de Usuarios"])
         
         with tab1:
             st.write("#### Paso 1: Definir Perfil")
             
-            # 1. ROL FUERA DEL FORM PARA INTERACTIVIDAD
-            rol_u = st.selectbox("Seleccione el Rol", ["Admin", "Programador", "Tecnico"])
+            # USAMOS KEYS PARA PODER RESETEARLOS DESPUÉS
+            if 'rol_key' not in st.session_state: st.session_state.rol_key = 0
             
-            # 2. LOGICA CONDICIONAL DE ESPECIALIDAD
-            especialidad_selec = "Gestión/Admin" # Valor por defecto
+            # Selector de ROL
+            rol_u = st.selectbox(
+                "Seleccione el Rol", 
+                ["Admin", "Programador", "Tecnico"],
+                key="widget_rol" # Key única
+            )
             
+            # Lógica Condicional
+            especialidad_selec = "Gestión/Admin"
             if rol_u == "Tecnico":
                 especialidad_selec = st.selectbox(
                     "Especialidad Técnica (Obligatorio)", 
-                    ["Técnico Infraestructura", "Tecnico Soldadura", "Tecnico Electricista", "Tecnico Aire Acondicionado", "Otros"]
+                    ["Técnico Infraestructura", "Tecnico Soldadura", "Tecnico Electricista", "Tecnico Aire Acondicionado", "Otros"],
+                    key="widget_esp"
                 )
             
             st.write("#### Paso 2: Credenciales")
             
-            # 3. EL RESTO EN EL FORMULARIO (Se limpia al enviar)
             with st.form("crear_user", clear_on_submit=True):
                 c1, c2 = st.columns(2)
                 nombre_u = c1.text_input("Nombre Completo")
@@ -297,14 +335,15 @@ else:
                                 "especialidad": especialidad_selec
                             }).execute()
                             
-                            st.balloons()
-                            st.markdown(f"""
-                                <div style="background-color: #d1e7dd; color: #0f5132; padding: 20px; border-radius: 10px; text-align: center;">
-                                    <h2 style="margin:0;">✅ Usuario Registrado</h2>
-                                    <h3>{nombre_u}</h3>
-                                    <p>Rol: {rol_u} | Esp: {especialidad_selec}</p>
-                                </div>
-                            """, unsafe_allow_html=True)
+                            # GUARDAMOS DATOS PARA EL MENSAJE Y RECARGAMOS
+                            st.session_state['user_success'] = {
+                                'nombre': nombre_u,
+                                'rol': rol_u,
+                                'especialidad': especialidad_selec
+                            }
+                            # Esto hace que la página se recargue, limpiando todo
+                            st.rerun()
+                            
                         except Exception as e:
                             st.error(f"Error al crear: {e}")
                     else:
