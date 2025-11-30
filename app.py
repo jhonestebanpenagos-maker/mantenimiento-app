@@ -692,48 +692,54 @@ elif choice == "Usuarios":
                     st.warning("Por favor, complete todos los campos.")
 
     # ----------------------------------------------------
-    # TAB 2: GESTIONAR USUARIOS (Con Edición/Eliminación)
+    # TAB 2: GESTIONAR USUARIOS (Con Edición/Eliminación usando data_editor)
     # ----------------------------------------------------
     with tab_gestionar:
         df_users = run_query("usuarios")
         
         if not df_users.empty:
             
-            st.subheader("Lista de Usuarios y Selección por ID")
-            
-            # 1. Mostrar la tabla completa para visión general
-            st.dataframe(
-                df_users[['id', 'documento', 'nombre', 'rol']],
-                use_container_width=True,
-                hide_index=True
-            )
-            
-            # 2. Selector por ID para activar la edición/eliminación
-            user_ids = df_users['id'].tolist()
-            user_ids.insert(0, None) # Opción inicial nula
+            st.subheader("Lista de Usuarios (Seleccione una fila para gestionar)")
 
-            selected_id = st.selectbox(
-                "📝 Seleccione el ID del usuario para editar o eliminar:", 
-                user_ids, 
-                index=0,
-                format_func=lambda x: "--- Seleccionar ID ---" if x is None else f"ID: {x}",
-                key="select_user_id"
+            # --- SELECCIÓN RÁPIDA: Usando st.data_editor para selección de fila con un solo clic ---
+            
+            # 1. Creamos una columna temporal de selección si no existe
+            if 'select' not in df_users.columns:
+                df_users['select'] = False
+            
+            # 2. Configuramos y mostramos el data_editor (la columna 'select' actúa como nuestro checkbox)
+            edited_df = st.data_editor(
+                df_users[['select', 'id', 'documento', 'nombre', 'rol']],
+                column_config={
+                    "select": st.column_config.CheckboxColumn(
+                        "Seleccionar",
+                        help="Marque para editar/eliminar este usuario.",
+                        default=False
+                    ),
+                    "id": "ID",
+                    "documento": "Documento",
+                    "nombre": "Nombre",
+                    "rol": st.column_config.SelectboxColumn("Rol", options=["Tecnico", "Programador", "Admin"], required=True)
+                },
+                disabled=['id', 'documento', 'nombre', 'rol'], # Deshabilitamos la edición de los campos directamente en la tabla
+                hide_index=True,
+                use_container_width=True
             )
 
-            # --- LÓGICA DE GESTIÓN ---
+            # 3. Identificamos el usuario seleccionado
+            selected_user_row = edited_df[edited_df['select'] == True]
             
-            if selected_id is not None:
-                # Encontrar el usuario por ID
-                selected_user = df_users[df_users['id'] == selected_id].iloc[0]
+            if len(selected_user_row) == 1:
+                selected_user = selected_user_row.iloc[0]
                 user_id = selected_user['id']
-
+                
+                # --- MÓDULO DE GESTIÓN ACTIVA ---
                 st.markdown("---")
                 st.markdown(f"**Usuario seleccionado:** **{selected_user['nombre']}** (ID: {user_id})")
                 
-                # --- ACCIONES DE EDICIÓN Y ELIMINACIÓN ---
                 
                 # Formulario de Edición
-                with st.form(key="edit_user_form"):
+                with st.form(key="edit_user_form", clear_on_submit=False):
                     st.subheader("Editar Información")
                     
                     c1, c2 = st.columns(2)
@@ -749,7 +755,7 @@ elif choice == "Usuarios":
                     
                     new_password = st.text_input("Nueva Contraseña (Dejar vacío para no cambiar)", type="password", key="edit_user_pass")
                     
-                    col_edit, col_space = st.columns([1, 1])
+                    col_edit, col_delete_btn = st.columns([1, 1])
                     
                     update_submitted = col_edit.form_submit_button("ACTUALIZAR USUARIO", type="primary")
                     
@@ -775,8 +781,8 @@ elif choice == "Usuarios":
                             st.rerun()
                         except Exception as e:
                             st.error(f"Error al actualizar: {e}")
-
-                # Botón de Eliminación (Fuera de la edición, pero abajo del formulario)
+                
+                # Botón de Eliminación (Fuera del formulario de edición para simplificar el flujo)
                 if st.button("🔴 ELIMINAR USUARIO SELECCIONADO", type="secondary", use_container_width=True, help="Borrar el usuario seleccionado"):
                     
                     # Validación de eliminación
@@ -789,10 +795,12 @@ elif choice == "Usuarios":
                             st.rerun()
                         except Exception as e:
                             st.error(f"Error al eliminar: {e}")
-
+                            
+            elif len(selected_user_row) > 1:
+                st.warning("⚠️ Seleccione solo un usuario a la vez para gestionar su información.")
 
             else:
-                st.info("Seleccione un ID de la lista para editar o eliminar un usuario.")
+                st.info("Haga clic en el checkbox de la columna 'Seleccionar' para elegir un usuario y gestionar sus datos.")
             
         else:
             st.info("No se encontraron usuarios en la base de datos. Use la pestaña 'CREAR USUARIO'.")
