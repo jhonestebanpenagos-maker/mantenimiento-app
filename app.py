@@ -305,7 +305,7 @@ def mostrar_notificaciones():
         del st.session_state['notification']
 
 
-# --- FUNCIÓN AISLADA PARA EL SVG (SOLUCIÓN AL PROBLEMA DEL DIV) ---
+# --- FUNCIÓN AISLADA PARA EL SVG ---
 def render_orion_svg(PRO_ORANGE):
     ORION_SVG = f"""
         <svg width="250" height="250" viewBox="0 0 400 400" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -378,7 +378,7 @@ if "id_activo_qr" in query_params:
     st.stop() 
 
 # ==============================================================================
-# 🚀 LOGIN / SCANNER (USANDO FUNCIÓN AISLADA)
+# 🚀 LOGIN / SCANNER (CORREGIDO Y ESTILIZADO)
 # ==============================================================================
 
 if 'usuario' not in st.session_state: st.session_state['usuario'] = None
@@ -393,15 +393,16 @@ def logout():
 if st.session_state['usuario'] is None:
     c1, c2, c3 = st.columns([1,2,1])
     with c2:
-        # LLAMADA A LA FUNCIÓN DE RENDERIZADO AISLADO (SOLUCIÓN SEGURA)
+        # 1. RENDERIZADO DEL SVG AISLADO
         render_orion_svg(PRO_ORANGE)
 
         # 2. TÍTULOS
         st.markdown(f"""
             <h1 style='text-align: center; font-size: 3.5rem; margin-bottom: 0; text-shadow: 0 0 10px {PRO_ORANGE};'>ORIÓN</h1>
-            <p style='text-align: center; color: #E5E7EB; font-size: 1.2rem; letter-spacing: 2px; margin-top: 5px; margin-bottom: 40px; font-weight: 300;'>
+            <p style='text-align: center; color: #E5E7EB; font-size: 1.2rem; letter-spacing: 2px; margin-top: 5px; margin-bottom: 10px; font-weight: 300;'>
                 PLATAFORMA INTEGRAL DE MANTENIMIENTO
             </p>
+            <hr style="border: none; height: 1px; background: linear-gradient(90deg, transparent, {PRO_ORANGE}, transparent); margin-bottom: 40px;">
         """, unsafe_allow_html=True)
         
         # 3. RECUADRO DE ACCESO
@@ -438,7 +439,7 @@ if st.session_state['usuario'] is None:
                     st.rerun()
                 else: st.warning("QR no válido.")
         
-        st.markdown("</div>", unsafe_allow_html=True) # Cierre seguro de la tarjeta de acceso
+        st.markdown("</div>", unsafe_allow_html=True) 
     st.stop()
 
 # ==============================================================================
