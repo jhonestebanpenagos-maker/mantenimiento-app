@@ -147,8 +147,7 @@ st.markdown(f"""
         text-align: center;
     }}
     
-    /* --- HACK CRÍTICO DEL LOGIN (Mantener por seguridad, aunque ahora lo "usamos") --- */
-    /* Lo mantenemos por si acaso, pero el objetivo es que el último "card-style" lo ocupe */
+    /* --- HACK CRÍTICO DEL LOGIN (Mantener por seguridad) --- */
     div[data-testid="stVerticalBlock"] > div:nth-child(3):empty {{
         height: 0 !important;
         min-height: 0 !important;
@@ -167,6 +166,7 @@ st.markdown(f"""
 @st.cache_resource
 def init_supabase():
     try:
+        # Asegúrate de que las credenciales estén en st.secrets
         url = st.secrets["SUPABASE_URL"]
         key = st.secrets["SUPABASE_KEY"]
         return create_client(url, key)
@@ -175,7 +175,7 @@ def init_supabase():
 
 supabase = init_supabase()
 if not supabase:
-    st.error("Error conectando a Supabase.")
+    st.error("Error conectando a Supabase. Revisa las claves.")
     st.stop()
 
 # --- 3. FUNCIONES AUXILIARES ---
@@ -201,7 +201,8 @@ def subir_imagen(archivo, carpeta="evidencias"):
 
             supabase.storage.from_(carpeta).upload(path=file_name, file=file_bytes, file_options={"content-type": mime_type})
             return supabase.storage.from_(carpeta).get_public_url(file_name)
-        except:
+        except Exception as e:
+            st.error(f"Error al subir imagen: {e}")
             return None
     return None
 
@@ -391,7 +392,7 @@ if "id_activo_qr" in query_params:
     st.stop() 
 
 # ==============================================================================
-# 🚀 LOGIN / SCANNER (ESTRUCTURA DE TARJETA ÚNICA CENTRAL)
+# 🚀 LOGIN / SCANNER (USANDO EL RECUADRO COMO PIE DE PÁGINA)
 # ==============================================================================
 
 if 'usuario' not in st.session_state: st.session_state['usuario'] = None
@@ -407,20 +408,20 @@ if st.session_state['usuario'] is None:
     c1, c2, c3 = st.columns([1,2,1])
     with c2:
         
-        # INICIO DE LA TARJETA PRINCIPAL (TODO EL CONTENIDO VA AQUÍ)
-        st.markdown("<div class='card-style' style='padding: 30px;'>", unsafe_allow_html=True)
-        
-        # 1. ENCABEZADO (SVG y Títulos)
+        # 1. ENCABEZADO Y TÍTULOS (Flotante)
         render_orion_svg(PRO_ORANGE)
+
         st.markdown(f"""
             <h1 style='text-align: center; font-size: 3.5rem; margin-bottom: 0; text-shadow: 0 0 10px {PRO_ORANGE};'>ORIÓN</h1>
             <p style='text-align: center; color: #E5E7EB; font-size: 1.2rem; letter-spacing: 2px; margin-top: 5px; margin-bottom: 20px; font-weight: 300;'>
                 PLATAFORMA INTEGRAL DE MANTENIMIENTO
             </p>
-            <hr style="border: none; height: 1px; background: linear-gradient(90deg, transparent, #4B5563, transparent); margin-bottom: 30px;">
+            <hr style="border: none; height: 1px; background: linear-gradient(90deg, transparent, {PRO_ORANGE}, transparent); margin-bottom: 40px;">
         """, unsafe_allow_html=True)
         
-        # 2. TABS Y FORMULARIO
+        # 2. RECUADRO DE ACCESO (Tarjeta principal)
+        st.markdown("<div class='card-style' style='padding: 30px;'>", unsafe_allow_html=True)
+        
         tab_login, tab_scan = st.tabs(["🔐 INGRESAR", "📷 ESCANEAR QR"])
         
         with tab_login:
@@ -449,14 +450,12 @@ if st.session_state['usuario'] is None:
                     st.rerun()
                 else: st.warning("QR no válido.")
         
-        # 3. FIN DE LA TARJETA PRINCIPAL
         st.markdown("</div>", unsafe_allow_html=True) 
 
-        # 4. PIE DE PÁGINA DESPUÉS DE LA TARJETA PRINCIPAL DE LOGIN
-        # Usamos un st.markdown para crear una tarjeta inferior, aprovechando el estilo 'card-style'
+        # 3. PIE DE PÁGINA ESTILIZADO (Reutilizando el estilo del "recuadro" para la firma)
         st.markdown(f"""
-            <div class='card-style' style='padding: 15px; margin-top: 20px; text-align: center; font-size: 0.9em; color: #9CA3AF;'>
-                <p style='margin: 0;'>By: Jhonestebanpenagos@gmail.com</p>
+            <div class='card-style' style='padding: 15px; margin-top: 20px; text-align: center; font-size: 0.85em; color: #9CA3AF;'>
+                <p style='margin: 0;'>Desarrollado por: <b>Jhonestebanpenagos@gmail.com</b></p>
             </div>
         """, unsafe_allow_html=True)
 
@@ -602,4 +601,14 @@ elif choice == "Cerrar Orden":
             with st.form("close"):
                 rep = st.text_area("Reporte Técnico")
                 img = st.file_uploader("Foto")
-                if st.form_
+                if st.form_submit_button("FINALIZAR"):
+                    url = subir_imagen(img)
+                    supabase.table("ordenes").update({"estado":"Concluida", "comentarios_cierre":rep, "evidencia_url":url}).eq("id",sid).execute()
+                    st.session_state['notification'] = {'type':'success', 'message':'Orden cerrada.'}
+                    st.rerun()
+            st.markdown("</div>", unsafe_allow_html=True)
+        else: st.info("No hay pendientes.")
+
+elif choice == "Usuarios":
+    st.title("USUARIOS")
+    st.markdown("<div class='card-style'>Panel de gestión de usuarios.</div>", unsafe_allow_html=True)
