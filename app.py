@@ -349,7 +349,7 @@ if "id_activo_qr" in query_params:
     st.stop() 
 
 # ==============================================================================
-# 🚀 LOGIN / SCANNER (MODIFICADO: IMAGEN ESTÁTICA TRANSPARENTE)
+# 🚀 LOGIN / SCANNER (IMAGEN SVG INTEGRADA)
 # ==============================================================================
 
 if 'usuario' not in st.session_state: st.session_state['usuario'] = None
@@ -364,19 +364,29 @@ def logout():
 if st.session_state['usuario'] is None:
     c1, c2, c3 = st.columns([1,2,1])
     with c2:
-        # 1. IMAGEN ESTÁTICA TRANSPARENTE DE ORIÓN CON GLOW SUTIL
-        # Nota: He usado una URL de ejemplo de una constelación blanca sobre transparente.
-        # Si el enlace caduca o prefieres otra, reemplaza la URL en 'src'.
+        # 1. IMAGEN SVG DE LA CONSTELACIÓN DE ORIÓN (Código incrustado/flotante)
+        # Código SVG de la Constelación de Orión (minimalista, Blanco y Naranja)
+        ORION_SVG = f"""
+        <svg width="250" height="250" viewBox="0 0 400 400" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <style>
+                .star {{ fill: white; filter: drop-shadow(0 0 2px white); }}
+                .belt {{ stroke: {PRO_ORANGE}; filter: drop-shadow(0 0 5px {PRO_ORANGE}); stroke-width: 2; opacity: 0.8; }}
+                .line {{ stroke: {PRO_ORANGE}; stroke-width: 1; opacity: 0.4; }}
+            </style>
+            <path class="line" d="M100 150 L200 50 L300 150 L250 250 L150 250 L100 150 Z"/>
+            <line class="belt" x1="160" y1="180" x2="200" y2="200"/>
+            <line class="belt" x1="200" y1="200" x2="240" y2="220"/>
+            <circle class="star" cx="200" cy="50" r="5"/> <circle class="star" cx="100" cy="150" r="4"/> <circle class="star" cx="240" cy="220" r="6"/> <circle class="star" cx="200" cy="200" r="6"/> <circle class="star" cx="160" cy="180" r="6"/> <circle class="star" cx="300" cy="150" r="5"/> <circle class="star" cx="250" cy="250" r="7"/> </svg>
+        """
         st.markdown(f"""
-            <div style="display: flex; justify-content: center; margin-bottom: 10px;">
-                <img src="https://static.vecteezy.com/system/resources/previews/023/853/746/original/orion-constellation-astronomy-star-map-png.png" width="280" 
-                     style="filter: drop-shadow(0 0 8px {PRO_ORANGE}); opacity: 0.9;">
+            <div style="display: flex; justify-content: center; margin-bottom: 5px;">
+                {ORION_SVG}
             </div>
         """, unsafe_allow_html=True)
 
         # 2. TÍTULOS
         st.markdown(f"""
-            <h1 style='text-align: center; font-size: 3.5rem; margin-bottom: 0; text-shadow: 0 0 15px {PRO_ORANGE};'>ORIÓN</h1>
+            <h1 style='text-align: center; font-size: 3.5rem; margin-bottom: 0; text-shadow: 0 0 10px {PRO_ORANGE};'>ORIÓN</h1>
             <p style='text-align: center; color: #E5E7EB; font-size: 1.2rem; letter-spacing: 2px; margin-top: 5px; margin-bottom: 40px; font-weight: 300;'>
                 PLATAFORMA INTEGRAL DE MANTENIMIENTO
             </p>
