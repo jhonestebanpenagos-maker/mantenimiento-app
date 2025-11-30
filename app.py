@@ -182,16 +182,26 @@ st.markdown(f"""
 @st.cache_resource
 def init_supabase():
     try:
+        # 1. Intentamos leer las claves. Si fallan, se lanza KeyError.
         url = st.secrets["SUPABASE_URL"]
         key = st.secrets["SUPABASE_KEY"]
-        # Implementamos max_retries=3 para una conexión más robusta
-        return create_client(url, key, options={"max_retries": 3}) 
-    except:
+        
+        # 2. Si las claves se leyeron, intentamos crear el cliente.
+        # Retiramos 'max_retries' para no introducir más variables si el problema es de conexión inicial.
+        return create_client(url, key) 
+        
+    except KeyError as e:
+        # Captura específica si la clave no existe en secrets.toml
+        st.error(f"❌ ERROR CRÍTICO: La clave {e} no se encuentra en la configuración de Streamlit Secrets (secrets.toml).")
         return None
+    except Exception as e:
+        # Captura de cualquier otro error (conexión, SSL, URL malformada, etc.)
+        st.error(f"❌ Error desconocido al conectar a Supabase. Verifique URL y clave. Detalles: {e}")
+        return None
+
 
 supabase = init_supabase()
 if not supabase:
-    st.error("Error conectando a Supabase. Revisa las claves.")
     st.stop()
 
 # --- 3. FUNCIONES AUXILIARES ---
@@ -454,19 +464,14 @@ if st.session_state['usuario'] is None:
             submitted = st.form_submit_button("ACCEDER AL SISTEMA", type="primary", use_container_width=True)
             if submitted:
                 try:
-                    # Intento de consulta a Supabase
                     response = supabase.table("usuarios").select("*").eq("documento", documento).eq("password", password).execute()
-                    
                     if response.data:
                         user = response.data[0]
                         st.session_state['usuario'] = user['nombre']
                         st.session_state['rol'] = user['rol']
                         st.rerun()
-                    else: 
-                        st.error("Acceso denegado. Usuario o contraseña incorrectos.")
-                except Exception as e: 
-                    # Capturamos el error para ver si es un problema de red o de la consulta
-                    st.error(f"Error de red o conexión. Intente nuevamente. Detalles: {e}")
+                    else: st.error("Acceso denegado.")
+                except: st.error("Error de red.")
         
 
     st.stop()
