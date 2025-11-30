@@ -147,7 +147,8 @@ st.markdown(f"""
         text-align: center;
     }}
     
-    /* --- HACK CRÍTICO DEL LOGIN (Mantener por seguridad) --- */
+    /* --- HACK CRÍTICO DEL LOGIN (Mantener por seguridad, aunque ahora lo "usamos") --- */
+    /* Lo mantenemos por si acaso, pero el objetivo es que el último "card-style" lo ocupe */
     div[data-testid="stVerticalBlock"] > div:nth-child(3):empty {{
         height: 0 !important;
         min-height: 0 !important;
@@ -423,7 +424,6 @@ if st.session_state['usuario'] is None:
         tab_login, tab_scan = st.tabs(["🔐 INGRESAR", "📷 ESCANEAR QR"])
         
         with tab_login:
-            # Aquí Streamlit maneja el espacio, no necesitamos código extra.
             with st.form("login_form"):
                 documento = st.text_input("Usuario")
                 password = st.text_input("Contraseña", type="password")
@@ -451,6 +451,15 @@ if st.session_state['usuario'] is None:
         
         # 3. FIN DE LA TARJETA PRINCIPAL
         st.markdown("</div>", unsafe_allow_html=True) 
+
+        # 4. PIE DE PÁGINA DESPUÉS DE LA TARJETA PRINCIPAL DE LOGIN
+        # Usamos un st.markdown para crear una tarjeta inferior, aprovechando el estilo 'card-style'
+        st.markdown(f"""
+            <div class='card-style' style='padding: 15px; margin-top: 20px; text-align: center; font-size: 0.9em; color: #9CA3AF;'>
+                <p style='margin: 0;'>By: Jhonestebanpenagos@gmail.com</p>
+            </div>
+        """, unsafe_allow_html=True)
+
     st.stop()
 
 # ==============================================================================
@@ -593,14 +602,4 @@ elif choice == "Cerrar Orden":
             with st.form("close"):
                 rep = st.text_area("Reporte Técnico")
                 img = st.file_uploader("Foto")
-                if st.form_submit_button("FINALIZAR"):
-                    url = subir_imagen(img)
-                    supabase.table("ordenes").update({"estado":"Concluida", "comentarios_cierre":rep, "evidencia_url":url}).eq("id",sid).execute()
-                    st.session_state['notification'] = {'type':'success', 'message':'Orden cerrada.'}
-                    st.rerun()
-            st.markdown("</div>", unsafe_allow_html=True)
-        else: st.info("No hay pendientes.")
-
-elif choice == "Usuarios":
-    st.title("USUARIOS")
-    st.markdown("<div class='card-style'>Panel de gestión de usuarios.</div>", unsafe_allow_html=True)
+                if st.form_
