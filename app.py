@@ -356,7 +356,7 @@ def render_orion_svg(PRO_ORANGE):
         </svg>
     """
     st.markdown(f"""
-        <div style="display: flex; justify-content: center; margin-bottom: 5px;">
+        <div style="display: flex; justify-content: center; margin-bottom: 0px;">
             {ORION_SVG}
         </div>
     """, unsafe_allow_html=True)
