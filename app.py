@@ -10,149 +10,98 @@ import qrcode
 import cv2 
 import numpy as np
 import time
-import plotly.express as px # NUEVO: Para gráficos transparentes y animados
+import plotly.express as px
+import plotly.graph_objects as go # Para gráficos avanzados
 
 # --- 1. CONFIGURACIÓN INICIAL ---
-st.set_page_config(page_title="Gestión de Mantenimiento", layout="centered", initial_sidebar_state="collapsed")
+st.set_page_config(page_title="Gestión de Mantenimiento", layout="wide", initial_sidebar_state="collapsed")
 
 # ==============================================================================
-# 🎨 TEMA: "KINETIC GLASS" (Limpio, Atrevido, Animado)
+# 🎨 TEMA: "BIO-HAZARD AMBER" (Profesional, Alto Contraste y Volumen)
 # ==============================================================================
 
-# PALETA ATREVIDA PERO LIMPIA
-ACCENT_1 = "#00F5D4" # Turquesa Neón (Energía)
-ACCENT_2 = "#F15BB5" # Magenta (Acción/Alerta)
-BG_GRADIENT_1 = "#0F172A" # Azul Noche Profundo
-BG_GRADIENT_2 = "#312E81" # Indigo
-TEXT_MAIN = "#F8FAFC"
-GLASS_BG = "rgba(255, 255, 255, 0.05)" # Vidrio semitransparente
+COLOR_ACCION = "#F59E0B" # Naranja Ámbar (Principal)
+COLOR_EXITO = "#10B981"  # Verde Esmeralda (Secundario)
+COLOR_FONDO_OSCURO = "#0F172A" 
+COLOR_TEXTO = "#F8FAFC"
 
 st.markdown(f"""
     <style>
-    /* --- ANIMACIONES --- */
-    @keyframes fadeIn {{
-        from {{ opacity: 0; transform: translateY(20px); }}
-        to {{ opacity: 1; transform: translateY(0); }}
-    }}
-    
-    @keyframes pulseGlow {{
-        0% {{ box-shadow: 0 0 10px rgba(0, 245, 212, 0.1); }}
-        50% {{ box-shadow: 0 0 20px rgba(0, 245, 212, 0.3); }}
-        100% {{ box-shadow: 0 0 10px rgba(0, 245, 212, 0.1); }}
-    }}
-
-    /* 1. FONDO LIMPIO PERO PROFUNDO */
+    /* 1. FONDO LIMPIO Y PROFESIONAL */
     .stApp {{
-        background: linear-gradient(135deg, {BG_GRADIENT_1} 0%, {BG_GRADIENT_2} 100%);
-        background-attachment: fixed;
-        color: {TEXT_MAIN};
+        background: radial-gradient(circle at top, #1E293B, {COLOR_FONDO_OSCURO});
+        color: {COLOR_TEXTO};
     }}
 
     /* 2. BARRA LATERAL */
     [data-testid="stSidebar"] {{
-        background-color: rgba(15, 23, 42, 0.95);
-        border-right: 1px solid rgba(255,255,255,0.1);
+        background-color: rgba(15, 23, 42, 0.98);
+        border-right: 1px solid rgba(245, 158, 11, 0.2);
     }}
 
-    /* 3. EFECTO VIDRIO (GLASSMORPHISM) PARA TARJETAS */
-    .card-style {{
-        background: {GLASS_BG};
-        backdrop-filter: blur(16px); /* El truco del vidrio */
-        -webkit-backdrop-filter: blur(16px);
-        border-radius: 20px;
-        padding: 30px;
-        border: 1px solid rgba(255, 255, 255, 0.1);
-        box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3);
-        margin-bottom: 25px;
-        animation: fadeIn 0.6s ease-out; /* Animación de entrada */
-    }}
-    
-    /* 4. TÍTULOS ATREVIDOS */
+    /* 3. TÍTULOS CON DEGRADADO NARANJA-VERDE */
     h1, h2, h3 {{
-        background: linear-gradient(90deg, {ACCENT_1}, {ACCENT_2});
+        background: linear-gradient(90deg, {COLOR_ACCION}, {COLOR_EXITO});
         -webkit-background-clip: text;
         -webkit-text-fill-color: transparent;
-        font-weight: 900 !important;
-        letter-spacing: -0.5px;
-    }}
-
-    /* 5. CORRECCIÓN DE MENÚS DESPLEGABLES (CRÍTICO) */
-    /* Fondo del input select */
-    .stSelectbox > div > div {{
-        background-color: rgba(15, 23, 42, 0.6) !important;
-        color: white !important;
-        border: 1px solid rgba(255,255,255,0.2) !important;
-        border-radius: 12px;
-    }}
-    /* Fondo de la lista desplegable (Popover) */
-    div[data-baseweb="popover"] {{
-        background-color: #0F172A !important;
-        border: 1px solid {ACCENT_1};
-    }}
-    /* Opciones individuales */
-    div[data-baseweb="menu"] li {{
-        background-color: #0F172A !important;
-        color: white !important;
-    }}
-    div[data-baseweb="menu"] li:hover {{
-        background-color: {ACCENT_2} !important; /* Color al pasar el mouse */
-        color: white !important;
-    }}
-    /* Texto seleccionado */
-    div[data-baseweb="select"] span {{
-        color: white !important;
+        font-weight: 800 !important;
     }}
     
-    /* 6. INPUTS DE TEXTO */
+    /* 4. TARJETAS DE VIDRIO (GLASS) */
+    .card-style {{
+        background: rgba(30, 41, 59, 0.7);
+        backdrop-filter: blur(12px);
+        border-radius: 16px;
+        padding: 24px;
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        box-shadow: 0 4px 20px rgba(0,0,0,0.4);
+        margin-bottom: 20px;
+    }}
+
+    /* 5. CORRECCIÓN MENÚS DESPLEGABLES (TEXTO VISIBLE) */
+    .stSelectbox > div > div {{
+        background-color: rgba(15, 23, 42, 0.8) !important;
+        color: white !important;
+        border: 1px solid rgba(255,255,255,0.2) !important;
+    }}
+    /* Popover (La lista que se abre) */
+    div[data-baseweb="popover"] {{ background-color: #1E293B !important; }}
+    div[data-baseweb="menu"] li {{ color: white !important; }}
+    div[data-baseweb="menu"] li:hover {{ background-color: {COLOR_ACCION} !important; }}
+    
+    /* 6. INPUTS */
     .stTextInput input, .stTextArea textarea {{
         background-color: rgba(0,0,0,0.3) !important;
         color: white !important;
-        border-radius: 12px;
-        border: 1px solid rgba(255,255,255,0.1) !important;
-    }}
-    .stTextInput input:focus, .stTextArea textarea:focus {{
-        border-color: {ACCENT_1} !important;
-        box-shadow: 0 0 15px rgba(0, 245, 212, 0.2);
-    }}
-
-    /* 7. BOTONES ANIMADOS */
-    div.stButton > button:first-child {{
-        background: linear-gradient(45deg, {ACCENT_1}, #4361ee) !important;
-        color: #0F172A !important;
-        border: none;
-        border-radius: 12px;
-        font-weight: 800;
-        padding: 0.7rem 2rem;
-        transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275); /* Efecto rebote */
-        text-transform: uppercase;
-        letter-spacing: 1px;
-    }}
-    div.stButton > button:first-child:hover {{
-        transform: scale(1.05) translateY(-3px);
-        box-shadow: 0 10px 25px rgba(0, 245, 212, 0.4);
+        border: 1px solid rgba(255,255,255,0.2) !important;
+        border-radius: 8px;
     }}
     
-    /* 8. MÉTRICAS FLOTANTES */
-    [data-testid="stMetric"] {{
-        background: rgba(255,255,255,0.03);
-        border-radius: 15px;
-        padding: 20px;
-        border: 1px solid rgba(255,255,255,0.05);
-        transition: transform 0.3s;
+    /* 7. BOTONES */
+    div.stButton > button:first-child {{
+        background: linear-gradient(135deg, {COLOR_ACCION}, #D97706) !important;
+        color: white !important;
+        border: none;
+        font-weight: bold;
+        border-radius: 8px;
+        padding: 0.6rem 1.2rem;
+        transition: transform 0.2s;
     }}
-    [data-testid="stMetric"]:hover {{
-        transform: translateY(-5px);
-        background: rgba(255,255,255,0.06);
-        border-color: {ACCENT_1};
-    }}
-    [data-testid="stMetricLabel"] {{ color: rgba(255,255,255,0.7) !important; }}
-    [data-testid="stMetricValue"] {{ 
-        background: linear-gradient(90deg, {ACCENT_1}, white);
-        -webkit-background-clip: text;
-        -webkit-text-fill-color: transparent;
-        font-weight: 800;
+    div.stButton > button:first-child:hover {{
+        transform: scale(1.02);
+        box-shadow: 0 0 15px rgba(245, 158, 11, 0.5);
     }}
 
+    /* 8. MÉTRICAS */
+    [data-testid="stMetric"] {{
+        background: rgba(255,255,255,0.03);
+        padding: 15px;
+        border-radius: 12px;
+        border-left: 4px solid {COLOR_ACCION};
+    }}
+    [data-testid="stMetricLabel"] {{ color: #94A3B8 !important; }}
+    [data-testid="stMetricValue"] {{ color: white !important; }}
+    
     </style>
 """, unsafe_allow_html=True)
 
@@ -231,28 +180,86 @@ def leer_qr_imagen(uploaded_image):
     except:
         return None
 
-# --- GRAFICOS PLOTLY (FONDO TRANSPARENTE) ---
-def plot_bar_chart(df, col_x, color_hex, title):
+# --- GRÁFICOS AVANZADOS (PLOTLY) ---
+
+def graficar_criticidad(df):
     if df.empty: return
-    # Contamos valores
-    conteo = df[col_x].value_counts().reset_index()
-    conteo.columns = [col_x, 'Cantidad']
+    conteo = df['criticidad'].value_counts().reset_index()
+    conteo.columns = ['Nivel', 'Cantidad']
     
-    fig = px.bar(conteo, x=col_x, y='Cantidad', title=title, 
-                 text='Cantidad', color_discrete_sequence=[color_hex])
+    # Orden lógico de criticidad
+    orden = ["Baja", "Media", "Alta", "Crítica"]
+    conteo['Nivel'] = pd.Categorical(conteo['Nivel'], categories=orden, ordered=True)
+    conteo = conteo.sort_values('Nivel')
+
+    # Mapa de colores semántico (Verde -> Rojo)
+    colores = {
+        "Baja": "#10B981",    # Verde
+        "Media": "#F59E0B",   # Amarillo/Naranja
+        "Alta": "#EA580C",    # Naranja Oscuro
+        "Crítica": "#EF4444"  # Rojo
+    }
+
+    fig = px.bar(conteo, x='Nivel', y='Cantidad', title="<b>Gravedad de las Fallas</b>",
+                 color='Nivel', color_discrete_map=colores, text='Cantidad')
     
-    # Hacemos transparente el fondo para que se integre
     fig.update_layout(
         paper_bgcolor='rgba(0,0,0,0)',
         plot_bgcolor='rgba(0,0,0,0)',
         font=dict(color='white'),
-        title_font_size=18,
-        margin=dict(l=20, r=20, t=40, b=20),
-        xaxis=dict(showgrid=False),
-        yaxis=dict(showgrid=True, gridcolor='rgba(255,255,255,0.1)')
+        showlegend=False,
+        height=300
     )
-    fig.update_traces(textposition='outside')
+    fig.update_traces(textposition='outside', marker_line_width=0)
     st.plotly_chart(fig, use_container_width=True)
+
+def graficar_torta_tipo(df):
+    if df.empty: return
+    if 'tipo_mantenimiento' not in df.columns: return
+
+    conteo = df['tipo_mantenimiento'].value_counts().reset_index()
+    conteo.columns = ['Tipo', 'Cantidad']
+    
+    # Colores elegantes
+    colores_torta = ["#3B82F6", "#8B5CF6", "#EC4899"] # Azul, Violeta, Rosa
+
+    fig = go.Figure(data=[go.Pie(
+        labels=conteo['Tipo'], 
+        values=conteo['Cantidad'], 
+        hole=.5, # Hace que sea una DONA
+        marker=dict(colors=colores_torta, line=dict(color='#0F172A', width=2))
+    )])
+    
+    fig.update_layout(
+        title="<b>Tipos de Mantenimiento</b>",
+        paper_bgcolor='rgba(0,0,0,0)',
+        font=dict(color='white'),
+        height=300,
+        showlegend=True,
+        legend=dict(orientation="h", y=-0.1)
+    )
+    st.plotly_chart(fig, use_container_width=True)
+
+def graficar_estado_barras(df):
+    if df.empty: return
+    conteo = df['estado'].value_counts().reset_index()
+    conteo.columns = ['Estado', 'Cantidad']
+    
+    colores = {"Abierta": "#0EA5E9", "Concluida": "#10B981"} # Azul cielo, Verde
+
+    fig = px.bar(conteo, x='Cantidad', y='Estado', orientation='h', 
+                 color='Estado', color_discrete_map=colores, text='Cantidad',
+                 title="<b>Progreso de Órdenes</b>")
+    
+    fig.update_layout(
+        paper_bgcolor='rgba(0,0,0,0)',
+        plot_bgcolor='rgba(0,0,0,0)',
+        font=dict(color='white'),
+        showlegend=False,
+        height=300
+    )
+    st.plotly_chart(fig, use_container_width=True)
+
 
 # --- NOTIFICACIONES ---
 def mostrar_notificaciones():
@@ -265,18 +272,18 @@ def mostrar_notificaciones():
             if tipo == 'success':
                 st.balloons()
                 st.markdown(f"""
-                <div style="padding: 15px; border-radius: 15px; background: rgba(0, 245, 212, 0.15); border: 1px solid {ACCENT_1}; text-align: center; margin-bottom: 20px; box-shadow: 0 0 20px rgba(0, 245, 212, 0.2);">
-                    <h2 style="margin:0; color: {ACCENT_1};">🚀 ÉXITO</h2>
-                    <p style="font-size: 16px; margin:5px 0 0 0; color: white;">{msg}</p>
+                <div style="padding: 15px; border-radius: 12px; background: rgba(16, 185, 129, 0.1); border: 1px solid {COLOR_EXITO}; text-align: center; margin-bottom: 20px;">
+                    <h3 style="margin:0; color: {COLOR_EXITO};">✅ EXCELENTE</h3>
+                    <p style="margin:5px 0 0 0; color: #E2E8F0;">{msg}</p>
                 </div>
                 """, unsafe_allow_html=True)
                 time.sleep(1) 
             
             elif tipo == 'delete':
                 st.markdown(f"""
-                <div style="padding: 15px; border-radius: 15px; background: rgba(241, 91, 181, 0.15); border: 1px solid {ACCENT_2}; text-align: center; margin-bottom: 20px;">
-                    <h3 style="margin:0; color: {ACCENT_2};">♻️ ELIMINADO</h3>
-                    <p style="color:white;">{msg}</p>
+                <div style="padding: 15px; border-radius: 12px; background: rgba(239, 68, 68, 0.1); border: 1px solid #EF4444; text-align: center; margin-bottom: 20px;">
+                    <h3 style="margin:0; color: #EF4444;">♻️ ELIMINADO</h3>
+                    <p style="color:#E2E8F0;">{msg}</p>
                 </div>
                 """, unsafe_allow_html=True)
         del st.session_state['notification']
@@ -295,26 +302,35 @@ if "id_activo_qr" in query_params:
     
     if datos_activo.data:
         activo = datos_activo.data[0]
+        # HEADER
         st.markdown(f"<h1 style='text-align: center;'>{activo['nombre']}</h1>", unsafe_allow_html=True)
         
+        # CARD DETALLES
         st.markdown(f"""
             <div class="card-style">
-                <h3 style="margin-top:0; color: {ACCENT_1};">Detalles</h3>
-                <p><strong>📍 Área:</strong> {activo.get('area', 'N/A')}</p>
-                <p><strong>🏢 Ubicación:</strong> {activo['ubicacion']}</p>
-                <p><strong>🔧 Categoría:</strong> {activo.get('categoria', 'N/A')}</p>
+                <h3 style="margin-top:0; color: {COLOR_ACCION};">Ficha Técnica</h3>
+                <div style="display: flex; justify-content: space-between; margin-bottom: 10px;">
+                    <span>📍 Área:</span> <b style="color:white">{activo.get('area', 'N/A')}</b>
+                </div>
+                <div style="display: flex; justify-content: space-between; margin-bottom: 10px;">
+                    <span>🏢 Ubicación:</span> <b style="color:white">{activo['ubicacion']}</b>
+                </div>
+                <div style="display: flex; justify-content: space-between;">
+                    <span>🔧 Categoría:</span> <b style="color:white">{activo.get('categoria', 'N/A')}</b>
+                </div>
             </div>
         """, unsafe_allow_html=True)
 
-        st.subheader("🛠️ Últimos Eventos")
+        st.subheader("🛠️ Historial Reciente")
         try:
             ots = supabase.table("ordenes").select("*").eq("activo_id", id_qr).order("id", desc=True).limit(5).execute()
             if ots.data:
                 df_qr = pd.DataFrame(ots.data)
-                st.markdown("<style>th{color: #00F5D4 !important;}</style>", unsafe_allow_html=True)
+                # Estilo tabla transparente
+                st.markdown("<style>th{color: #F59E0B !important;} td{border-bottom: 1px solid #334155 !important;}</style>", unsafe_allow_html=True)
                 st.table(df_qr[['fecha_creacion', 'tipo_mantenimiento', 'estado']])
             else:
-                st.info("Sin historial.")
+                st.info("Sin registros históricos.")
         except: pass
             
         st.markdown("---")
@@ -325,11 +341,11 @@ if "id_activo_qr" in query_params:
                 st.rerun()
         with c2:
             if st.session_state.get('usuario') is None:
-                if st.button("🔐 Login"):
+                if st.button("🔐 Acceso Técnico"):
                     st.query_params.clear()
                     st.rerun()
     else:
-        st.error("❌ Activo no encontrado.")
+        st.error("❌ Equipo no encontrado.")
         if st.button("Volver"):
             st.query_params.clear()
             st.rerun()
@@ -337,7 +353,7 @@ if "id_activo_qr" in query_params:
 
 
 # ==============================================================================
-# 🚀 ZONA 2: LOGIN / SCANNER
+# 🚀 ZONA 2: LOGIN
 # ==============================================================================
 
 if 'usuario' not in st.session_state: st.session_state['usuario'] = None
@@ -350,16 +366,16 @@ def logout():
     st.rerun()
 
 if st.session_state['usuario'] is None:
-    st.markdown("<h1 style='text-align: center; font-size: 3rem;'>CMMS <span style='color:#00F5D4'>KINETIC</span></h1>", unsafe_allow_html=True)
+    st.markdown("<h1 style='text-align: center; font-size: 3rem;'>CMMS <span style='color:#F59E0B'>PRO</span></h1>", unsafe_allow_html=True)
     
     st.markdown(f"""
         <style>
-            .stTabs [data-baseweb="tab-list"] {{ border-bottom: none; }}
-            .stTabs [aria-selected="true"] {{ color: {ACCENT_1} !important; border-bottom: 3px solid {ACCENT_1}; }}
+            .stTabs [data-baseweb="tab-list"] {{ border-bottom: 1px solid rgba(255,255,255,0.1); }}
+            .stTabs [aria-selected="true"] {{ color: {COLOR_ACCION} !important; border-bottom: 3px solid {COLOR_ACCION}; }}
         </style>
     """, unsafe_allow_html=True)
 
-    tab_login, tab_scan = st.tabs(["🔐 ACCESO", "📷 ESCÁNER"])
+    tab_login, tab_scan = st.tabs(["🔐 INGRESAR", "📷 ESCANEAR"])
     
     with tab_login:
         c1, c2, c3 = st.columns([1,2,1])
@@ -369,7 +385,7 @@ if st.session_state['usuario'] is None:
             with st.form("login_form"):
                 documento = st.text_input("Usuario")
                 password = st.text_input("Contraseña", type="password")
-                submitted = st.form_submit_button("ENTRAR AL SISTEMA", type="primary", use_container_width=True)
+                submitted = st.form_submit_button("ACCEDER AL PANEL", type="primary", use_container_width=True)
                 
                 if submitted:
                     try:
@@ -380,14 +396,14 @@ if st.session_state['usuario'] is None:
                             st.session_state['rol'] = user_data['rol']
                             st.rerun()
                         else:
-                            st.error("Credenciales incorrectas.")
+                            st.error("Datos incorrectos.")
                     except:
-                        st.error("Error de conexión.")
+                        st.error("Sin conexión.")
             st.markdown("</div>", unsafe_allow_html=True)
 
     with tab_scan:
         st.markdown("<div class='card-style' style='text-align:center;'>", unsafe_allow_html=True)
-        st.info("Escanea el QR del equipo")
+        st.info("Escanea el QR para ver la ficha técnica")
         img_file = st.camera_input("Escanear", label_visibility="collapsed")
         if img_file is not None:
             id_detectado = leer_qr_imagen(img_file)
@@ -395,7 +411,7 @@ if st.session_state['usuario'] is None:
                 st.query_params["id_activo_qr"] = id_detectado
                 st.rerun()
             else:
-                st.warning("QR no válido.")
+                st.warning("No se detectó QR.")
         st.markdown("</div>", unsafe_allow_html=True)
     st.stop()
 
@@ -409,10 +425,10 @@ usuario_actual = st.session_state['usuario']
 
 with st.sidebar:
     st.markdown(f"""
-        <div style="background: rgba(255,255,255,0.05); padding: 20px; border-radius: 15px; text-align: center; margin-bottom: 20px; border: 1px solid rgba(255,255,255,0.1);">
-            <div style="width: 60px; height: 60px; background: linear-gradient(135deg, {ACCENT_1}, {ACCENT_2}); border-radius: 50%; margin: 0 auto 10px auto; display: flex; align-items: center; justify-content: center; font-size: 24px;">👤</div>
-            <h3 style="margin:10px 0; font-size: 18px; color: white;">{usuario_actual}</h3>
-            <span style="background: {ACCENT_1}; color: #0F172A; padding: 4px 12px; border-radius: 20px; font-size: 11px; font-weight: 900; letter-spacing: 1px;">{rol_actual.upper()}</span>
+        <div style="background: rgba(255,255,255,0.05); padding: 20px; border-radius: 12px; text-align: center; margin-bottom: 20px; border: 1px solid rgba(255,255,255,0.1);">
+            <div style="width: 50px; height: 50px; background: linear-gradient(135deg, {COLOR_ACCION}, #D97706); border-radius: 50%; margin: 0 auto 10px auto; display: flex; align-items: center; justify-content: center; font-size: 20px; box-shadow: 0 0 10px {COLOR_ACCION};">👤</div>
+            <h3 style="margin:5px 0; font-size: 16px; color: white;">{usuario_actual}</h3>
+            <span style="background: {COLOR_EXITO}; color: #064E3B; padding: 2px 10px; border-radius: 10px; font-size: 11px; font-weight: bold;">{rol_actual.upper()}</span>
         </div>
     """, unsafe_allow_html=True)
     
@@ -428,15 +444,15 @@ with st.sidebar:
         options_menu = ["Cierre de OTs"] 
     
     choice = option_menu(
-        menu_title="MENÚ",
+        menu_title="NAVEGACIÓN",
         options=options_menu,
         icons=["speedometer2", "box-seam", "plus-circle", "check2-circle", "people"],
         default_index=0,
         styles={
             "container": {"padding": "0!important", "background-color": "transparent"},
-            "icon": {"color": ACCENT_1, "font-size": "18px"}, 
-            "nav-link": {"font-size": "15px", "text-align": "left", "margin": "5px", "color": "#cbd5e1"},
-            "nav-link-selected": {"background": f"linear-gradient(90deg, {ACCENT_1}, #4361ee)", "color": "#0F172A", "border-radius": "10px", "font-weight":"bold"},
+            "icon": {"color": COLOR_ACCION, "font-size": "18px"}, 
+            "nav-link": {"font-size": "14px", "text-align": "left", "margin": "5px", "color": "#cbd5e1"},
+            "nav-link-selected": {"background": f"linear-gradient(90deg, {COLOR_ACCION}, {COLOR_EXITO})", "color": "white", "border-radius": "8px", "font-weight":"bold"},
         }
     )
 
@@ -451,27 +467,37 @@ LISTA_CATEGORIAS = ["Mecánico", "Eléctrico", "Infraestructura", "HVAC", "Otros
 # --- PANTALLAS ---
 
 if choice == "Dashboard":
-    st.subheader("Panel de Control")
+    st.subheader("Tablero de Mando")
     mostrar_notificaciones()
     
     df_ordenes = run_query("ordenes")
     if not df_ordenes.empty:
+        # Métricas
         c1, c2, c3 = st.columns(3)
         c1.metric("Total OTs", len(df_ordenes))
         c2.metric("Abiertas", len(df_ordenes[df_ordenes['estado']=='Abierta']))
         c3.metric("Concluidas", len(df_ordenes[df_ordenes['estado']=='Concluida']))
         
-        st.divider()
+        st.markdown("---")
         
-        # --- USAMOS PLOTLY PARA GRÁFICOS INTEGRADOS Y ATREVIDOS ---
+        # --- GRÁFICOS INTERACTIVOS (PLOTLY) ---
         c1, c2, c3 = st.columns(3)
-        with c1: 
-            plot_bar_chart(df_ordenes, 'estado', ACCENT_1, "Estado")
-        with c2: 
-            plot_bar_chart(df_ordenes, 'criticidad', ACCENT_2, "Criticidad")
-        with c3: 
-            if 'tipo_mantenimiento' in df_ordenes.columns: 
-                plot_bar_chart(df_ordenes, 'tipo_mantenimiento', '#4361ee', "Tipo")
+        
+        with c1:
+            st.markdown("<div class='card-style'>", unsafe_allow_html=True)
+            graficar_estado_barras(df_ordenes)
+            st.markdown("</div>", unsafe_allow_html=True)
+            
+        with c2:
+            st.markdown("<div class='card-style'>", unsafe_allow_html=True)
+            graficar_criticidad(df_ordenes) # AQUÍ ESTÁ EL COLOR ROJO/NARANJA/VERDE
+            st.markdown("</div>", unsafe_allow_html=True)
+            
+        with c3:
+            st.markdown("<div class='card-style'>", unsafe_allow_html=True)
+            graficar_torta_tipo(df_ordenes) # AQUÍ ESTÁ LA DONA
+            st.markdown("</div>", unsafe_allow_html=True)
+
     else: st.info("Sin datos.")
 
 elif choice == "Gestión de Activos":
@@ -493,7 +519,7 @@ elif choice == "Gestión de Activos":
         styles={
             "container": {"background-color": "transparent"},
             "nav-link": {"color": "white"},
-            "nav-link-selected": {"background-color": ACCENT_1, "color": "#0F172A", "border-radius":"10px", "font-weight":"bold"}
+            "nav-link-selected": {"background-color": COLOR_ACCION, "color": "white", "border-radius":"8px", "font-weight":"bold"}
         }
     )
     
@@ -512,7 +538,7 @@ elif choice == "Gestión de Activos":
             ubicacion = c2.selectbox("Sub-Área", sub_areas)
             categoria = st.selectbox("Categoría", [""] + LISTA_CATEGORIAS)
             
-            if st.form_submit_button("💾 Guardar"):
+            if st.form_submit_button("💾 Guardar Activo"):
                 if nombre and area_selec and ubicacion and categoria:
                     try:
                         res = supabase.table("activos").insert({
@@ -551,7 +577,7 @@ elif choice == "Gestión de Activos":
                             url_qr = generar_qr_activo(id_sel, dato['nombre'])
                             supabase.table("activos").update({"qr_url": url_qr}).eq("id", int(id_sel)).execute()
                             st.rerun()
-                with c2: st.info("Usa este QR para el equipo.")
+                with c2: st.info("Usa este QR para identificar el equipo.")
                 
                 st.markdown(f"<div class='card-style'><h4>🛠️ Modificar</h4>", unsafe_allow_html=True)
                 area_actual = dato.get('area', '')
@@ -583,7 +609,7 @@ elif choice == "Gestión de Activos":
                 
                 with st.expander("🚫 ZONA DE PELIGRO"):
                     st.warning("Esto borrará el activo y su historial.")
-                    confirmar_borrado = st.checkbox("Confirmar eliminación irreversible.")
+                    confirmar_borrado = st.checkbox("Confirmar eliminación.")
                     if st.button("🔥 ELIMINAR", type="primary", disabled=not confirmar_borrado):
                         try:
                             supabase.table("ordenes").delete().eq("activo_id", int(id_sel)).execute()
