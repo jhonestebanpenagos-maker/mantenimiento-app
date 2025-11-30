@@ -653,6 +653,10 @@ elif choice == "Usuarios":
     
     # Estructura de pestañas para Crear y Gestionar usuarios
     tab_crear, tab_gestionar = st.tabs(["CREAR USUARIO", "GESTIONAR USUARIOS"])
+    
+    # Inicializamos la variable de sesión para el último ID seleccionado
+    if 'last_selected_user_id' not in st.session_state:
+        st.session_state['last_selected_user_id'] = None
 
     # ----------------------------------------------------
     # TAB 1: CREAR USUARIO (Sin card-style)
@@ -699,15 +703,19 @@ elif choice == "Usuarios":
         
         if not df_users.empty:
             
-            st.subheader("Lista de Usuarios (Seleccione una fila para gestionar)")
-
-            # --- SELECCIÓN RÁPIDA: Usando st.data_editor para selección de fila con un solo clic ---
+            st.subheader("Lista de Usuarios (Marque una casilla para gestionar)")
             
-            # 1. Creamos una columna temporal de selección si no existe
+            # --- PREPARACIÓN PARA LA SELECCIÓN ÚNICA ---
+            # 1. Creamos la columna de selección si no existe
             if 'select' not in df_users.columns:
                 df_users['select'] = False
             
-            # 2. Configuramos y mostramos el data_editor (la columna 'select' actúa como nuestro checkbox)
+            # 2. Si hay un ID seleccionado previamente, marcamos su casilla
+            if st.session_state['last_selected_user_id'] is not None:
+                # Nos aseguramos de que solo la fila del ID previamente seleccionado esté marcada al cargar
+                df_users['select'] = (df_users['id'] == st.session_state['last_selected_user_id'])
+            
+            # 3. Configuramos y mostramos el data_editor (la columna 'select' actúa como nuestro checkbox)
             edited_df = st.data_editor(
                 df_users[['select', 'id', 'documento', 'nombre', 'rol']],
                 column_config={
@@ -716,24 +724,27 @@ elif choice == "Usuarios":
                         help="Marque para editar/eliminar este usuario.",
                         default=False
                     ),
-                    "id": "ID",
-                    "documento": "Documento",
-                    "nombre": "Nombre",
-                    "rol": st.column_config.SelectboxColumn("Rol", options=["Tecnico", "Programador", "Admin"], required=True)
+                    "id": st.column_config.Column("ID", disabled=True),
+                    "documento": st.column_config.Column("Documento", disabled=True),
+                    "nombre": st.column_config.Column("Nombre", disabled=True),
+                    "rol": st.column_config.Column("Rol", disabled=True),
                 },
-                disabled=['id', 'documento', 'nombre', 'rol'], # Deshabilitamos la edición de los campos directamente en la tabla
                 hide_index=True,
-                use_container_width=True
+                use_container_width=True,
+                key="user_data_editor"
             )
 
-            # 3. Identificamos el usuario seleccionado
+            # 4. Identificamos el usuario seleccionado en el data_editor
             selected_user_row = edited_df[edited_df['select'] == True]
             
             if len(selected_user_row) == 1:
+                # --- NUEVA SELECCIÓN VÁLIDA ---
                 selected_user = selected_user_row.iloc[0]
                 user_id = selected_user['id']
                 
-                # --- MÓDULO DE GESTIÓN ACTIVA ---
+                # Actualizamos la variable de sesión para mantener la selección en la próxima recarga
+                st.session_state['last_selected_user_id'] = user_id
+                
                 st.markdown("---")
                 st.markdown(f"**Usuario seleccionado:** **{selected_user['nombre']}** (ID: {user_id})")
                 
@@ -782,7 +793,7 @@ elif choice == "Usuarios":
                         except Exception as e:
                             st.error(f"Error al actualizar: {e}")
                 
-                # Botón de Eliminación (Fuera del formulario de edición para simplificar el flujo)
+                # Botón de Eliminación 
                 if st.button("🔴 ELIMINAR USUARIO SELECCIONADO", type="secondary", use_container_width=True, help="Borrar el usuario seleccionado"):
                     
                     # Validación de eliminación
@@ -791,6 +802,8 @@ elif choice == "Usuarios":
                     else:
                         try:
                             supabase.table("usuarios").delete().eq("id", user_id).execute()
+                            # Limpiar la selección después de la eliminación
+                            st.session_state['last_selected_user_id'] = None 
                             st.session_state['notification'] = {'type':'delete', 'message':f'Usuario {selected_user["nombre"]} eliminado.'}
                             st.rerun()
                         except Exception as e:
@@ -800,7 +813,12 @@ elif choice == "Usuarios":
                 st.warning("⚠️ Seleccione solo un usuario a la vez para gestionar su información.")
 
             else:
-                st.info("Haga clic en el checkbox de la columna 'Seleccionar' para elegir un usuario y gestionar sus datos.")
+                # Si el data_editor se actualiza y no hay nada seleccionado, borramos la variable de sesión
+                if st.session_state['last_selected_user_id'] is not None:
+                    st.session_state['last_selected_user_id'] = None
+                    st.rerun() # Forzamos recarga para limpiar la interfaz si se desmarcó
+
+                st.info("Haga clic en la columna 'Seleccionar' para elegir un usuario y gestionar sus datos.")
             
         else:
             st.info("No se encontraron usuarios en la base de datos. Use la pestaña 'CREAR USUARIO'.")
