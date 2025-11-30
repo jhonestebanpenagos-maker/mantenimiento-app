@@ -160,140 +160,218 @@ else:
         else:
             st.info("Sin datos para mostrar.")
 
-    # 2. GESTIÓN DE ACTIVOS (AQUÍ ESTÁ LA LÓGICA DE LISTAS DEPENDIENTES)
+    # 2. GESTIÓN DE ACTIVOS (CORREGIDO: MENSAJES Y CAMPOS EN BLANCO)
     elif choice == "Gestión de Activos":
         st.subheader("Inventario de Equipos")
+        
+        # --- LÓGICA DE MENSAJES PARA ACTIVOS ---
+        if 'asset_msg' in st.session_state:
+            msg = st.session_state['asset_msg']
+            tipo = msg['tipo']
+            
+            if tipo == 'create':
+                st.balloons()
+                st.markdown(f"""
+                    <div style="background-color: #d1e7dd; border: 2px solid #28a745; border-radius: 15px; padding: 20px; text-align: center; box-shadow: 0 4px 8px rgba(0,0,0,0.1); margin-bottom: 20px; max-width: 600px; margin: 0 auto;">
+                        <h3 style="color: #28a745; margin: 0;">✅ Activo Registrado</h3>
+                        <h2 style="margin: 0; color: #0f5132;">{msg['nombre']}</h2>
+                        <p style="margin: 0;">Ubicado en: {msg['ubicacion']}</p>
+                    </div><br>""", unsafe_allow_html=True)
+            elif tipo == 'update':
+                st.balloons()
+                st.markdown(f"""
+                    <div style="background-color: #cff4fc; border: 2px solid #0dcaf0; border-radius: 15px; padding: 20px; text-align: center; box-shadow: 0 4px 8px rgba(0,0,0,0.1); margin-bottom: 20px; max-width: 600px; margin: 0 auto;">
+                        <h3 style="color: #055160; margin: 0;">🔄 Datos de Activo Actualizados</h3>
+                        <h2 style="margin: 0; color: #055160;">{msg['nombre']}</h2>
+                    </div><br>""", unsafe_allow_html=True)
+            elif tipo == 'delete':
+                st.markdown(f"""
+                    <div style="background-color: #f8d7da; border: 2px solid #dc3545; border-radius: 15px; padding: 20px; text-align: center; box-shadow: 0 4px 8px rgba(0,0,0,0.1); margin-bottom: 20px; max-width: 600px; margin: 0 auto;">
+                        <h3 style="color: #842029; margin: 0;">🗑️ Activo Eliminado</h3>
+                        <h2 style="margin: 0; color: #842029;">{msg['nombre']}</h2>
+                    </div><br>""", unsafe_allow_html=True)
+            
+            # Borramos el mensaje para que no salga siempre
+            del st.session_state['asset_msg']
+
         df_activos = run_query("activos")
         
-        # --- DEFINICIÓN DE ÁREAS Y SUS SUB-ÁREAS ---
-        # Este diccionario controla qué aparece en el segundo menú
+        # --- DEFINICIÓN DE ÁREAS ---
         ESTRUCTURA_AREAS = {
-            "Logística": [
-                "Almacén Materia Prima", "Almacén Producto Terminado", "Distribución", "Taller Vehicular"
-            ],
-            "Administración": [
-                "Administración", "Servicios Generales"
-            ],
-            "Técnica": [
-                "Agua Cristal", "Linea 8", "Linea 2", "Linea 3", "Linea 1", "Linea 10", 
-                "Salas de Jarabe Terminado", "Sala de Jarabes Jugos", "Sala de Jarabe Simple", 
-                "Oficinas Técnicas", "Equipos Auxiliares", "Ptap", "Ptar"
-            ],
-            "Ventas": [
-                "Ventas", "Bodega de Publicidad"
-            ],
-            "Otros": ["Otros"]
+            "Logística": ["Almacén Materia Prima", "Almacén Producto Terminado", "Distribución", "Taller Vehicular"],
+            "Administración": ["Administración", "Servicios Generales"],
+            "Técnica": ["Agua Cristal", "Linea 8", "Linea 2", "Linea 3", "Linea 1", "Linea 10", "Salas de Jarabe Terminado", "Sala de Jarabes Jugos", "Sala de Jarabe Simple", "Oficinas Técnicas", "Equipos Auxiliares", "Ptap", "Ptar"],
+            "Ventas": ["Ventas", "Bodega de Publicidad"]
         }
-        
         LISTA_CATEGORIAS_TECNICAS = ["Mecánico", "Eléctrico", "Infraestructura", "HVAC", "Otros"]
 
-        tab1, tab2 = st.tabs(["➕ Registrar Nuevo", "✏️ Editar / Dar de Baja"])
+        # Control de pestaña activa
+        if 'tab_index_activos' not in st.session_state: st.session_state['tab_index_activos'] = 0
+
+        # Menú de pestañas
+        selected_tab = option_menu(
+            menu_title=None,
+            options=["Registrar Nuevo", "Editar / Dar de Baja"],
+            icons=["plus-square", "pencil-square"],
+            orientation="horizontal",
+            default_index=st.session_state['tab_index_activos']
+        )
         
-        with tab1:
-            # NOTA: Sacamos el selector de Área FUERA del form para que actualice la página al cambiar
-            # y así cargue las sub-áreas correspondientes.
-            st.write("#### Paso 1: Ubicación General")
-            area_selec = st.selectbox("Seleccione el Área", list(ESTRUCTURA_AREAS.keys()), key="area_create")
+        # --- PESTAÑA 1: CREAR ---
+        if selected_tab == "Registrar Nuevo":
+            # Variable para resetear los selectores
+            if 'asset_reset_key' not in st.session_state: st.session_state.asset_reset_key = 0
             
-            # Calculamos las sub-áreas disponibles según la selección anterior
-            sub_areas_disponibles = ESTRUCTURA_AREAS[area_selec]
+            st.write("#### Paso 1: Ubicación General")
+            
+            # 1. Agregamos opcion vacia "" al inicio de la lista de areas
+            lista_areas_display = [""] + list(ESTRUCTURA_AREAS.keys())
+            
+            area_selec = st.selectbox(
+                "Seleccione el Área", 
+                lista_areas_display, 
+                key=f"area_create_{st.session_state.asset_reset_key}"
+            )
+            
+            # 2. Calculamos sub-áreas solo si hay área seleccionada
+            sub_areas_disponibles = [""] # Por defecto vacía
+            if area_selec and area_selec != "":
+                sub_areas_disponibles = [""] + ESTRUCTURA_AREAS.get(area_selec, [])
 
             st.write("#### Paso 2: Detalles del Equipo")
             with st.form("form_activo", clear_on_submit=True):
                 c1, c2 = st.columns(2)
                 nombre = c1.text_input("Nombre del Equipo")
-                # Aquí la "Ubicación" ahora es una lista desplegable dependiente
+                
+                # Selector de Ubicación Dependiente
                 ubicacion = c2.selectbox("Ubicación Específica / Sub-Área", sub_areas_disponibles)
                 
-                categoria = st.selectbox("Categoría Técnica", LISTA_CATEGORIAS_TECNICAS)
+                # Selector de Categoría con opción vacía
+                categoria = st.selectbox("Categoría Técnica", [""] + LISTA_CATEGORIAS_TECNICAS)
                 
                 if st.form_submit_button("Guardar Activo"):
-                    if nombre:
-                        # Guardamos 'area' como el área principal y 'ubicacion' como la sub-área
-                        supabase.table("activos").insert({
-                            "nombre": nombre, 
-                            "ubicacion": ubicacion, 
-                            "area": area_selec,          
-                            "categoria": categoria 
-                        }).execute()
-                        st.success("Activo creado correctamente!")
-                        st.rerun()
+                    # Validamos que no estén vacíos
+                    if nombre and area_selec and area_selec != "" and ubicacion and ubicacion != "" and categoria and categoria != "":
+                        try:
+                            supabase.table("activos").insert({
+                                "nombre": nombre, 
+                                "ubicacion": ubicacion, 
+                                "area": area_selec,          
+                                "categoria": categoria 
+                            }).execute()
+                            
+                            # Guardamos mensaje y reseteamos
+                            st.session_state['asset_msg'] = {'tipo': 'create', 'nombre': nombre, 'ubicacion': ubicacion}
+                            st.session_state.asset_reset_key += 1
+                            st.session_state['tab_index_activos'] = 0 # Nos quedamos aquí
+                            st.rerun()
+                        except Exception as e:
+                            st.error(f"Error al guardar: {e}")
                     else:
-                        st.warning("Falta el nombre del equipo.")
+                        st.warning("Por favor complete todos los campos (Área, Ubicación, Nombre, Categoría).")
 
-        with tab2:
+        # --- PESTAÑA 2: EDITAR ---
+        elif selected_tab == "Editar / Dar de Baja":
+            st.session_state['tab_index_activos'] = 1 # Sincronizar
+            
             if not df_activos.empty:
-                # Mostramos ID, Nombre y Area en el buscador
-                activos_dict = {f"{row['nombre']} ({row.get('area','?')})" : row['id'] for i, row in df_activos.iterrows()}
-                seleccion = st.selectbox("Seleccionar Activo a Editar", list(activos_dict.keys()))
-                id_seleccionado = activos_dict[seleccion]
-                datos_actuales = df_activos[df_activos['id'] == id_seleccionado].iloc[0]
+                # Buscador
+                activos_dict = {f"{row['nombre']} - {row.get('ubicacion','?')}": row['id'] for i, row in df_activos.iterrows()}
+                seleccion = st.selectbox("Seleccionar Activo a Editar", [""] + list(activos_dict.keys()))
                 
-                st.markdown("---")
-                
-                # --- LÓGICA DE EDICIÓN CON DEPENDENCIAS ---
-                # 1. Recuperamos el Área actual
-                area_actual_db = datos_actuales.get('area', 'Otros')
-                if area_actual_db not in ESTRUCTURA_AREAS: area_actual_db = "Otros"
-                
-                # Selector de Área (Fuera del form para interactividad)
-                nueva_area = st.selectbox("Área Perteneciente", list(ESTRUCTURA_AREAS.keys()), index=list(ESTRUCTURA_AREAS.keys()).index(area_actual_db), key="area_edit")
-                
-                # 2. Calculamos las sub-áreas disponibles
-                sub_areas_edit_disp = ESTRUCTURA_AREAS[nueva_area]
-                
-                # 3. Intentamos mantener la ubicación actual si existe en la nueva lista
-                ubicacion_actual_db = datos_actuales.get('ubicacion', '')
-                idx_ubic = 0
-                if ubicacion_actual_db in sub_areas_edit_disp:
-                    idx_ubic = sub_areas_edit_disp.index(ubicacion_actual_db)
-                
-                with st.form("form_editar"):
-                    c1, c2 = st.columns(2)
-                    nuevo_nombre = c1.text_input("Nombre", value=datos_actuales['nombre'])
-                    # Selector dependiente dentro del form (ya cargado con las opciones correctas)
-                    nueva_ubicacion = c2.selectbox("Ubicación Específica / Sub-Área", sub_areas_edit_disp, index=idx_ubic)
+                if seleccion and seleccion != "":
+                    id_seleccionado = activos_dict[seleccion]
+                    datos_actuales = df_activos[df_activos['id'] == id_seleccionado].iloc[0]
                     
-                    # Categoría Técnica
-                    cat_actual = datos_actuales.get('categoria', '')
-                    idx_cat = 0
-                    if cat_actual in LISTA_CATEGORIAS_TECNICAS: idx_cat = LISTA_CATEGORIAS_TECNICAS.index(cat_actual)
-                    nueva_categoria = st.selectbox("Categoría Técnica", LISTA_CATEGORIAS_TECNICAS, index=idx_cat)
-
-                    if st.form_submit_button("Actualizar"):
-                        supabase.table("activos").update({
-                            "nombre": nuevo_nombre, 
-                            "ubicacion": nueva_ubicacion, 
-                            "area": nueva_area, 
-                            "categoria": nueva_categoria
-                        }).eq("id", int(id_seleccionado)).execute()
-                        st.success("Datos del activo actualizados.")
-                        st.rerun()
-                
-                st.markdown("---")
-                with st.expander("🗑️ Zona de Peligro (Baja)"):
-                    usuario_baja = st.text_input("👤 Responsable de la Baja:")
-                    motivo = st.text_area("Motivo:")
-                    if st.button("Dar de Baja", type="primary", disabled=(not motivo or not usuario_baja)):
-                        backup = {
-                            "id_original": int(id_seleccionado),
-                            "nombre": datos_actuales['nombre'],
-                            "ubicacion": datos_actuales['ubicacion'],
-                            "area": datos_actuales.get('area', ''),
-                            "categoria": datos_actuales.get('categoria', ''),
-                            "motivo_baja": motivo
-                        }
-                        supabase.table("auditoria_eliminados").insert({
-                            "tipo_registro": "Activo",
-                            "nombre_referencia": datos_actuales['nombre'],
-                            "datos_respaldo": backup,
-                            "usuario_responsable": usuario_baja
-                        }).execute()
+                    st.markdown("---")
+                    st.markdown(f"### ✏️ Editando: {datos_actuales['nombre']}")
+                    
+                    # --- Pre-llenado inteligente ---
+                    # 1. Área
+                    area_actual_db = datos_actuales.get('area', '')
+                    idx_area = 0
+                    lista_areas_edit = [""] + list(ESTRUCTURA_AREAS.keys())
+                    if area_actual_db in ESTRUCTURA_AREAS: 
+                        idx_area = lista_areas_edit.index(area_actual_db)
+                    
+                    # Usamos un key dinámico con el ID para que se resetee al cambiar de activo
+                    key_suffix = id_seleccionado
+                    
+                    nueva_area = st.selectbox("Área Perteneciente", lista_areas_edit, index=idx_area, key=f"area_edit_{key_suffix}")
+                    
+                    # 2. Sub-áreas dependientes
+                    sub_areas_edit_disp = [""]
+                    if nueva_area and nueva_area != "":
+                        sub_areas_edit_disp = [""] + ESTRUCTURA_AREAS.get(nueva_area, [])
+                    
+                    ubicacion_actual_db = datos_actuales.get('ubicacion', '')
+                    idx_ubic = 0
+                    if ubicacion_actual_db in sub_areas_edit_disp:
+                        idx_ubic = sub_areas_edit_disp.index(ubicacion_actual_db)
+                    
+                    with st.form("form_editar"):
+                        c1, c2 = st.columns(2)
+                        nuevo_nombre = c1.text_input("Nombre", value=datos_actuales['nombre'])
+                        nueva_ubicacion = c2.selectbox("Ubicación Específica", sub_areas_edit_disp, index=idx_ubic)
                         
-                        supabase.table("ordenes").delete().eq("activo_id", int(id_seleccionado)).execute()
-                        supabase.table("activos").delete().eq("id", int(id_seleccionado)).execute()
-                        st.success("Activo eliminado y respaldado.")
-                        st.rerun()
+                        cat_actual = datos_actuales.get('categoria', '')
+                        lista_cat_edit = [""] + LISTA_CATEGORIAS_TECNICAS
+                        idx_cat = 0
+                        if cat_actual in LISTA_CATEGORIAS_TECNICAS: idx_cat = lista_cat_edit.index(cat_actual)
+                        
+                        nueva_categoria = st.selectbox("Categoría Técnica", lista_cat_edit, index=idx_cat)
+
+                        if st.form_submit_button("Actualizar"):
+                            if nueva_area != "" and nueva_ubicacion != "" and nueva_categoria != "":
+                                try:
+                                    supabase.table("activos").update({
+                                        "nombre": nuevo_nombre, 
+                                        "ubicacion": nueva_ubicacion, 
+                                        "area": nueva_area, 
+                                        "categoria": nueva_categoria
+                                    }).eq("id", int(id_seleccionado)).execute()
+                                    
+                                    st.session_state['asset_msg'] = {'tipo': 'update', 'nombre': nuevo_nombre}
+                                    st.session_state['tab_index_activos'] = 1
+                                    st.rerun()
+                                except Exception as e:
+                                    st.error(f"Error: {e}")
+                            else:
+                                st.warning("No puedes dejar campos vacíos.")
+                    
+                    st.markdown("---")
+                    with st.expander("🗑️ Zona de Peligro (Baja)"):
+                        usuario_baja = st.text_input("👤 Responsable de la Baja:")
+                        motivo = st.text_area("Motivo:")
+                        if st.button("Dar de Baja", type="primary", disabled=(not motivo or not usuario_baja)):
+                            try:
+                                backup = {
+                                    "id_original": int(id_seleccionado),
+                                    "nombre": datos_actuales['nombre'],
+                                    "ubicacion": datos_actuales['ubicacion'],
+                                    "area": datos_actuales.get('area', ''),
+                                    "categoria": datos_actuales.get('categoria', ''),
+                                    "motivo_baja": motivo
+                                }
+                                supabase.table("auditoria_eliminados").insert({
+                                    "tipo_registro": "Activo",
+                                    "nombre_referencia": datos_actuales['nombre'],
+                                    "datos_respaldo": backup,
+                                    "usuario_responsable": usuario_baja
+                                }).execute()
+                                
+                                supabase.table("ordenes").delete().eq("activo_id", int(id_seleccionado)).execute()
+                                supabase.table("activos").delete().eq("id", int(id_seleccionado)).execute()
+                                
+                                st.session_state['asset_msg'] = {'tipo': 'delete', 'nombre': datos_actuales['nombre']}
+                                st.session_state['tab_index_activos'] = 1
+                                st.rerun()
+                            except Exception as e:
+                                st.error(f"Error: {e}")
+                else:
+                    st.info("Selecciona un activo para ver sus detalles.")
+            else:
+                st.info("No hay activos registrados.")
 
     # 3. CREAR ORDEN Y ASIGNAR
     elif choice == "Crear Orden":
@@ -308,7 +386,6 @@ else:
             lista_tecnicos = tecnicos['nombre'].tolist()
 
         if not df_activos.empty:
-            # Mostramos nombre y ubicación para que sea fácil identificar
             activos_dict = {f"{row['nombre']} - {row.get('ubicacion','?')}": row['id'] for i, row in df_activos.iterrows()}
             seleccion = st.selectbox("Equipo", list(activos_dict.keys()))
             activo_id = activos_dict[seleccion]
