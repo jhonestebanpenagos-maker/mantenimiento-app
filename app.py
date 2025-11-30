@@ -636,16 +636,66 @@ elif choice == "Cerrar Orden":
 elif choice == "Usuarios":
     st.title("USUARIOS")
     mostrar_notificaciones()
-
-    # Obtener y mostrar la tabla de usuarios
-    df_users = run_query("usuarios")
     
-    if not df_users.empty:
-        st.markdown(f"<div class='card-style'>", unsafe_allow_html=True)
-        # Mostrar solo las columnas relevantes
-        st.dataframe(df_users[['id', 'documento', 'nombre', 'rol']], 
-                     use_container_width=True,
-                     hide_index=True)
+    # Estructura de pestañas para Crear y Gestionar usuarios
+    tab_crear, tab_gestionar = st.tabs(["CREAR USUARIO", "GESTIONAR USUARIOS"])
+
+    # ----------------------------------------------------
+    # TAB 1: CREAR USUARIO
+    # ----------------------------------------------------
+    with tab_crear:
+        st.markdown("<div class='card-style'>", unsafe_allow_html=True)
+        st.subheader("Registrar Nuevo Usuario")
+        
+        with st.form("new_user_form"):
+            c1, c2 = st.columns(2)
+            documento = c1.text_input("Documento/ID", key="new_user_doc")
+            nombre = c2.text_input("Nombre Completo", key="new_user_name")
+            password = c1.text_input("Contraseña", type="password", key="new_user_pass")
+            rol = c2.selectbox("Rol", ["Tecnico", "Programador", "Admin"], key="new_user_rol")
+            
+            submitted = st.form_submit_button("REGISTRAR USUARIO", type="primary")
+            
+            if submitted:
+                if documento and nombre and password and rol:
+                    try:
+                        # Insertar el nuevo usuario en la tabla 'usuarios'
+                        res = supabase.table("usuarios").insert({
+                            "documento": documento, 
+                            "nombre": nombre, 
+                            "password": password, 
+                            "rol": rol
+                        }).execute()
+                        
+                        if res.data:
+                            st.session_state['notification'] = {'type':'success', 'message':f'Usuario {nombre} registrado con éxito.'}
+                            st.rerun()
+                        else:
+                            st.error("Error al registrar el usuario en la base de datos.")
+                            
+                    except Exception as e:
+                        st.error(f"Error de base de datos: Asegúrese de que el Documento no exista ya. Detalles: {e}")
+                else:
+                    st.warning("Por favor, complete todos los campos.")
         st.markdown("</div>", unsafe_allow_html=True)
-    else:
-        st.info("No se encontraron usuarios en la base de datos.")
+
+    # ----------------------------------------------------
+    # TAB 2: GESTIONAR USUARIOS (Mostrar tabla)
+    # ----------------------------------------------------
+    with tab_gestionar:
+        df_users = run_query("usuarios")
+        
+        if not df_users.empty:
+            st.markdown("<div class='card-style'>", unsafe_allow_html=True)
+            st.subheader("Usuarios Registrados")
+            # Mostrar solo las columnas relevantes (sin la contraseña)
+            st.dataframe(df_users[['id', 'documento', 'nombre', 'rol']], 
+                         use_container_width=True,
+                         hide_index=True)
+            
+            # --- Aquí se añadiría la lógica de edición/eliminación ---
+            st.info("Para implementar la edición o eliminación, seleccione un usuario de la tabla o añada controles de acción.")
+            
+            st.markdown("</div>", unsafe_allow_html=True)
+        else:
+            st.info("No se encontraron usuarios en la base de datos.")
