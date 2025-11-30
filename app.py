@@ -378,7 +378,7 @@ if "id_activo_qr" in query_params:
     st.stop() 
 
 # ==============================================================================
-# 🚀 LOGIN / SCANNER (CORREGIDO Y ESTILIZADO)
+# 🚀 LOGIN / SCANNER (CORREGIDO EL RECUADRO VACÍO)
 # ==============================================================================
 
 if 'usuario' not in st.session_state: st.session_state['usuario'] = None
@@ -393,10 +393,9 @@ def logout():
 if st.session_state['usuario'] is None:
     c1, c2, c3 = st.columns([1,2,1])
     with c2:
-        # 1. RENDERIZADO DEL SVG AISLADO
+        # 1. ENCABEZADO UNIFICADO Y ESTILIZADO (SIN MARCO DE RECUADRO)
         render_orion_svg(PRO_ORANGE)
 
-        # 2. TÍTULOS
         st.markdown(f"""
             <h1 style='text-align: center; font-size: 3.5rem; margin-bottom: 0; text-shadow: 0 0 10px {PRO_ORANGE};'>ORIÓN</h1>
             <p style='text-align: center; color: #E5E7EB; font-size: 1.2rem; letter-spacing: 2px; margin-top: 5px; margin-bottom: 10px; font-weight: 300;'>
@@ -405,17 +404,17 @@ if st.session_state['usuario'] is None:
             <hr style="border: none; height: 1px; background: linear-gradient(90deg, transparent, {PRO_ORANGE}, transparent); margin-bottom: 40px;">
         """, unsafe_allow_html=True)
         
-        # 3. RECUADRO DE ACCESO
+        # 2. RECUADRO DE ACCESO (Inicio de la tarjeta de login)
         st.markdown("<div class='card-style' style='padding: 30px;'>", unsafe_allow_html=True)
         
         tab_login, tab_scan = st.tabs(["🔐 INGRESAR", "📷 ESCANEAR QR"])
         
         with tab_login:
-            st.write("")
+            # st.write("") <-- ELIMINADO: Puede generar un p-tag vacío
             with st.form("login_form"):
                 documento = st.text_input("Usuario")
                 password = st.text_input("Contraseña", type="password")
-                st.write("")
+                # st.write("") <-- ELIMINADO: Puede generar un p-tag vacío
                 submitted = st.form_submit_button("ACCEDER AL SISTEMA", type="primary", use_container_width=True)
                 if submitted:
                     try:
