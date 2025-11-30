@@ -147,8 +147,8 @@ st.markdown(f"""
         text-align: center;
     }}
     
-    /* --- HACK AVANZADO: OCULTAR TODOS LOS CONTENEDORES VACÍOS --- */
-    /* Apunta a contenedores vacíos generados automáticamente entre bloques de contenido */
+    /* --- HACK AVANZADO: OCULTAR CONTENEDORES VACÍOS --- */
+    /* Apunta a contenedores vacíos generados automáticamente */
     div[data-testid="stVerticalBlock"] > div:empty,
     div[data-testid="stVerticalBlock"] > div > div:empty {{
         height: 0 !important;
@@ -398,7 +398,7 @@ if "id_activo_qr" in query_params:
     st.stop() 
 
 # ==============================================================================
-# 🚀 LOGIN (FINAL - ÚNICA OPCIÓN)
+# 🚀 LOGIN (FINAL - RECUADRO SUPERIOR)
 # ==============================================================================
 
 if 'usuario' not in st.session_state: st.session_state['usuario'] = None
@@ -414,7 +414,7 @@ if st.session_state['usuario'] is None:
     c1, c2, c3 = st.columns([1,2,1])
     with c2:
         
-        # 1. ENCABEZADO Y TÍTULOS (Flotante)
+        # 1. ENCABEZADO Y TÍTULOS
         render_orion_svg(PRO_ORANGE)
 
         st.markdown(f"""
@@ -422,10 +422,17 @@ if st.session_state['usuario'] is None:
             <p style='text-align: center; color: #E5E7EB; font-size: 1.2rem; letter-spacing: 2px; margin-top: 5px; margin-bottom: 20px; font-weight: 300;'>
                 PLATAFORMA INTEGRAL DE MANTENIMIENTO
             </p>
-            <hr style="border: none; height: 1px; background: linear-gradient(90deg, transparent, {PRO_ORANGE}, transparent); margin-bottom: 40px;">
         """, unsafe_allow_html=True)
         
-        # 2. RECUADRO DE ACCESO (Tarjeta principal)
+        # 2. CUADRO DE CORREO REUBICADO (para ocupar el espacio vacío)
+        st.markdown(f"""
+            <div class='card-style' style='padding: 10px; margin-top: 0px; margin-bottom: 30px; text-align: center; font-size: 0.85em; color: {PRO_ORANGE}; border: none; box-shadow: none; background: #1F2937;'>
+                <p style='margin: 0;'>Desarrollado por: <b>Jhonestebanpenagos@gmail.com</b></p>
+            </div>
+            <hr style="border: none; height: 1px; background: linear-gradient(90deg, transparent, #4B5563, transparent); margin-bottom: 30px;">
+        """, unsafe_allow_html=True)
+        
+        # 3. RECUADRO DE ACCESO (Tarjeta principal)
         st.markdown("<div class='card-style' style='padding: 30px;'>", unsafe_allow_html=True)
         
         # FORMULARIO DE INGRESO (ÚNICO)
@@ -446,14 +453,7 @@ if st.session_state['usuario'] is None:
                     else: st.error("Acceso denegado.")
                 except: st.error("Error de red.")
         
-        # 3. PIE DE PÁGINA DENTRO DE LA MISMA TARJETA PRINCIPAL (Eliminamos fragmentación)
-        # Usamos un bloque de markdown para el separador y el pie de página
-        st.markdown(f"""
-            <hr style="border: none; height: 1px; background: linear-gradient(90deg, transparent, #4B5563, transparent); margin-top: 30px; margin-bottom: 10px;">
-            <p style='text-align: center; font-size: 0.8em; color: #9CA3AF; margin: 0;'>Desarrollado por: <b>Jhonestebanpenagos@gmail.com</b></p>
-        """, unsafe_allow_html=True)
-
-        # 4. CIERRE DE LA TARJETA PRINCIPAL
+        # CIERRE DE LA TARJETA PRINCIPAL
         st.markdown("</div>", unsafe_allow_html=True) 
 
     st.stop()
