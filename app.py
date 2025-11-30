@@ -699,27 +699,32 @@ elif choice == "Usuarios":
         
         if not df_users.empty:
             
-            st.subheader("Seleccionar Usuario para Gestión")
+            st.subheader("Lista de Usuarios y Selección por ID")
+            
+            # 1. Mostrar la tabla completa para visión general
+            st.dataframe(
+                df_users[['id', 'documento', 'nombre', 'rol']],
+                use_container_width=True,
+                hide_index=True
+            )
+            
+            # 2. Selector por ID para activar la edición/eliminación
+            user_ids = df_users['id'].tolist()
+            user_ids.insert(0, None) # Opción inicial nula
 
-            # --- SELECCIÓN RÁPIDA: Usamos un Selectbox o Radio para una selección rápida de un solo clic ---
-            
-            # 1. Creamos una lista de etiquetas [Nombre - Rol] para el selectbox
-            user_options = df_users.apply(lambda row: f"{row['nombre']} ({row['rol']})", axis=1).tolist()
-            
-            # 2. Permitimos seleccionar el usuario por su nombre
-            selected_user_label = st.selectbox(
-                "Seleccione un usuario", 
-                user_options, 
-                index=None, # Inicia sin selección
-                placeholder="Seleccione un usuario de la lista...",
-                key="fast_select_user"
+            selected_id = st.selectbox(
+                "📝 Seleccione el ID del usuario para editar o eliminar:", 
+                user_ids, 
+                index=0,
+                format_func=lambda x: "--- Seleccionar ID ---" if x is None else f"ID: {x}",
+                key="select_user_id"
             )
 
             # --- LÓGICA DE GESTIÓN ---
             
-            if selected_user_label:
-                # 3. Encontramos la fila del DataFrame basada en el nombre seleccionado
-                selected_user = df_users[df_users.apply(lambda row: f"{row['nombre']} ({row['rol']})", axis=1) == selected_user_label].iloc[0]
+            if selected_id is not None:
+                # Encontrar el usuario por ID
+                selected_user = df_users[df_users['id'] == selected_id].iloc[0]
                 user_id = selected_user['id']
 
                 st.markdown("---")
@@ -784,9 +789,10 @@ elif choice == "Usuarios":
                             st.rerun()
                         except Exception as e:
                             st.error(f"Error al eliminar: {e}")
-            
+
+
             else:
-                st.info("Utilice el selector de arriba para elegir un usuario y gestionar sus datos.")
+                st.info("Seleccione un ID de la lista para editar o eliminar un usuario.")
             
         else:
             st.info("No se encontraron usuarios en la base de datos. Use la pestaña 'CREAR USUARIO'.")
