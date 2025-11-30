@@ -344,6 +344,20 @@ def mostrar_notificaciones():
         del st.session_state['notification']
 
 
+# --- FUNCIÓN DE VALIDACIÓN DE ÓRDENES ABIERTAS ---
+def check_open_orders(user_id):
+    """Verifica si el ID de usuario tiene órdenes de trabajo activas."""
+    try:
+        # Se asume que tecnico_asignado en 'ordenes' guarda el ID del usuario de la tabla 'usuarios'
+        response = supabase.table("ordenes").select("id").eq("tecnico_asignado", user_id).neq("estado", "Concluida").execute()
+        return len(response.data) > 0
+    except Exception as e:
+        # En caso de error de conexión o consulta, asumimos que no hay órdenes para no bloquear
+        # st.error(f"Error al verificar órdenes: {e}") 
+        return False
+# --- FIN FUNCIÓN DE VALIDACIÓN ---
+
+
 # --- FUNCIÓN AISLADA PARA EL SVG ---
 def render_orion_svg(PRO_ORANGE):
     ORION_SVG = f"""
@@ -688,7 +702,6 @@ elif choice == "Usuarios":
             st.subheader("Seleccionar Usuario para Gestión")
             
             # --- SELECCIÓN DE USUARIO ---
-            # Mostramos la tabla y guardamos la selección en el estado de la sesión
             st.dataframe(
                 df_users[['id', 'documento', 'nombre', 'rol']],
                 use_container_width=True,
@@ -707,7 +720,7 @@ elif choice == "Usuarios":
                 user_id = selected_user['id']
 
                 st.markdown("---")
-                st.markdown(f"**Usuario seleccionado:** **{selected_user['nombre']}** ({selected_user['rol']})")
+                st.markdown(f"**Usuario seleccionado:** **{selected_user['nombre']}** (ID: {user_id})")
                 
                 # --- ACCIONES DE EDICIÓN Y ELIMINACIÓN ---
                 
@@ -716,6 +729,7 @@ elif choice == "Usuarios":
                     st.subheader("Editar Información")
                     
                     c1, c2 = st.columns(2)
+                    
                     # Pre-cargamos los valores del usuario seleccionado
                     edit_doc = c1.text_input("Documento/ID", value=selected_user['documento'], key="edit_user_doc")
                     edit_name = c2.text_input("Nombre Completo", value=selected_user['nombre'], key="edit_user_name")
@@ -723,7 +737,7 @@ elif choice == "Usuarios":
                     # Manejo de índice para el Selectbox
                     rol_options = ["Tecnico", "Programador", "Admin"]
                     current_rol_index = rol_options.index(selected_user['rol']) if selected_user['rol'] in rol_options else 0
-                    edit_rol = st.selectbox("Rol", rol_options, index=current_rol_index, key="edit_user_rol")
+                    new_rol = st.selectbox("Rol", rol_options, index=current_rol_index, key="edit_user_rol")
                     
                     new_password = st.text_input("Nueva Contraseña (Dejar vacío para no cambiar)", type="password", key="edit_user_pass")
                     
@@ -732,10 +746,18 @@ elif choice == "Usuarios":
                     update_submitted = col_edit.form_submit_button("ACTUALIZAR USUARIO", type="primary")
                     
                     if update_submitted:
+                        
+                        # Validación del cambio de rol si el rol es diferente
+                        if new_rol != selected_user['rol']:
+                            if check_open_orders(user_id):
+                                st.error(f"❌ ERROR: El usuario {selected_user['nombre']} tiene Órdenes de Trabajo pendientes. Debe cerrarlas antes de cambiar su rol.")
+                                # Salir de la lógica de actualización
+                                st.stop()
+                        
                         update_data = {
                             "documento": edit_doc,
                             "nombre": edit_name,
-                            "rol": edit_rol
+                            "rol": new_rol
                         }
                         if new_password:
                             update_data["password"] = new_password
@@ -749,12 +771,17 @@ elif choice == "Usuarios":
 
                 # Botón de Eliminación (Fuera de la edición, pero abajo del formulario)
                 if st.button("🔴 ELIMINAR USUARIO SELECCIONADO", type="secondary", use_container_width=True, help="Borrar el usuario seleccionado"):
-                    try:
-                        supabase.table("usuarios").delete().eq("id", user_id).execute()
-                        st.session_state['notification'] = {'type':'delete', 'message':f'Usuario {selected_user["nombre"]} eliminado.'}
-                        st.rerun()
-                    except Exception as e:
-                        st.error(f"Error al eliminar: {e}")
+                    
+                    # Validación de eliminación
+                    if check_open_orders(user_id):
+                        st.error(f"❌ ERROR: El usuario {selected_user['nombre']} tiene Órdenes de Trabajo pendientes. No puede ser eliminado.")
+                    else:
+                        try:
+                            supabase.table("usuarios").delete().eq("id", user_id).execute()
+                            st.session_state['notification'] = {'type':'delete', 'message':f'Usuario {selected_user["nombre"]} eliminado.'}
+                            st.rerun()
+                        except Exception as e:
+                            st.error(f"Error al eliminar: {e}")
 
 
             else:
