@@ -147,8 +147,7 @@ st.markdown(f"""
         text-align: center;
     }}
     
-    /* --- HACK CRÍTICO PARA EL LOGIN --- */
-    /* Este CSS oculta el elemento contenedor vacío generado por Streamlit si queda contenido suelto entre el título y el formulario principal. */
+    /* --- HACK CRÍTICO DEL LOGIN (Mantener por seguridad) --- */
     div[data-testid="stVerticalBlock"] > div:nth-child(3):empty {{
         height: 0 !important;
         min-height: 0 !important;
@@ -391,7 +390,7 @@ if "id_activo_qr" in query_params:
     st.stop() 
 
 # ==============================================================================
-# 🚀 LOGIN / SCANNER (CORREGIDO EL RECUADRO VACÍO)
+# 🚀 LOGIN / SCANNER (ESTRUCTURA DE TARJETA ÚNICA CENTRAL)
 # ==============================================================================
 
 if 'usuario' not in st.session_state: st.session_state['usuario'] = None
@@ -406,29 +405,28 @@ def logout():
 if st.session_state['usuario'] is None:
     c1, c2, c3 = st.columns([1,2,1])
     with c2:
-        # 1. ENCABEZADO UNIFICADO Y ESTILIZADO (SIN RECINTO INDESEADO)
-        render_orion_svg(PRO_ORANGE)
-
-        # Contenedor para el título y subtítulo
-        st.markdown(f"""
-            <h1 style='text-align: center; font-size: 3.5rem; margin-bottom: 0; text-shadow: 0 0 10px {PRO_ORANGE};'>ORIÓN</h1>
-            <p style='text-align: center; color: #E5E7EB; font-size: 1.2rem; letter-spacing: 2px; margin-top: 5px; margin-bottom: 10px; font-weight: 300;'>
-                PLATAFORMA INTEGRAL DE MANTENIMIENTO
-            </p>
-            <hr style="border: none; height: 1px; background: linear-gradient(90deg, transparent, {PRO_ORANGE}, transparent); margin-bottom: 40px;">
-        """, unsafe_allow_html=True)
         
-        # 2. RECUADRO DE ACCESO (Inicio de la tarjeta de login)
+        # INICIO DE LA TARJETA PRINCIPAL (TODO EL CONTENIDO VA AQUÍ)
         st.markdown("<div class='card-style' style='padding: 30px;'>", unsafe_allow_html=True)
         
+        # 1. ENCABEZADO (SVG y Títulos)
+        render_orion_svg(PRO_ORANGE)
+        st.markdown(f"""
+            <h1 style='text-align: center; font-size: 3.5rem; margin-bottom: 0; text-shadow: 0 0 10px {PRO_ORANGE};'>ORIÓN</h1>
+            <p style='text-align: center; color: #E5E7EB; font-size: 1.2rem; letter-spacing: 2px; margin-top: 5px; margin-bottom: 20px; font-weight: 300;'>
+                PLATAFORMA INTEGRAL DE MANTENIMIENTO
+            </p>
+            <hr style="border: none; height: 1px; background: linear-gradient(90deg, transparent, #4B5563, transparent); margin-bottom: 30px;">
+        """, unsafe_allow_html=True)
+        
+        # 2. TABS Y FORMULARIO
         tab_login, tab_scan = st.tabs(["🔐 INGRESAR", "📷 ESCANEAR QR"])
         
         with tab_login:
-            # Los widgets de Streamlit gestionan su propio espacio, no necesitamos st.write("")
+            # Aquí Streamlit maneja el espacio, no necesitamos código extra.
             with st.form("login_form"):
                 documento = st.text_input("Usuario")
                 password = st.text_input("Contraseña", type="password")
-                # Aquí el espacio se gestiona solo por el form y los inputs
                 submitted = st.form_submit_button("ACCEDER AL SISTEMA", type="primary", use_container_width=True)
                 if submitted:
                     try:
@@ -442,7 +440,6 @@ if st.session_state['usuario'] is None:
                     except: st.error("Error de red.")
 
         with tab_scan:
-            st.write("") # Dejamos un st.write para asegurar que la pestaña no quede pegada al borde superior
             st.info("Escanea el QR del equipo")
             img_file = st.camera_input("Escanear", label_visibility="collapsed")
             if img_file:
@@ -452,6 +449,7 @@ if st.session_state['usuario'] is None:
                     st.rerun()
                 else: st.warning("QR no válido.")
         
+        # 3. FIN DE LA TARJETA PRINCIPAL
         st.markdown("</div>", unsafe_allow_html=True) 
     st.stop()
 
