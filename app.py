@@ -160,65 +160,105 @@ else:
         else:
             st.info("Sin datos para mostrar.")
 
-    # 2. GESTIÓN DE ACTIVOS (AQUÍ ESTÁ LA CORRECCIÓN: DOS LISTAS SEPARADAS)
+    # 2. GESTIÓN DE ACTIVOS (AQUÍ ESTÁ LA LÓGICA DE LISTAS DEPENDIENTES)
     elif choice == "Gestión de Activos":
         st.subheader("Inventario de Equipos")
         df_activos = run_query("activos")
         
-        # DEFINIMOS LAS LISTAS POR SEPARADO
-        LISTA_AREAS = ["Logística", "Técnica", "Administración", "Ventas", "Otros"]
-        LISTA_CATEGORIAS = ["Mecánico", "Eléctrico", "Infraestructura", "HVAC", "Otros"]
+        # --- DEFINICIÓN DE ÁREAS Y SUS SUB-ÁREAS ---
+        # Este diccionario controla qué aparece en el segundo menú
+        ESTRUCTURA_AREAS = {
+            "Logística": [
+                "Almacén Materia Prima", "Almacén Producto Terminado", "Distribución", "Taller Vehicular"
+            ],
+            "Administración": [
+                "Administración", "Servicios Generales"
+            ],
+            "Técnica": [
+                "Agua Cristal", "Linea 8", "Linea 2", "Linea 3", "Linea 1", "Linea 10", 
+                "Salas de Jarabe Terminado", "Sala de Jarabes Jugos", "Sala de Jarabe Simple", 
+                "Oficinas Técnicas", "Equipos Auxiliares", "Ptap", "Ptar"
+            ],
+            "Ventas": [
+                "Ventas", "Bodega de Publicidad"
+            ],
+            "Otros": ["Otros"]
+        }
+        
+        LISTA_CATEGORIAS_TECNICAS = ["Mecánico", "Eléctrico", "Infraestructura", "HVAC", "Otros"]
 
         tab1, tab2 = st.tabs(["➕ Registrar Nuevo", "✏️ Editar / Dar de Baja"])
         
         with tab1:
+            # NOTA: Sacamos el selector de Área FUERA del form para que actualice la página al cambiar
+            # y así cargue las sub-áreas correspondientes.
+            st.write("#### Paso 1: Ubicación General")
+            area_selec = st.selectbox("Seleccione el Área", list(ESTRUCTURA_AREAS.keys()), key="area_create")
+            
+            # Calculamos las sub-áreas disponibles según la selección anterior
+            sub_areas_disponibles = ESTRUCTURA_AREAS[area_selec]
+
+            st.write("#### Paso 2: Detalles del Equipo")
             with st.form("form_activo", clear_on_submit=True):
                 c1, c2 = st.columns(2)
                 nombre = c1.text_input("Nombre del Equipo")
-                ubicacion = c2.text_input("Ubicación Física")
+                # Aquí la "Ubicación" ahora es una lista desplegable dependiente
+                ubicacion = c2.selectbox("Ubicación Específica / Sub-Área", sub_areas_disponibles)
                 
-                # Dos columnas para los selectores
-                c3, c4 = st.columns(2)
-                area = c3.selectbox("Área Perteneciente", LISTA_AREAS)
-                categoria = c4.selectbox("Categoría Técnica", LISTA_CATEGORIAS)
+                categoria = st.selectbox("Categoría Técnica", LISTA_CATEGORIAS_TECNICAS)
                 
                 if st.form_submit_button("Guardar Activo"):
-                    if nombre and ubicacion:
+                    if nombre:
+                        # Guardamos 'area' como el área principal y 'ubicacion' como la sub-área
                         supabase.table("activos").insert({
                             "nombre": nombre, 
                             "ubicacion": ubicacion, 
-                            "area": area,          # Campo Nuevo
-                            "categoria": categoria # Campo Técnico
+                            "area": area_selec,          
+                            "categoria": categoria 
                         }).execute()
                         st.success("Activo creado correctamente!")
                         st.rerun()
                     else:
-                        st.warning("Faltan datos (Nombre o Ubicación).")
+                        st.warning("Falta el nombre del equipo.")
 
         with tab2:
             if not df_activos.empty:
-                activos_dict = {f"{row['nombre']} - {row['ubicacion']}": row['id'] for i, row in df_activos.iterrows()}
-                seleccion = st.selectbox("Seleccionar Activo", list(activos_dict.keys()))
+                # Mostramos ID, Nombre y Area en el buscador
+                activos_dict = {f"{row['nombre']} ({row.get('area','?')})" : row['id'] for i, row in df_activos.iterrows()}
+                seleccion = st.selectbox("Seleccionar Activo a Editar", list(activos_dict.keys()))
                 id_seleccionado = activos_dict[seleccion]
                 datos_actuales = df_activos[df_activos['id'] == id_seleccionado].iloc[0]
                 
+                st.markdown("---")
+                
+                # --- LÓGICA DE EDICIÓN CON DEPENDENCIAS ---
+                # 1. Recuperamos el Área actual
+                area_actual_db = datos_actuales.get('area', 'Otros')
+                if area_actual_db not in ESTRUCTURA_AREAS: area_actual_db = "Otros"
+                
+                # Selector de Área (Fuera del form para interactividad)
+                nueva_area = st.selectbox("Área Perteneciente", list(ESTRUCTURA_AREAS.keys()), index=list(ESTRUCTURA_AREAS.keys()).index(area_actual_db), key="area_edit")
+                
+                # 2. Calculamos las sub-áreas disponibles
+                sub_areas_edit_disp = ESTRUCTURA_AREAS[nueva_area]
+                
+                # 3. Intentamos mantener la ubicación actual si existe en la nueva lista
+                ubicacion_actual_db = datos_actuales.get('ubicacion', '')
+                idx_ubic = 0
+                if ubicacion_actual_db in sub_areas_edit_disp:
+                    idx_ubic = sub_areas_edit_disp.index(ubicacion_actual_db)
+                
                 with st.form("form_editar"):
-                    nuevo_nombre = st.text_input("Nombre", value=datos_actuales['nombre'])
-                    nueva_ubicacion = st.text_input("Ubicación Física", value=datos_actuales['ubicacion'])
+                    c1, c2 = st.columns(2)
+                    nuevo_nombre = c1.text_input("Nombre", value=datos_actuales['nombre'])
+                    # Selector dependiente dentro del form (ya cargado con las opciones correctas)
+                    nueva_ubicacion = c2.selectbox("Ubicación Específica / Sub-Área", sub_areas_edit_disp, index=idx_ubic)
                     
-                    c3, c4 = st.columns(2)
-                    
-                    # Lógica para Área (con manejo de valores antiguos)
-                    idx_area = 0
-                    area_actual = datos_actuales.get('area', '')
-                    if area_actual in LISTA_AREAS: idx_area = LISTA_AREAS.index(area_actual)
-                    nueva_area = c3.selectbox("Área Perteneciente", LISTA_AREAS, index=idx_area)
-                    
-                    # Lógica para Categoría
-                    idx_cat = 0
+                    # Categoría Técnica
                     cat_actual = datos_actuales.get('categoria', '')
-                    if cat_actual in LISTA_CATEGORIAS: idx_cat = LISTA_CATEGORIAS.index(cat_actual)
-                    nueva_categoria = c4.selectbox("Categoría Técnica", LISTA_CATEGORIAS, index=idx_cat)
+                    idx_cat = 0
+                    if cat_actual in LISTA_CATEGORIAS_TECNICAS: idx_cat = LISTA_CATEGORIAS_TECNICAS.index(cat_actual)
+                    nueva_categoria = st.selectbox("Categoría Técnica", LISTA_CATEGORIAS_TECNICAS, index=idx_cat)
 
                     if st.form_submit_button("Actualizar"):
                         supabase.table("activos").update({
@@ -268,8 +308,8 @@ else:
             lista_tecnicos = tecnicos['nombre'].tolist()
 
         if not df_activos.empty:
-            # Mostramos más detalles en el selector para evitar confusiones
-            activos_dict = {f"{row['nombre']} ({row.get('area','S/A')})": row['id'] for i, row in df_activos.iterrows()}
+            # Mostramos nombre y ubicación para que sea fácil identificar
+            activos_dict = {f"{row['nombre']} - {row.get('ubicacion','?')}": row['id'] for i, row in df_activos.iterrows()}
             seleccion = st.selectbox("Equipo", list(activos_dict.keys()))
             activo_id = activos_dict[seleccion]
             
