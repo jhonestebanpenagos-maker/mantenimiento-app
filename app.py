@@ -158,6 +158,10 @@ st.markdown(f"""
         background: transparent !important;
         overflow: hidden !important;
     }}
+    /* Quitar el padding extra que pone Streamlit a veces en elementos de columna */
+    div.stVerticalBlock > div:first-child > div:nth-child(2) > div:first-child {{
+        padding-top: 0 !important;
+    }}
     </style>
 """, unsafe_allow_html=True)
 
@@ -391,7 +395,7 @@ if "id_activo_qr" in query_params:
     st.stop() 
 
 # ==============================================================================
-# 🚀 LOGIN / SCANNER (CORRECCIÓN FINAL DE RECUADRO VACÍO)
+# 🚀 LOGIN / SCANNER (SOLUCIÓN DE CONTENEDOR ÚNICO Y ESTILIZACIÓN INLINE)
 # ==============================================================================
 
 if 'usuario' not in st.session_state: st.session_state['usuario'] = None
@@ -407,7 +411,10 @@ if st.session_state['usuario'] is None:
     c1, c2, c3 = st.columns([1,2,1])
     with c2:
         
-        # 1. ENCABEZADO Y TÍTULOS (Flotante)
+        # 1. TARJETA PRINCIPAL ENVOLVIENDO TODO EL CONTENIDO DEL LOGIN
+        st.markdown("<div class='card-style' style='padding: 30px;'>", unsafe_allow_html=True)
+        
+        # --- ENCABEZADO DENTRO DE LA TARJETA ---
         render_orion_svg(PRO_ORANGE)
 
         st.markdown(f"""
@@ -415,12 +422,11 @@ if st.session_state['usuario'] is None:
             <p style='text-align: center; color: #E5E7EB; font-size: 1.2rem; letter-spacing: 2px; margin-top: 5px; margin-bottom: 20px; font-weight: 300;'>
                 PLATAFORMA INTEGRAL DE MANTENIMIENTO
             </p>
-            <hr style="border: none; height: 1px; background: linear-gradient(90deg, transparent, {PRO_ORANGE}, transparent); margin-bottom: 40px;">
+            <hr style="border: none; height: 1px; background: linear-gradient(90deg, transparent, {PRO_ORANGE}, transparent); margin-bottom: 30px;">
         """, unsafe_allow_html=True)
+        # --- FIN DEL ENCABEZADO ---
         
-        # 2. RECUADRO DE ACCESO (Tarjeta principal)
-        st.markdown("<div class='card-style' style='padding: 30px;'>", unsafe_allow_html=True)
-        
+        # 2. TABS Y FORMULARIO
         tab_login, tab_scan = st.tabs(["🔐 INGRESAR", "📷 ESCANEAR QR"])
         
         with tab_login:
@@ -449,15 +455,14 @@ if st.session_state['usuario'] is None:
                     st.rerun()
                 else: st.warning("QR no válido.")
         
-        # FIN DE LA TARJETA PRINCIPAL
-        st.markdown("</div>", unsafe_allow_html=True) 
-
-        # 3. PIE DE PÁGINA ESTILIZADO (Usamos un único bloque para esto)
+        # 3. PIE DE PÁGINA DENTRO DE LA MISMA TARJETA PRINCIPAL (para evitar el contenedor vacío)
         st.markdown(f"""
-            <div class='card-style' style='padding: 15px; margin-top: 20px; text-align: center; font-size: 0.85em; color: #9CA3AF;'>
-                <p style='margin: 0;'>Desarrollado por: <b>Jhonestebanpenagos@gmail.com</b></p>
-            </div>
+            <hr style="border: none; height: 1px; background: linear-gradient(90deg, transparent, #4B5563, transparent); margin-top: 30px; margin-bottom: 10px;">
+            <p style='text-align: center; font-size: 0.8em; color: #9CA3AF; margin: 0;'>Desarrollado por: <b>Jhonestebanpenagos@gmail.com</b></p>
         """, unsafe_allow_html=True)
+
+        # 4. CIERRE DE LA TARJETA PRINCIPAL
+        st.markdown("</div>", unsafe_allow_html=True) 
 
     st.stop()
 
