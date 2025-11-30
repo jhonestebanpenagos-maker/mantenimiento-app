@@ -147,8 +147,10 @@ st.markdown(f"""
         text-align: center;
     }}
     
-    /* --- HACK CRÍTICO DEL LOGIN (Mantener por seguridad) --- */
-    div[data-testid="stVerticalBlock"] > div:nth-child(3):empty {{
+    /* --- HACK AVANZADO: OCULTAR TODOS LOS CONTENEDORES VACÍOS --- */
+    /* Apunta a contenedores vacíos generados automáticamente entre bloques de contenido */
+    div[data-testid="stVerticalBlock"] > div:empty,
+    div[data-testid="stVerticalBlock"] > div > div:empty {{
         height: 0 !important;
         min-height: 0 !important;
         padding: 0 !important;
@@ -158,6 +160,7 @@ st.markdown(f"""
         background: transparent !important;
         overflow: hidden !important;
     }}
+    
     /* Aseguramos que no haya padding extra en la columna central del login */
     div.stVerticalBlock > div:first-child > div:nth-child(2) > div:first-child {{
         padding-top: 0 !important;
@@ -444,6 +447,7 @@ if st.session_state['usuario'] is None:
                 except: st.error("Error de red.")
         
         # 3. PIE DE PÁGINA DENTRO DE LA MISMA TARJETA PRINCIPAL (Eliminamos fragmentación)
+        # Usamos un bloque de markdown para el separador y el pie de página
         st.markdown(f"""
             <hr style="border: none; height: 1px; background: linear-gradient(90deg, transparent, #4B5563, transparent); margin-top: 30px; margin-bottom: 10px;">
             <p style='text-align: center; font-size: 0.8em; color: #9CA3AF; margin: 0;'>Desarrollado por: <b>Jhonestebanpenagos@gmail.com</b></p>
