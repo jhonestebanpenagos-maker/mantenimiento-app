@@ -55,7 +55,6 @@ st.markdown(f"""
     }}
 
     /* --- CORRECCIÓN DE VISIBILIDAD DE ETIQUETAS (USUARIO/CONTRASEÑA) --- */
-    /* Esto fuerza a que "Usuario" y "Contraseña" sean blancos y brillantes */
     .stTextInput label {{
         color: #FFFFFF !important;
         font-size: 16px !important;
@@ -358,7 +357,7 @@ if "id_activo_qr" in query_params:
     st.stop() 
 
 # ==============================================================================
-# 🚀 LOGIN / SCANNER
+# 🚀 LOGIN / SCANNER (MODIFICADO CON GIF Y SIN RECUADRO SUPERIOR)
 # ==============================================================================
 
 if 'usuario' not in st.session_state: st.session_state['usuario'] = None
@@ -371,23 +370,30 @@ def logout():
     st.rerun()
 
 if st.session_state['usuario'] is None:
-    # AQUI EL CAMBIO: Título dentro de una estructura unificada
-    
-    # 1. Contenedor Centrado
+    # Usamos columnas para centrar todo el contenido
     c1, c2, c3 = st.columns([1,2,1])
     with c2:
-        # 2. Tarjeta Unificada para Login
-        st.markdown("<div class='card-style' style='padding: 40px;'>", unsafe_allow_html=True)
-        
-        # TÍTULO Y SUBTÍTULO DENTRO DE LA TARJETA
+        # 1. GIF ANIMADO (Flotando, sin recuadro)
+        # Puedes cambiar esta URL por el GIF de Orión que prefieras.
+        # He usado uno de estrellas con un estilo redondo y brillo naranja para que combine.
         st.markdown(f"""
-            <h1 style='text-align: center; font-size: 3.5rem; margin-bottom: 0;'>ORIÓN</h1>
-            <p style='text-align: center; color: #E5E7EB; font-size: 1.1rem; letter-spacing: 1px; margin-top: 5px; margin-bottom: 30px; border-bottom: 1px solid {PRO_ORANGE}; padding-bottom: 15px;'>
+            <div style="display: flex; justify-content: center; margin-bottom: 20px;">
+                <img src="https://i.giphy.com/media/3o85xkpCruOJPGtBMQ/giphy.webp" width="180" 
+                     style="border-radius: 50%; box-shadow: 0 0 30px {PRO_ORANGE}; border: 3px solid {PRO_ORANGE};">
+            </div>
+        """, unsafe_allow_html=True)
+
+        # 2. TÍTULOS (Flotando, sin recuadro)
+        st.markdown(f"""
+            <h1 style='text-align: center; font-size: 3.5rem; margin-bottom: 0; text-shadow: 0 0 10px {PRO_ORANGE};'>ORIÓN</h1>
+            <p style='text-align: center; color: #E5E7EB; font-size: 1.2rem; letter-spacing: 2px; margin-top: 10px; margin-bottom: 40px; font-weight: 300;'>
                 PLATAFORMA INTEGRAL DE MANTENIMIENTO
             </p>
         """, unsafe_allow_html=True)
         
-        # TABS Y FORMULARIO (VISUALMENTE INTEGRADOS)
+        # 3. RECUADRO PARA LOS FORMULARIOS
+        st.markdown("<div class='card-style' style='padding: 30px;'>", unsafe_allow_html=True)
+        
         tab_login, tab_scan = st.tabs(["🔐 INGRESAR", "📷 ESCANEAR QR"])
         
         with tab_login:
