@@ -700,9 +700,12 @@ elif choice == "Usuarios":
                 key="user_selection_data"
             )
 
-            # Verificamos si hay una fila seleccionada
-            if selection['selection']['rows']:
-                selected_index = selection['selection']['rows'][0]
+            # 🚨 CORRECCIÓN APLICADA AQUÍ: Se verifica si la lista de filas seleccionadas tiene elementos
+            selected_rows = selection['selection']['rows']
+            
+            if selected_rows: # <--- La verificación segura
+                # Como solo permitimos una fila, tomamos el primer (y único) índice de la lista de índices
+                selected_index = selected_rows[0] 
                 selected_user = df_users.iloc[selected_index]
                 user_id = selected_user['id']
 
@@ -744,9 +747,9 @@ elif choice == "Usuarios":
                             st.error(f"Error al actualizar: {e}")
 
                 # Botón de Eliminación (Fuera del formulario de edición, pero en el mismo contexto)
-                if col_delete_btn.button("ELIMINAR", type="secondary", help="Borrar el usuario seleccionado"):
+                # Usamos un botón de confirmación simple, aunque en producción es mejor usar un `st.popover` o `st.form` separado para confirmación de eliminación.
+                if st.button("🔴 ELIMINAR USUARIO SELECCIONADO", type="secondary", use_container_width=True, help="Borrar el usuario seleccionado"):
                     try:
-                        # Confirmación de eliminación (opcional, pero buena práctica)
                         supabase.table("usuarios").delete().eq("id", user_id).execute()
                         st.session_state['notification'] = {'type':'delete', 'message':f'Usuario {selected_user["nombre"]} eliminado.'}
                         st.rerun()
@@ -755,7 +758,7 @@ elif choice == "Usuarios":
 
 
             else:
-                st.info("Seleccione una fila de la tabla de arriba para editar o eliminar un usuario.")
+                st.info("Seleccione una fila de la tabla para editar o eliminar un usuario.")
             
             st.markdown("</div>", unsafe_allow_html=True)
 
