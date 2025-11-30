@@ -166,7 +166,6 @@ st.markdown(f"""
 @st.cache_resource
 def init_supabase():
     try:
-        # Asegúrate de que las credenciales estén en st.secrets
         url = st.secrets["SUPABASE_URL"]
         key = st.secrets["SUPABASE_KEY"]
         return create_client(url, key)
@@ -392,7 +391,7 @@ if "id_activo_qr" in query_params:
     st.stop() 
 
 # ==============================================================================
-# 🚀 LOGIN / SCANNER (USANDO EL RECUADRO COMO PIE DE PÁGINA)
+# 🚀 LOGIN / SCANNER (CORRECCIÓN FINAL DE RECUADRO VACÍO)
 # ==============================================================================
 
 if 'usuario' not in st.session_state: st.session_state['usuario'] = None
@@ -450,9 +449,10 @@ if st.session_state['usuario'] is None:
                     st.rerun()
                 else: st.warning("QR no válido.")
         
+        # FIN DE LA TARJETA PRINCIPAL
         st.markdown("</div>", unsafe_allow_html=True) 
 
-        # 3. PIE DE PÁGINA ESTILIZADO (Reutilizando el estilo del "recuadro" para la firma)
+        # 3. PIE DE PÁGINA ESTILIZADO (Usamos un único bloque para esto)
         st.markdown(f"""
             <div class='card-style' style='padding: 15px; margin-top: 20px; text-align: center; font-size: 0.85em; color: #9CA3AF;'>
                 <p style='margin: 0;'>Desarrollado por: <b>Jhonestebanpenagos@gmail.com</b></p>
