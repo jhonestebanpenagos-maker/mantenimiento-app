@@ -144,17 +144,13 @@ else:
             
             st.divider()
             
-            # Gráficos
             c1, c2, c3 = st.columns(3)
-            
             with c1:
                 st.write("### Estado")
                 st.bar_chart(df_ordenes['estado'].value_counts(), color="#00b09b") 
-            
             with c2:
                 st.write("### Criticidad")
                 st.bar_chart(df_ordenes['criticidad'].value_counts(), color="#ff6b6b")
-                
             with c3:
                 st.write("### Tipo Mantenimiento")
                 if 'tipo_mantenimiento' in df_ordenes.columns:
@@ -164,13 +160,14 @@ else:
         else:
             st.info("Sin datos para mostrar.")
 
-    # 2. GESTIÓN DE ACTIVOS (AQUÍ ESTÁ EL CAMBIO DE ÁREAS)
+    # 2. GESTIÓN DE ACTIVOS (AQUÍ ESTÁ LA CORRECCIÓN: DOS LISTAS SEPARADAS)
     elif choice == "Gestión de Activos":
         st.subheader("Inventario de Equipos")
         df_activos = run_query("activos")
         
-        # DEFINIMOS LAS NUEVAS ÁREAS AQUÍ PARA USARLAS EN TODO LADO
+        # DEFINIMOS LAS LISTAS POR SEPARADO
         LISTA_AREAS = ["Logística", "Técnica", "Administración", "Ventas", "Otros"]
+        LISTA_CATEGORIAS = ["Mecánico", "Eléctrico", "Infraestructura", "HVAC", "Otros"]
 
         tab1, tab2 = st.tabs(["➕ Registrar Nuevo", "✏️ Editar / Dar de Baja"])
         
@@ -178,17 +175,25 @@ else:
             with st.form("form_activo", clear_on_submit=True):
                 c1, c2 = st.columns(2)
                 nombre = c1.text_input("Nombre del Equipo")
-                ubicacion = c2.text_input("Ubicación")
-                # Selector con las nuevas áreas
-                categoria = st.selectbox("Área / Categoría", LISTA_AREAS)
+                ubicacion = c2.text_input("Ubicación Física")
+                
+                # Dos columnas para los selectores
+                c3, c4 = st.columns(2)
+                area = c3.selectbox("Área Perteneciente", LISTA_AREAS)
+                categoria = c4.selectbox("Categoría Técnica", LISTA_CATEGORIAS)
                 
                 if st.form_submit_button("Guardar Activo"):
                     if nombre and ubicacion:
-                        supabase.table("activos").insert({"nombre": nombre, "ubicacion": ubicacion, "categoria": categoria}).execute()
-                        st.success("Activo creado!")
+                        supabase.table("activos").insert({
+                            "nombre": nombre, 
+                            "ubicacion": ubicacion, 
+                            "area": area,          # Campo Nuevo
+                            "categoria": categoria # Campo Técnico
+                        }).execute()
+                        st.success("Activo creado correctamente!")
                         st.rerun()
                     else:
-                        st.warning("Faltan datos.")
+                        st.warning("Faltan datos (Nombre o Ubicación).")
 
         with tab2:
             if not df_activos.empty:
@@ -199,19 +204,30 @@ else:
                 
                 with st.form("form_editar"):
                     nuevo_nombre = st.text_input("Nombre", value=datos_actuales['nombre'])
-                    nueva_ubicacion = st.text_input("Ubicación", value=datos_actuales['ubicacion'])
+                    nueva_ubicacion = st.text_input("Ubicación Física", value=datos_actuales['ubicacion'])
                     
-                    # Lógica para que no falle si el activo tiene una categoría vieja
+                    c3, c4 = st.columns(2)
+                    
+                    # Lógica para Área (con manejo de valores antiguos)
                     idx_area = 0
-                    categoria_actual = datos_actuales.get('categoria', '')
-                    if categoria_actual in LISTA_AREAS:
-                        idx_area = LISTA_AREAS.index(categoria_actual)
+                    area_actual = datos_actuales.get('area', '')
+                    if area_actual in LISTA_AREAS: idx_area = LISTA_AREAS.index(area_actual)
+                    nueva_area = c3.selectbox("Área Perteneciente", LISTA_AREAS, index=idx_area)
                     
-                    nueva_categoria = st.selectbox("Área / Categoría", LISTA_AREAS, index=idx_area)
+                    # Lógica para Categoría
+                    idx_cat = 0
+                    cat_actual = datos_actuales.get('categoria', '')
+                    if cat_actual in LISTA_CATEGORIAS: idx_cat = LISTA_CATEGORIAS.index(cat_actual)
+                    nueva_categoria = c4.selectbox("Categoría Técnica", LISTA_CATEGORIAS, index=idx_cat)
 
                     if st.form_submit_button("Actualizar"):
-                        supabase.table("activos").update({"nombre": nuevo_nombre, "ubicacion": nueva_ubicacion, "categoria": nueva_categoria}).eq("id", int(id_seleccionado)).execute()
-                        st.success("Actualizado.")
+                        supabase.table("activos").update({
+                            "nombre": nuevo_nombre, 
+                            "ubicacion": nueva_ubicacion, 
+                            "area": nueva_area, 
+                            "categoria": nueva_categoria
+                        }).eq("id", int(id_seleccionado)).execute()
+                        st.success("Datos del activo actualizados.")
                         st.rerun()
                 
                 st.markdown("---")
@@ -223,6 +239,7 @@ else:
                             "id_original": int(id_seleccionado),
                             "nombre": datos_actuales['nombre'],
                             "ubicacion": datos_actuales['ubicacion'],
+                            "area": datos_actuales.get('area', ''),
                             "categoria": datos_actuales.get('categoria', ''),
                             "motivo_baja": motivo
                         }
@@ -235,7 +252,7 @@ else:
                         
                         supabase.table("ordenes").delete().eq("activo_id", int(id_seleccionado)).execute()
                         supabase.table("activos").delete().eq("id", int(id_seleccionado)).execute()
-                        st.success("Eliminado")
+                        st.success("Activo eliminado y respaldado.")
                         st.rerun()
 
     # 3. CREAR ORDEN Y ASIGNAR
@@ -251,7 +268,8 @@ else:
             lista_tecnicos = tecnicos['nombre'].tolist()
 
         if not df_activos.empty:
-            activos_dict = {f"{row['nombre']}": row['id'] for i, row in df_activos.iterrows()}
+            # Mostramos más detalles en el selector para evitar confusiones
+            activos_dict = {f"{row['nombre']} ({row.get('area','S/A')})": row['id'] for i, row in df_activos.iterrows()}
             seleccion = st.selectbox("Equipo", list(activos_dict.keys()))
             activo_id = activos_dict[seleccion]
             
