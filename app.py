@@ -64,13 +64,13 @@ st.markdown(f"""
         box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
         margin-bottom: 20px;
     }}
-    /* Nuevo estilo para el FORMULARIO DE LOGIN ahora que no está en un card-style grande */
+    /* ELIMINADO: Nuevo estilo para el FORMULARIO DE LOGIN ahora que no está en un card-style grande */
     .login-container {{
-        background: {BG_CARD};
+        /* background: {BG_CARD}; */
         border-radius: 12px;
         padding: 30px;
-        border: 1px solid rgba(245, 158, 11, 0.2); 
-        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+        /* border: 1px solid rgba(245, 158, 11, 0.2); 
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3); */
         margin-top: 20px;
     }}
 
@@ -158,7 +158,6 @@ st.markdown(f"""
     }}
     
     /* --- HACK AVANZADO: OCULTAR CONTENEDORES VACÍOS --- */
-    /* Apunta a contenedores vacíos generados automáticamente */
     div[data-testid="stVerticalBlock"] > div:empty,
     div[data-testid="stVerticalBlock"] > div > div:empty {{
         height: 0 !important;
@@ -408,7 +407,7 @@ if "id_activo_qr" in query_params:
     st.stop() 
 
 # ==============================================================================
-# 🚀 LOGIN (FINAL - SIN TARJETA PRINCIPAL EXTERNA)
+# 🚀 LOGIN (FINAL - SIN CONTENEDOR DE LOGIN)
 # ==============================================================================
 
 if 'usuario' not in st.session_state: st.session_state['usuario'] = None
@@ -442,8 +441,7 @@ if st.session_state['usuario'] is None:
             <hr style="border: none; height: 1px; background: linear-gradient(90deg, transparent, {PRO_ORANGE}, transparent); margin-bottom: 30px;">
         """, unsafe_allow_html=True)
         
-        # 3. CONTENEDOR DE LOGIN (Ahora usando un DIV personalizado para el fondo, ya que se eliminó el card-style externo)
-        st.markdown("<div class='login-container'>", unsafe_allow_html=True)
+        # 3. CONTENIDO DE LOGIN (Sin contenedor DIV externo, solo elementos Streamlit)
         
         st.markdown("<h3 style='text-align: center; margin-bottom: 20px;'>ACCESO DE USUARIOS</h3>", unsafe_allow_html=True)
         
@@ -463,8 +461,7 @@ if st.session_state['usuario'] is None:
                     else: st.error("Acceso denegado.")
                 except: st.error("Error de red.")
         
-        # 4. CIERRE DEL CONTENEDOR DE LOGIN
-        st.markdown("</div>", unsafe_allow_html=True) 
+        # 4. No hay cierre de div aquí.
 
     st.stop()
 
