@@ -146,6 +146,19 @@ st.markdown(f"""
         border-radius: 8px;
         text-align: center;
     }}
+    
+    /* --- HACK CRÍTICO PARA EL LOGIN --- */
+    /* Este CSS oculta el elemento contenedor vacío generado por Streamlit si queda contenido suelto entre el título y el formulario principal. */
+    div[data-testid="stVerticalBlock"] > div:nth-child(3):empty {{
+        height: 0 !important;
+        min-height: 0 !important;
+        padding: 0 !important;
+        margin: 0 !important;
+        border: none !important;
+        box-shadow: none !important;
+        background: transparent !important;
+        overflow: hidden !important;
+    }}
     </style>
 """, unsafe_allow_html=True)
 
@@ -393,9 +406,10 @@ def logout():
 if st.session_state['usuario'] is None:
     c1, c2, c3 = st.columns([1,2,1])
     with c2:
-        # 1. ENCABEZADO UNIFICADO Y ESTILIZADO (SIN MARCO DE RECUADRO)
+        # 1. ENCABEZADO UNIFICADO Y ESTILIZADO (SIN RECINTO INDESEADO)
         render_orion_svg(PRO_ORANGE)
 
+        # Contenedor para el título y subtítulo
         st.markdown(f"""
             <h1 style='text-align: center; font-size: 3.5rem; margin-bottom: 0; text-shadow: 0 0 10px {PRO_ORANGE};'>ORIÓN</h1>
             <p style='text-align: center; color: #E5E7EB; font-size: 1.2rem; letter-spacing: 2px; margin-top: 5px; margin-bottom: 10px; font-weight: 300;'>
@@ -410,11 +424,11 @@ if st.session_state['usuario'] is None:
         tab_login, tab_scan = st.tabs(["🔐 INGRESAR", "📷 ESCANEAR QR"])
         
         with tab_login:
-            # st.write("") <-- ELIMINADO: Puede generar un p-tag vacío
+            # Los widgets de Streamlit gestionan su propio espacio, no necesitamos st.write("")
             with st.form("login_form"):
                 documento = st.text_input("Usuario")
                 password = st.text_input("Contraseña", type="password")
-                # st.write("") <-- ELIMINADO: Puede generar un p-tag vacío
+                # Aquí el espacio se gestiona solo por el form y los inputs
                 submitted = st.form_submit_button("ACCEDER AL SISTEMA", type="primary", use_container_width=True)
                 if submitted:
                     try:
@@ -428,7 +442,7 @@ if st.session_state['usuario'] is None:
                     except: st.error("Error de red.")
 
         with tab_scan:
-            st.write("")
+            st.write("") # Dejamos un st.write para asegurar que la pestaña no quede pegada al borde superior
             st.info("Escanea el QR del equipo")
             img_file = st.camera_input("Escanear", label_visibility="collapsed")
             if img_file:
