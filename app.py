@@ -15,105 +15,125 @@ import time
 st.set_page_config(page_title="Gestión de Mantenimiento", layout="centered", initial_sidebar_state="collapsed")
 
 # ==============================================================================
-# 🎨 ZONA DE PERSONALIZACIÓN: TEMA "NEON DATA FLOW" (Estilo Orion)
+# 🎨 ZONA DE PERSONALIZACIÓN: TEMA "PROFESSIONAL AMBER & EMERALD"
 # ==============================================================================
 
-# COLORES BASADOS EN TUS IMÁGENES (Morados, Rosas, Fondo Oscuro)
-NEON_PURPLE = "#7d12ff"
-NEON_PINK = "#e6007e"
-NEON_CYAN = "#00f2ea"
-BG_DARK = "#080a12"  # Casi negro
-CARD_BG = "rgba(20, 24, 40, 0.7)" # Semitransparente
+# COLORES PROFESIONALES (Naranja Ámbar y Verde Esmeralda)
+PRO_ORANGE = "#F59E0B" # Ámbar brillante para acción
+PRO_GREEN = "#10B981"  # Esmeralda para datos/éxito
+BG_DARK_CLEAN = "#111827" # Gris carbón muy oscuro (fondo principal)
+BG_CARD_CLEAN = "rgba(31, 41, 55, 0.7)" # Gris azulado semitransparente para tarjetas
+TEXT_HIGH_CONTRAST = "#F9FAFB" # Blanco hueso para máximo contraste
 
-# Inyección de CSS para replicar el estilo de las fotos
+# Inyección de CSS Profesional
 st.markdown(f"""
     <style>
-    /* 1. FONDO GENERAL CON DEGRADADO SUTIL (Como la imagen 1) */
+    /* 1. FONDO GENERAL LIMPIO Y PROFESIONAL */
     .stApp {{
-        background: radial-gradient(circle at 50% 0%, #1a0b2e 0%, #080a12 70%);
+        /* Degradado sutil de gris carbón, menos fatigante que el negro puro */
+        background: radial-gradient(circle at 50% 0%, #374151 0%, {BG_DARK_CLEAN} 80%);
         background-attachment: fixed;
-        color: #ffffff;
+        color: {TEXT_HIGH_CONTRAST}; /* Texto de alto contraste */
     }}
 
     /* 2. BARRA LATERAL (SIDEBAR) */
     [data-testid="stSidebar"] {{
-        background-color: #050505;
-        border-right: 1px solid #333;
+        background-color: {BG_DARK_CLEAN};
+        border-right: 1px solid #374151;
     }}
     
-    /* 3. TÍTULOS CON DEGRADADO (Estilo moderno) */
+    /* 3. TÍTULOS MODERNOS (Degradado Naranja -> Verde) */
     h1, h2, h3 {{
-        background: -webkit-linear-gradient(0deg, {NEON_CYAN}, {NEON_PURPLE});
+        background: linear-gradient(90deg, {PRO_ORANGE}, {PRO_GREEN});
         -webkit-background-clip: text;
         -webkit-text-fill-color: transparent;
         font-weight: 800 !important;
-        letter-spacing: 1px;
+        letter-spacing: 0.5px;
     }}
     
-    /* 4. TARJETAS GLOW (Efecto de las burbujas/paneles) */
+    /* Texto normal dentro de la app para asegurar contraste */
+    p, label, span, div {{
+        color: {TEXT_HIGH_CONTRAST};
+    }}
+    
+    /* 4. TARJETAS "ORION" MEJORADAS */
     .card-style {{
-        background: {CARD_BG};
-        backdrop-filter: blur(10px); /* Efecto vidrio */
-        border-radius: 20px;
+        background: {BG_CARD_CLEAN};
+        backdrop-filter: blur(12px); /* Efecto vidrio esmerilado */
+        border-radius: 16px;
         padding: 25px;
-        border: 1px solid rgba(125, 18, 255, 0.2); /* Borde morado sutil */
-        box-shadow: 0 0 20px rgba(125, 18, 255, 0.1); /* Resplandor suave */
+        /* Borde sutil naranja */
+        border: 1px solid rgba(245, 158, 11, 0.3); 
+        /* Sombra suave para profundidad */
+        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2); 
         margin-bottom: 25px;
     }}
     
-    /* 5. INPUTS Y SELECTORES (Oscuros y redondeados) */
+    /* 5. INPUTS Y SELECTORES (Limpios y alto contraste) */
     .stTextInput input, .stTextArea textarea, .stSelectbox > div > div {{
-        background-color: #0f111a !important;
-        color: white !important;
-        border-radius: 12px;
-        border: 1px solid #333 !important;
+        background-color: rgba(17, 24, 39, 0.8) !important;
+        color: {TEXT_HIGH_CONTRAST} !important;
+        border-radius: 8px;
+        border: 1px solid #4B5563 !important; /* Borde gris medio */
     }}
     .stTextInput input:focus, .stSelectbox > div > div:focus-within {{
-        border-color: {NEON_PINK} !important;
-        box-shadow: 0 0 10px rgba(230, 0, 126, 0.5);
+        border-color: {PRO_ORANGE} !important;
+        box-shadow: 0 0 8px rgba(245, 158, 11, 0.4);
     }}
     
-    /* 6. BOTONES (Gradiente Morado -> Rosa como en la imagen 1) */
+    /* 6. BOTONES (Gradiente Naranja -> Verde Profesional) */
     div.stButton > button:first-child {{
-        background: linear-gradient(90deg, {NEON_PURPLE} 0%, {NEON_PINK} 100%) !important;
+        background: linear-gradient(90deg, {PRO_ORANGE} 0%, {PRO_GREEN} 100%) !important;
         color: white !important;
         border: none;
-        border-radius: 50px; /* Botones redondos */
-        font-weight: bold;
-        padding: 0.5rem 1.5rem;
-        transition: transform 0.2s;
-        box-shadow: 0 4px 15px rgba(230, 0, 126, 0.4);
+        border-radius: 8px; /* Un poco menos redondeados para look pro */
+        font-weight: 600;
+        padding: 0.6rem 1.5rem;
+        transition: all 0.2s ease-in-out;
+        box-shadow: 0 4px 12px rgba(245, 158, 11, 0.3);
     }}
     div.stButton > button:first-child:hover {{
-        transform: scale(1.05);
-        box-shadow: 0 6px 20px rgba(230, 0, 126, 0.6);
+        transform: translateY(-2px);
+        box-shadow: 0 6px 15px rgba(16, 185, 129, 0.4);
     }}
 
-    /* 7. MÉTRICAS (Estilo Panel Flotante) */
+    /* 7. MÉTRICAS (Estilo Panel Limpio) */
     [data-testid="stMetric"] {{
-        background: linear-gradient(145deg, rgba(255,255,255,0.05), rgba(255,255,255,0.01));
-        border-radius: 15px;
-        padding: 15px;
-        border-top: 3px solid {NEON_CYAN}; /* Detalle de color arriba */
-        box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+        background: {BG_CARD_CLEAN};
+        border-radius: 12px;
+        padding: 20px;
+        border-left: 4px solid {PRO_GREEN}; /* Barra de acento verde a la izquierda */
+        box-shadow: 0 2px 10px rgba(0,0,0,0.2);
     }}
-    [data-testid="stMetricLabel"] {{ color: #a0a0a0 !important; font-size: 14px; }}
-    [data-testid="stMetricValue"] {{ color: white !important; font-size: 30px !important; font-weight: bold; }}
+    [data-testid="stMetricLabel"] {{ color: #9CA3AF !important; font-size: 15px; font-weight: 500; }}
+    [data-testid="stMetricValue"] {{ color: {TEXT_HIGH_CONTRAST} !important; font-size: 32px !important; font-weight: 700; }}
 
-    /* 8. TABLAS */
+    /* 8. TABLAS (Hacerlas legibles) */
     [data-testid="stTable"] {{
         background: transparent;
+        color: {TEXT_HIGH_CONTRAST};
+    }}
+    /* Encabezados de tabla */
+    th {{
+        color: {PRO_ORANGE} !important;
+        border-bottom: 2px solid #374151 !important;
+    }}
+    td {{
+        border-bottom: 1px solid #374151 !important;
     }}
     
-    /* 9. ALERTA DE PELIGRO (Roja Brillante) */
+    /* 9. ZONA DE PELIGRO */
     .danger-zone {{
-        background: rgba(50, 0, 0, 0.8);
-        border: 2px solid #ff2a2a;
-        box-shadow: 0 0 15px #ff2a2a;
-        color: #ff2a2a;
+        background: rgba(127, 29, 29, 0.2); /* Rojo oscuro transparente */
+        border: 2px solid #EF4444;
+        color: #EF4444;
         padding: 20px;
-        border-radius: 15px;
+        border-radius: 12px;
         text-align: center;
+    }}
+    /* Asegurar que los textos dentro de danger zone se vean */
+    .danger-zone p, .danger-zone h3 {{
+         color: #EF4444 !important;
     }}
     </style>
 """, unsafe_allow_html=True)
@@ -205,20 +225,20 @@ def mostrar_notificaciones():
             
             if tipo == 'success':
                 st.balloons()
-                # Notificación estilo Neon
+                # Notificación estilo Verde Profesional
                 st.markdown(f"""
-                <div style="padding: 15px; border-radius: 15px; background: rgba(0, 242, 234, 0.1); border: 1px solid {NEON_CYAN}; text-align: center; margin-bottom: 20px; box-shadow: 0 0 15px {NEON_CYAN};">
-                    <h2 style="margin:0; color: {NEON_CYAN}; text-shadow: 0 0 5px {NEON_CYAN};">⚡ ÉXITO ⚡</h2>
-                    <p style="font-size: 18px; margin:5px 0 0 0; color: white;">{msg}</p>
+                <div style="padding: 15px; border-radius: 12px; background: rgba(16, 185, 129, 0.15); border: 1px solid {PRO_GREEN}; text-align: center; margin-bottom: 20px; box-shadow: 0 4px 15px rgba(16, 185, 129, 0.2);">
+                    <h2 style="margin:0; color: {PRO_GREEN};">✅ Operación Exitosa</h2>
+                    <p style="font-size: 18px; margin:5px 0 0 0; color: {TEXT_HIGH_CONTRAST};">{msg}</p>
                 </div>
                 """, unsafe_allow_html=True)
                 time.sleep(1) 
             
             elif tipo == 'delete':
                 st.markdown(f"""
-                <div style="padding: 15px; border-radius: 15px; background: rgba(255, 42, 42, 0.1); border: 1px solid #ff2a2a; text-align: center; margin-bottom: 20px; box-shadow: 0 0 15px #ff2a2a;">
-                    <h3 style="margin:0; color: #ff2a2a;">🗑️ ELIMINADO</h3>
-                    <p style="color:white;">{msg}</p>
+                <div style="padding: 15px; border-radius: 12px; background: rgba(239, 68, 68, 0.15); border: 1px solid #EF4444; text-align: center; margin-bottom: 20px;">
+                    <h3 style="margin:0; color: #EF4444;">🗑️ Registro Eliminado</h3>
+                    <p style="color:{TEXT_HIGH_CONTRAST};">{msg}</p>
                 </div>
                 """, unsafe_allow_html=True)
         
@@ -243,14 +263,14 @@ if "id_activo_qr" in query_params:
         
         st.markdown(f"""
             <div class="card-style">
-                <h3 style="margin-top:0; color: {NEON_CYAN};">Detalles del Equipo</h3>
+                <h3 style="margin-top:0; color: {PRO_ORANGE};">Ficha Técnica del Equipo</h3>
                 <p><strong>📍 Área:</strong> {activo.get('area', 'N/A')}</p>
                 <p><strong>🏢 Ubicación:</strong> {activo['ubicacion']}</p>
                 <p><strong>🔧 Categoría:</strong> {activo.get('categoria', 'N/A')}</p>
             </div>
         """, unsafe_allow_html=True)
 
-        st.subheader("🛠️ Historial de Mantenimiento")
+        st.subheader("🛠️ Historial Reciente")
         try:
             ots = supabase.table("ordenes").select("*").eq("activo_id", id_qr).order("id", desc=True).limit(5).execute()
             if ots.data:
@@ -293,36 +313,37 @@ def logout():
     st.rerun()
 
 if st.session_state['usuario'] is None:
-    st.markdown("<h1 style='text-align: center;'>ORION CMMS</h1>", unsafe_allow_html=True)
+    st.markdown("<h1 style='text-align: center;'>SISTEMA CMMS</h1>", unsafe_allow_html=True)
     
-    # Estilo personalizado para Tabs
+    # Estilo personalizado para Tabs (Naranja activo)
     st.markdown(f"""
         <style>
             .stTabs [data-baseweb="tab-list"] {{
                 background-color: transparent;
-                border-bottom: 2px solid #333;
+                border-bottom: 2px solid #374151;
             }}
             .stTabs [data-baseweb="tab"] {{
-                color: #a0a0a0;
+                color: #9CA3AF; /* Gris claro inactivo */
             }}
             .stTabs [aria-selected="true"] {{
-                color: {NEON_CYAN} !important;
-                border-bottom: 2px solid {NEON_CYAN};
+                color: {PRO_ORANGE} !important;
+                border-bottom: 3px solid {PRO_ORANGE};
+                font-weight: bold;
             }}
         </style>
     """, unsafe_allow_html=True)
 
-    tab_login, tab_scan = st.tabs(["🔐 ACCESO", "📷 ESCÁNER"])
+    tab_login, tab_scan = st.tabs(["🔐 ACCESO PERSONAL", "📷 ESCÁNER QR"])
     
     with tab_login:
         c1, c2, c3 = st.columns([1,2,1])
         with c2:
             st.write("")
-            st.markdown("<div class='card-style' style='text-align:center;'><h3>Identificación</h3>", unsafe_allow_html=True)
+            st.markdown("<div class='card-style' style='text-align:center;'><h3>Credenciales</h3>", unsafe_allow_html=True)
             with st.form("login_form"):
                 documento = st.text_input("Usuario / Documento")
                 password = st.text_input("Contraseña", type="password")
-                submitted = st.form_submit_button("INGRESAR", type="primary", use_container_width=True)
+                submitted = st.form_submit_button("INICIAR SESIÓN", type="primary", use_container_width=True)
                 
                 if submitted:
                     try:
@@ -340,7 +361,7 @@ if st.session_state['usuario'] is None:
 
     with tab_scan:
         st.markdown("<div class='card-style' style='text-align:center;'>", unsafe_allow_html=True)
-        st.info("📷 Escanea el QR del activo para ver su ficha.")
+        st.info("📷 Escanea el QR del activo para acceso rápido.")
         img_file = st.camera_input("Escanear", label_visibility="collapsed")
         if img_file is not None:
             id_detectado = leer_qr_imagen(img_file)
@@ -363,10 +384,10 @@ usuario_actual = st.session_state['usuario']
 # --- BARRA LATERAL ---
 with st.sidebar:
     st.markdown(f"""
-        <div style="background: linear-gradient(135deg, #1a0b2e, #000); padding: 20px; border-radius: 15px; text-align: center; margin-bottom: 20px; border: 1px solid {NEON_PURPLE};">
+        <div style="background: {BG_CARD_CLEAN}; padding: 20px; border-radius: 12px; text-align: center; margin-bottom: 20px; border: 1px solid {PRO_ORANGE};">
             <h2 style="margin:0;">👤</h2>
             <h3 style="margin:10px 0; font-size: 18px; color: white;">{usuario_actual}</h3>
-            <span style="background: {NEON_PINK}; padding: 3px 10px; border-radius: 20px; font-size: 12px; font-weight: bold;">{rol_actual}</span>
+            <span style="background: {PRO_GREEN}; color: #064E3B; padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: 700;">{rol_actual.upper()}</span>
         </div>
     """, unsafe_allow_html=True)
     
@@ -381,7 +402,7 @@ with st.sidebar:
     elif rol_actual == "Tecnico": 
         options_menu = ["Cierre de OTs"] 
     
-    # MENÚ ADAPTADO AL TEMA NEON
+    # MENÚ ADAPTADO AL TEMA PROFESIONAL
     choice = option_menu(
         menu_title="NAVEGACIÓN",
         options=options_menu,
@@ -389,9 +410,9 @@ with st.sidebar:
         default_index=0,
         styles={
             "container": {"padding": "5px!important", "background-color": "transparent"},
-            "icon": {"color": NEON_CYAN, "font-size": "18px"}, 
-            "nav-link": {"font-size": "15px", "text-align": "left", "margin": "5px", "color": "#fff"},
-            "nav-link-selected": {"background": f"linear-gradient(90deg, {NEON_PURPLE}, {NEON_PINK})", "color": "white", "border-radius": "10px"},
+            "icon": {"color": PRO_ORANGE, "font-size": "18px"}, 
+            "nav-link": {"font-size": "15px", "text-align": "left", "margin": "5px", "color": "#D1D5DB"},
+            "nav-link-selected": {"background": f"linear-gradient(90deg, {PRO_ORANGE}, {PRO_GREEN})", "color": "white", "border-radius": "8px", "font-weight":"600"},
         }
     )
 
@@ -407,12 +428,12 @@ LISTA_CATEGORIAS = ["Mecánico", "Eléctrico", "Infraestructura", "HVAC", "Otros
 # --- PANTALLAS ---
 
 if choice == "Dashboard":
-    st.subheader("Tablero de Control")
+    st.subheader("Resumen de Operaciones")
     mostrar_notificaciones()
     
     df_ordenes = run_query("ordenes")
     if not df_ordenes.empty:
-        # Métricas "flotantes"
+        # Métricas limpias
         c1, c2, c3 = st.columns(3)
         c1.metric("Total OTs", len(df_ordenes))
         c2.metric("Abiertas", len(df_ordenes[df_ordenes['estado']=='Abierta']))
@@ -420,18 +441,18 @@ if choice == "Dashboard":
         
         st.divider()
         
-        # Gráficos
+        # Gráficos con títulos de color
         c1, c2, c3 = st.columns(3)
         with c1: 
-            st.markdown(f"<h4 style='color:{NEON_CYAN}'>Estado</h4>", unsafe_allow_html=True)
-            st.bar_chart(df_ordenes['estado'].value_counts(), color="#00f2ea") 
+            st.markdown(f"<h4 style='color:{PRO_ORANGE}'>Estado de OTs</h4>", unsafe_allow_html=True)
+            st.bar_chart(df_ordenes['estado'].value_counts(), color=PRO_ORANGE) 
         with c2: 
-            st.markdown(f"<h4 style='color:{NEON_PINK}'>Criticidad</h4>", unsafe_allow_html=True)
-            st.bar_chart(df_ordenes['criticidad'].value_counts(), color="#e6007e")
+            st.markdown(f"<h4 style='color:{PRO_GREEN}'>Criticidad</h4>", unsafe_allow_html=True)
+            st.bar_chart(df_ordenes['criticidad'].value_counts(), color=PRO_GREEN)
         with c3: 
-            st.markdown(f"<h4 style='color:{NEON_PURPLE}'>Tipo</h4>", unsafe_allow_html=True)
+            st.markdown(f"<h4 style='color:#A78BFA'>Tipo Mto.</h4>", unsafe_allow_html=True)
             if 'tipo_mantenimiento' in df_ordenes.columns: 
-                st.bar_chart(df_ordenes['tipo_mantenimiento'].value_counts(), color="#7d12ff")
+                st.bar_chart(df_ordenes['tipo_mantenimiento'].value_counts(), color="#A78BFA") # Un morado suave para contraste
     else: st.info("Sin datos para analizar.")
 
 elif choice == "Gestión de Activos":
@@ -442,8 +463,8 @@ elif choice == "Gestión de Activos":
     
     if 'tab_index_activos' not in st.session_state: st.session_state['tab_index_activos'] = 0
     
-    # Tabs estilo minimalista
-    st.markdown(f"""<style> .stTabs [data-baseweb="tab-list"] {{ border-bottom: 1px solid {NEON_PURPLE}; }} </style>""", unsafe_allow_html=True)
+    # Tabs internos estilo minimalista naranja
+    st.markdown(f"""<style> .stTabs [data-baseweb="tab-list"] {{ border-bottom: 2px solid {PRO_ORANGE}; }} </style>""", unsafe_allow_html=True)
 
     selected_tab = option_menu(
         menu_title=None, 
@@ -453,8 +474,8 @@ elif choice == "Gestión de Activos":
         default_index=st.session_state['tab_index_activos'],
         styles={
             "container": {"background-color": "transparent"},
-            "nav-link": {"color": "white"},
-            "nav-link-selected": {"background-color": NEON_PURPLE, "color": "white", "border-radius":"20px"}
+            "nav-link": {"color": "#D1D5DB"},
+            "nav-link-selected": {"background-color": PRO_ORANGE, "color": "white", "border-radius":"8px"}
         }
     )
     
@@ -559,7 +580,7 @@ elif choice == "Gestión de Activos":
                     st.markdown(f"""
                         <div class="danger-zone">
                             <h3>⚠️ ELIMINACIÓN DE ACTIVO</h3>
-                            <p>Esta acción eliminará el activo y todas sus órdenes asociadas de forma permanente.</p>
+                            <p style="color:#EF4444;">Esta acción eliminará el activo y todas sus órdenes asociadas de forma permanente.</p>
                         </div>
                     """, unsafe_allow_html=True)
                     
