@@ -158,6 +158,10 @@ st.markdown(f"""
         background: transparent !important;
         overflow: hidden !important;
     }}
+    /* Aseguramos que no haya padding extra en la columna central del login */
+    div.stVerticalBlock > div:first-child > div:nth-child(2) > div:first-child {{
+        padding-top: 0 !important;
+    }}
     </style>
 """, unsafe_allow_html=True)
 
@@ -391,7 +395,7 @@ if "id_activo_qr" in query_params:
     st.stop() 
 
 # ==============================================================================
-# 🚀 LOGIN (SIN PESTAÑA ESCANEAR QR)
+# 🚀 LOGIN (FINAL - ÚNICA OPCIÓN)
 # ==============================================================================
 
 if 'usuario' not in st.session_state: st.session_state['usuario'] = None
@@ -407,10 +411,7 @@ if st.session_state['usuario'] is None:
     c1, c2, c3 = st.columns([1,2,1])
     with c2:
         
-        # INICIO DE LA TARJETA PRINCIPAL (ENVOLVIENDO TODO)
-        st.markdown("<div class='card-style' style='padding: 30px;'>", unsafe_allow_html=True)
-        
-        # 1. ENCABEZADO DENTRO DE LA TARJETA
+        # 1. ENCABEZADO Y TÍTULOS (Flotante)
         render_orion_svg(PRO_ORANGE)
 
         st.markdown(f"""
@@ -418,10 +419,15 @@ if st.session_state['usuario'] is None:
             <p style='text-align: center; color: #E5E7EB; font-size: 1.2rem; letter-spacing: 2px; margin-top: 5px; margin-bottom: 20px; font-weight: 300;'>
                 PLATAFORMA INTEGRAL DE MANTENIMIENTO
             </p>
-            <hr style="border: none; height: 1px; background: linear-gradient(90deg, transparent, {PRO_ORANGE}, transparent); margin-bottom: 30px;">
+            <hr style="border: none; height: 1px; background: linear-gradient(90deg, transparent, {PRO_ORANGE}, transparent); margin-bottom: 40px;">
         """, unsafe_allow_html=True)
         
-        # 2. FORMULARIO DE INGRESO (ÚNICO)
+        # 2. RECUADRO DE ACCESO (Tarjeta principal)
+        st.markdown("<div class='card-style' style='padding: 30px;'>", unsafe_allow_html=True)
+        
+        # FORMULARIO DE INGRESO (ÚNICO)
+        st.markdown("<h3 style='text-align: center; margin-bottom: 20px;'>ACCESO DE USUARIOS</h3>", unsafe_allow_html=True)
+        
         with st.form("login_form"):
             documento = st.text_input("Usuario")
             password = st.text_input("Contraseña", type="password")
@@ -437,7 +443,7 @@ if st.session_state['usuario'] is None:
                     else: st.error("Acceso denegado.")
                 except: st.error("Error de red.")
         
-        # 3. PIE DE PÁGINA DENTRO DE LA MISMA TARJETA PRINCIPAL
+        # 3. PIE DE PÁGINA DENTRO DE LA MISMA TARJETA PRINCIPAL (Eliminamos fragmentación)
         st.markdown(f"""
             <hr style="border: none; height: 1px; background: linear-gradient(90deg, transparent, #4B5563, transparent); margin-top: 30px; margin-bottom: 10px;">
             <p style='text-align: center; font-size: 0.8em; color: #9CA3AF; margin: 0;'>Desarrollado por: <b>Jhonestebanpenagos@gmail.com</b></p>
