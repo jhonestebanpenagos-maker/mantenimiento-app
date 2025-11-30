@@ -641,10 +641,9 @@ elif choice == "Usuarios":
     tab_crear, tab_gestionar = st.tabs(["CREAR USUARIO", "GESTIONAR USUARIOS"])
 
     # ----------------------------------------------------
-    # TAB 1: CREAR USUARIO
+    # TAB 1: CREAR USUARIO (Sin card-style)
     # ----------------------------------------------------
     with tab_crear:
-        st.markdown("<div class='card-style'>", unsafe_allow_html=True)
         st.subheader("Registrar Nuevo Usuario")
         
         with st.form("new_user_form"):
@@ -677,7 +676,6 @@ elif choice == "Usuarios":
                         st.error(f"Error de base de datos: Asegúrese de que el Documento no exista ya. Detalles: {e}")
                 else:
                     st.warning("Por favor, complete todos los campos.")
-        st.markdown("</div>", unsafe_allow_html=True)
 
     # ----------------------------------------------------
     # TAB 2: GESTIONAR USUARIOS (Con Edición/Eliminación)
@@ -704,7 +702,6 @@ elif choice == "Usuarios":
             selected_rows = selection_data.get('selection', {}).get('rows', [])
             
             if selected_rows: # <--- Acceso seguro
-                # Como solo permitimos una fila, tomamos el primer (y único) índice de la lista de índices
                 selected_index = selected_rows[0] 
                 selected_user = df_users.iloc[selected_index]
                 user_id = selected_user['id']
