@@ -23,7 +23,7 @@ st.set_page_config(page_title="Orión | Mantenimiento", layout="wide", initial_s
 PRO_ORANGE = "#F59E0B" 
 PRO_GREEN = "#10B981"  
 BG_DARK_CLEAN = "#111827" 
-BG_CARD = "rgba(31, 41, 55, 0.95)" # Más opaco para mejor lectura
+BG_CARD = "rgba(31, 41, 55, 0.95)" 
 TEXT_WHITE = "#FFFFFF"
 
 st.markdown(f"""
@@ -54,29 +54,12 @@ st.markdown(f"""
         letter-spacing: 0.5px;
     }}
 
-    /* --- CORRECCIÓN DE VISIBILIDAD DE ETIQUETAS (USUARIO/CONTRASEÑA) --- */
-    .stTextInput label {{
-        color: #FFFFFF !important;
-        font-size: 16px !important;
-        font-weight: 600 !important;
-    }}
-    
-    /* --- CORRECCIÓN DE VISIBILIDAD DE PESTAÑAS (SCANNER/INGRESAR) --- */
-    .stTabs [data-baseweb="tab"] {{
-        color: #9CA3AF; /* Gris claro cuando no está seleccionado */
-        font-weight: 600;
-    }}
-    .stTabs [aria-selected="true"] {{
-        color: {PRO_ORANGE} !important; /* Naranja brillante seleccionado */
-        background-color: transparent !important;
-    }}
-    
     /* 4. TARJETAS */
     .card-style {{
         background: {BG_CARD};
         backdrop-filter: blur(10px);
         border-radius: 12px;
-        padding: 30px; /* Más espacio interno */
+        padding: 30px;
         border: 1px solid rgba(245, 158, 11, 0.2); 
         box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
         margin-bottom: 20px;
@@ -111,9 +94,14 @@ st.markdown(f"""
         color: white !important;
     }}
     
-    /* 7. INPUTS TEXTO */
+    /* 7. INPUTS TEXTO Y ETIQUETAS */
+    .stTextInput label {{
+        color: #FFFFFF !important;
+        font-size: 16px !important;
+        font-weight: 600 !important;
+    }}
     .stTextInput input, .stTextArea textarea {{
-        background-color: #0F1115 !important; /* Fondo casi negro para el input */
+        background-color: #0F1115 !important; 
         color: white !important;
         border: 1px solid #4B5563 !important;
         border-radius: 6px;
@@ -144,8 +132,12 @@ st.markdown(f"""
     }}
     [data-testid="stMetricLabel"] {{ color: #9CA3AF !important; }}
     [data-testid="stMetricValue"] {{ color: white !important; }}
+
+    /* 10. PESTAÑAS (TABS) */
+    .stTabs [data-baseweb="tab"] {{ color: #9CA3AF; font-weight: 600; }}
+    .stTabs [aria-selected="true"] {{ color: {PRO_ORANGE} !important; background-color: transparent !important; }}
     
-    /* 10. ZONA PELIGRO */
+    /* 11. ZONA PELIGRO */
     .danger-zone {{
         background: rgba(220, 38, 38, 0.1);
         border: 1px solid #EF4444;
@@ -357,7 +349,7 @@ if "id_activo_qr" in query_params:
     st.stop() 
 
 # ==============================================================================
-# 🚀 LOGIN / SCANNER (MODIFICADO CON GIF Y SIN RECUADRO SUPERIOR)
+# 🚀 LOGIN / SCANNER (MODIFICADO: IMAGEN ESTÁTICA TRANSPARENTE)
 # ==============================================================================
 
 if 'usuario' not in st.session_state: st.session_state['usuario'] = None
@@ -370,28 +362,27 @@ def logout():
     st.rerun()
 
 if st.session_state['usuario'] is None:
-    # Usamos columnas para centrar todo el contenido
     c1, c2, c3 = st.columns([1,2,1])
     with c2:
-        # 1. GIF ANIMADO (Flotando, sin recuadro)
-        # Puedes cambiar esta URL por el GIF de Orión que prefieras.
-        # He usado uno de estrellas con un estilo redondo y brillo naranja para que combine.
+        # 1. IMAGEN ESTÁTICA TRANSPARENTE DE ORIÓN CON GLOW SUTIL
+        # Nota: He usado una URL de ejemplo de una constelación blanca sobre transparente.
+        # Si el enlace caduca o prefieres otra, reemplaza la URL en 'src'.
         st.markdown(f"""
-            <div style="display: flex; justify-content: center; margin-bottom: 20px;">
-                <img src="https://i.giphy.com/media/3o85xkpCruOJPGtBMQ/giphy.webp" width="180" 
-                     style="border-radius: 50%; box-shadow: 0 0 30px {PRO_ORANGE}; border: 3px solid {PRO_ORANGE};">
+            <div style="display: flex; justify-content: center; margin-bottom: 10px;">
+                <img src="https://static.vecteezy.com/system/resources/previews/023/853/746/original/orion-constellation-astronomy-star-map-png.png" width="280" 
+                     style="filter: drop-shadow(0 0 8px {PRO_ORANGE}); opacity: 0.9;">
             </div>
         """, unsafe_allow_html=True)
 
-        # 2. TÍTULOS (Flotando, sin recuadro)
+        # 2. TÍTULOS
         st.markdown(f"""
-            <h1 style='text-align: center; font-size: 3.5rem; margin-bottom: 0; text-shadow: 0 0 10px {PRO_ORANGE};'>ORIÓN</h1>
-            <p style='text-align: center; color: #E5E7EB; font-size: 1.2rem; letter-spacing: 2px; margin-top: 10px; margin-bottom: 40px; font-weight: 300;'>
+            <h1 style='text-align: center; font-size: 3.5rem; margin-bottom: 0; text-shadow: 0 0 15px {PRO_ORANGE};'>ORIÓN</h1>
+            <p style='text-align: center; color: #E5E7EB; font-size: 1.2rem; letter-spacing: 2px; margin-top: 5px; margin-bottom: 40px; font-weight: 300;'>
                 PLATAFORMA INTEGRAL DE MANTENIMIENTO
             </p>
         """, unsafe_allow_html=True)
         
-        # 3. RECUADRO PARA LOS FORMULARIOS
+        # 3. RECUADRO DE ACCESO
         st.markdown("<div class='card-style' style='padding: 30px;'>", unsafe_allow_html=True)
         
         tab_login, tab_scan = st.tabs(["🔐 INGRESAR", "📷 ESCANEAR QR"])
