@@ -678,13 +678,13 @@ elif choice == "Usuarios":
                     st.warning("Por favor, complete todos los campos.")
 
     # ----------------------------------------------------
-    # TAB 2: GESTIONAR USUARIOS (Con Edición/Eliminación)
+    # TAB 2: GESTIONAR USUARIOS (Sin card-style, con Edición/Eliminación)
     # ----------------------------------------------------
     with tab_gestionar:
         df_users = run_query("usuarios")
         
         if not df_users.empty:
-            st.markdown("<div class='card-style'>", unsafe_allow_html=True)
+            
             st.subheader("Seleccionar Usuario para Gestión")
             
             # --- SELECCIÓN DE USUARIO ---
@@ -760,7 +760,5 @@ elif choice == "Usuarios":
             else:
                 st.info("Seleccione una fila de la tabla para editar o eliminar un usuario.")
             
-            st.markdown("</div>", unsafe_allow_html=True)
-
         else:
             st.info("No se encontraron usuarios en la base de datos. Use la pestaña 'CREAR USUARIO'.")
