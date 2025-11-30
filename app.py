@@ -680,22 +680,84 @@ elif choice == "Usuarios":
         st.markdown("</div>", unsafe_allow_html=True)
 
     # ----------------------------------------------------
-    # TAB 2: GESTIONAR USUARIOS (Mostrar tabla)
+    # TAB 2: GESTIONAR USUARIOS (Con Edición/Eliminación)
     # ----------------------------------------------------
     with tab_gestionar:
         df_users = run_query("usuarios")
         
         if not df_users.empty:
             st.markdown("<div class='card-style'>", unsafe_allow_html=True)
-            st.subheader("Usuarios Registrados")
-            # Mostrar solo las columnas relevantes (sin la contraseña)
-            st.dataframe(df_users[['id', 'documento', 'nombre', 'rol']], 
-                         use_container_width=True,
-                         hide_index=True)
+            st.subheader("Seleccionar Usuario para Gestión")
             
-            # --- Aquí se añadiría la lógica de edición/eliminación ---
-            st.info("Para implementar la edición o eliminación, seleccione un usuario de la tabla o añada controles de acción.")
+            # --- SELECCIÓN DE USUARIO ---
+            # Mostramos la tabla y capturamos la fila seleccionada
+            selection = st.dataframe(
+                df_users[['id', 'documento', 'nombre', 'rol']],
+                use_container_width=True,
+                hide_index=True,
+                # Habilitamos la selección de filas
+                selection_mode="single-row", 
+                key="user_selection_data"
+            )
+
+            # Verificamos si hay una fila seleccionada
+            if selection['selection']['rows']:
+                selected_index = selection['selection']['rows'][0]
+                selected_user = df_users.iloc[selected_index]
+                user_id = selected_user['id']
+
+                st.markdown("---")
+                st.markdown(f"**Usuario seleccionado:** **{selected_user['nombre']}** ({selected_user['rol']})")
+                
+                # --- ACCIONES DE EDICIÓN Y ELIMINACIÓN ---
+                
+                # Formulario de Edición
+                with st.form(key="edit_user_form"):
+                    st.subheader("Editar Información")
+                    
+                    c1, c2 = st.columns(2)
+                    # Pre-cargamos los valores del usuario seleccionado
+                    edit_doc = c1.text_input("Documento/ID", value=selected_user['documento'], key="edit_user_doc")
+                    edit_name = c2.text_input("Nombre Completo", value=selected_user['nombre'], key="edit_user_name")
+                    edit_rol = st.selectbox("Rol", ["Tecnico", "Programador", "Admin"], index=["Tecnico", "Programador", "Admin"].index(selected_user['rol']), key="edit_user_rol")
+                    # Nota: La contraseña no se precarga por seguridad, si se deja vacío, no se actualiza.
+                    new_password = st.text_input("Nueva Contraseña (Dejar vacío para no cambiar)", type="password", key="edit_user_pass")
+                    
+                    col_edit, col_delete_btn = st.columns([3, 1])
+                    
+                    update_submitted = col_edit.form_submit_button("ACTUALIZAR USUARIO", type="primary")
+                    
+                    if update_submitted:
+                        update_data = {
+                            "documento": edit_doc,
+                            "nombre": edit_name,
+                            "rol": edit_rol
+                        }
+                        if new_password:
+                            update_data["password"] = new_password
+                            
+                        try:
+                            supabase.table("usuarios").update(update_data).eq("id", user_id).execute()
+                            st.session_state['notification'] = {'type':'success', 'message':f'Usuario {edit_name} actualizado.'}
+                            st.rerun()
+                        except Exception as e:
+                            st.error(f"Error al actualizar: {e}")
+
+                # Botón de Eliminación (Fuera del formulario de edición, pero en el mismo contexto)
+                if col_delete_btn.button("ELIMINAR", type="secondary", help="Borrar el usuario seleccionado"):
+                    try:
+                        # Confirmación de eliminación (opcional, pero buena práctica)
+                        supabase.table("usuarios").delete().eq("id", user_id).execute()
+                        st.session_state['notification'] = {'type':'delete', 'message':f'Usuario {selected_user["nombre"]} eliminado.'}
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"Error al eliminar: {e}")
+
+
+            else:
+                st.info("Seleccione una fila de la tabla de arriba para editar o eliminar un usuario.")
             
             st.markdown("</div>", unsafe_allow_html=True)
+
         else:
-            st.info("No se encontraron usuarios en la base de datos.")
+            st.info("No se encontraron usuarios en la base de datos. Use la pestaña 'CREAR USUARIO'.")
