@@ -635,4 +635,17 @@ elif choice == "Cerrar Orden":
 
 elif choice == "Usuarios":
     st.title("USUARIOS")
-    st.markdown("<div class='card-style'>Panel de gestión de usuarios.</div>", unsafe_allow_html=True)
+    mostrar_notificaciones()
+
+    # Obtener y mostrar la tabla de usuarios
+    df_users = run_query("usuarios")
+    
+    if not df_users.empty:
+        st.markdown(f"<div class='card-style'>", unsafe_allow_html=True)
+        # Mostrar solo las columnas relevantes
+        st.dataframe(df_users[['id', 'documento', 'nombre', 'rol']], 
+                     use_container_width=True,
+                     hide_index=True)
+        st.markdown("</div>", unsafe_allow_html=True)
+    else:
+        st.info("No se encontraron usuarios en la base de datos.")
