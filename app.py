@@ -158,10 +158,6 @@ st.markdown(f"""
         background: transparent !important;
         overflow: hidden !important;
     }}
-    /* Quitar el padding extra que pone Streamlit a veces en elementos de columna */
-    div.stVerticalBlock > div:first-child > div:nth-child(2) > div:first-child {{
-        padding-top: 0 !important;
-    }}
     </style>
 """, unsafe_allow_html=True)
 
@@ -351,7 +347,7 @@ def render_orion_svg(PRO_ORANGE):
 
 
 # ==============================================================================
-# 🚀 INTERCEPTOR PÚBLICO
+# 🚀 INTERCEPTOR PÚBLICO (ACCESO QR)
 # ==============================================================================
 query_params = st.query_params
 if "id_activo_qr" in query_params:
@@ -395,7 +391,7 @@ if "id_activo_qr" in query_params:
     st.stop() 
 
 # ==============================================================================
-# 🚀 LOGIN / SCANNER (SOLUCIÓN DE CONTENEDOR ÚNICO Y ESTILIZACIÓN INLINE)
+# 🚀 LOGIN (SIN PESTAÑA ESCANEAR QR)
 # ==============================================================================
 
 if 'usuario' not in st.session_state: st.session_state['usuario'] = None
@@ -411,10 +407,10 @@ if st.session_state['usuario'] is None:
     c1, c2, c3 = st.columns([1,2,1])
     with c2:
         
-        # 1. TARJETA PRINCIPAL ENVOLVIENDO TODO EL CONTENIDO DEL LOGIN
+        # INICIO DE LA TARJETA PRINCIPAL (ENVOLVIENDO TODO)
         st.markdown("<div class='card-style' style='padding: 30px;'>", unsafe_allow_html=True)
         
-        # --- ENCABEZADO DENTRO DE LA TARJETA ---
+        # 1. ENCABEZADO DENTRO DE LA TARJETA
         render_orion_svg(PRO_ORANGE)
 
         st.markdown(f"""
@@ -424,38 +420,24 @@ if st.session_state['usuario'] is None:
             </p>
             <hr style="border: none; height: 1px; background: linear-gradient(90deg, transparent, {PRO_ORANGE}, transparent); margin-bottom: 30px;">
         """, unsafe_allow_html=True)
-        # --- FIN DEL ENCABEZADO ---
         
-        # 2. TABS Y FORMULARIO
-        tab_login, tab_scan = st.tabs(["🔐 INGRESAR", "📷 ESCANEAR QR"])
+        # 2. FORMULARIO DE INGRESO (ÚNICO)
+        with st.form("login_form"):
+            documento = st.text_input("Usuario")
+            password = st.text_input("Contraseña", type="password")
+            submitted = st.form_submit_button("ACCEDER AL SISTEMA", type="primary", use_container_width=True)
+            if submitted:
+                try:
+                    response = supabase.table("usuarios").select("*").eq("documento", documento).eq("password", password).execute()
+                    if response.data:
+                        user = response.data[0]
+                        st.session_state['usuario'] = user['nombre']
+                        st.session_state['rol'] = user['rol']
+                        st.rerun()
+                    else: st.error("Acceso denegado.")
+                except: st.error("Error de red.")
         
-        with tab_login:
-            with st.form("login_form"):
-                documento = st.text_input("Usuario")
-                password = st.text_input("Contraseña", type="password")
-                submitted = st.form_submit_button("ACCEDER AL SISTEMA", type="primary", use_container_width=True)
-                if submitted:
-                    try:
-                        response = supabase.table("usuarios").select("*").eq("documento", documento).eq("password", password).execute()
-                        if response.data:
-                            user = response.data[0]
-                            st.session_state['usuario'] = user['nombre']
-                            st.session_state['rol'] = user['rol']
-                            st.rerun()
-                        else: st.error("Acceso denegado.")
-                    except: st.error("Error de red.")
-
-        with tab_scan:
-            st.info("Escanea el QR del equipo")
-            img_file = st.camera_input("Escanear", label_visibility="collapsed")
-            if img_file:
-                id_det = leer_qr_imagen(img_file)
-                if id_det:
-                    st.query_params["id_activo_qr"] = id_det
-                    st.rerun()
-                else: st.warning("QR no válido.")
-        
-        # 3. PIE DE PÁGINA DENTRO DE LA MISMA TARJETA PRINCIPAL (para evitar el contenedor vacío)
+        # 3. PIE DE PÁGINA DENTRO DE LA MISMA TARJETA PRINCIPAL
         st.markdown(f"""
             <hr style="border: none; height: 1px; background: linear-gradient(90deg, transparent, #4B5563, transparent); margin-top: 30px; margin-bottom: 10px;">
             <p style='text-align: center; font-size: 0.8em; color: #9CA3AF; margin: 0;'>Desarrollado por: <b>Jhonestebanpenagos@gmail.com</b></p>
