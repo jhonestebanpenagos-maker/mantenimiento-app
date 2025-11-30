@@ -156,7 +156,6 @@ else:
                 st.bar_chart(df_ordenes['criticidad'].value_counts(), color="#ff6b6b")
                 
             with c3:
-                # NUEVO GRÁFICO: TIPO DE MANTENIMIENTO
                 st.write("### Tipo Mantenimiento")
                 if 'tipo_mantenimiento' in df_ordenes.columns:
                     st.bar_chart(df_ordenes['tipo_mantenimiento'].value_counts(), color="#ffaa00")
@@ -165,11 +164,14 @@ else:
         else:
             st.info("Sin datos para mostrar.")
 
-    # 2. GESTIÓN DE ACTIVOS
+    # 2. GESTIÓN DE ACTIVOS (AQUÍ ESTÁ EL CAMBIO DE ÁREAS)
     elif choice == "Gestión de Activos":
         st.subheader("Inventario de Equipos")
         df_activos = run_query("activos")
         
+        # DEFINIMOS LAS NUEVAS ÁREAS AQUÍ PARA USARLAS EN TODO LADO
+        LISTA_AREAS = ["Logística", "Técnica", "Administración", "Ventas", "Otros"]
+
         tab1, tab2 = st.tabs(["➕ Registrar Nuevo", "✏️ Editar / Dar de Baja"])
         
         with tab1:
@@ -177,7 +179,9 @@ else:
                 c1, c2 = st.columns(2)
                 nombre = c1.text_input("Nombre del Equipo")
                 ubicacion = c2.text_input("Ubicación")
-                categoria = st.selectbox("Categoría", ["Mecánico", "Eléctrico", "Infraestructura", "HVAC", "Otros"])
+                # Selector con las nuevas áreas
+                categoria = st.selectbox("Área / Categoría", LISTA_AREAS)
+                
                 if st.form_submit_button("Guardar Activo"):
                     if nombre and ubicacion:
                         supabase.table("activos").insert({"nombre": nombre, "ubicacion": ubicacion, "categoria": categoria}).execute()
@@ -196,8 +200,17 @@ else:
                 with st.form("form_editar"):
                     nuevo_nombre = st.text_input("Nombre", value=datos_actuales['nombre'])
                     nueva_ubicacion = st.text_input("Ubicación", value=datos_actuales['ubicacion'])
+                    
+                    # Lógica para que no falle si el activo tiene una categoría vieja
+                    idx_area = 0
+                    categoria_actual = datos_actuales.get('categoria', '')
+                    if categoria_actual in LISTA_AREAS:
+                        idx_area = LISTA_AREAS.index(categoria_actual)
+                    
+                    nueva_categoria = st.selectbox("Área / Categoría", LISTA_AREAS, index=idx_area)
+
                     if st.form_submit_button("Actualizar"):
-                        supabase.table("activos").update({"nombre": nuevo_nombre, "ubicacion": nueva_ubicacion}).eq("id", int(id_seleccionado)).execute()
+                        supabase.table("activos").update({"nombre": nuevo_nombre, "ubicacion": nueva_ubicacion, "categoria": nueva_categoria}).eq("id", int(id_seleccionado)).execute()
                         st.success("Actualizado.")
                         st.rerun()
                 
@@ -210,7 +223,7 @@ else:
                             "id_original": int(id_seleccionado),
                             "nombre": datos_actuales['nombre'],
                             "ubicacion": datos_actuales['ubicacion'],
-                            "categoria": datos_actuales['categoria'],
+                            "categoria": datos_actuales.get('categoria', ''),
                             "motivo_baja": motivo
                         }
                         supabase.table("auditoria_eliminados").insert({
@@ -224,7 +237,7 @@ else:
                         supabase.table("activos").delete().eq("id", int(id_seleccionado)).execute()
                         st.success("Eliminado")
                         st.rerun()
-    
+
     # 3. CREAR ORDEN Y ASIGNAR
     elif choice == "Crear Orden":
         st.subheader("Planificación y Asignación de OTs")
@@ -242,7 +255,7 @@ else:
             seleccion = st.selectbox("Equipo", list(activos_dict.keys()))
             activo_id = activos_dict[seleccion]
             
-            # --- NUEVO CAMPO: TIPO DE MANTENIMIENTO ---
+            # TIPO DE MANTENIMIENTO
             col_a, col_b = st.columns(2)
             tipo_mant = col_a.selectbox("Tipo de Mantenimiento", ["Correctivo", "Preventivo", "Predictivo"])
             criticidad = col_b.select_slider("Criticidad", ["Baja", "Media", "Alta", "Crítica"])
@@ -256,7 +269,7 @@ else:
                     "activo_id": int(activo_id),
                     "descripcion": descripcion,
                     "criticidad": criticidad,
-                    "tipo_mantenimiento": tipo_mant, # Guardamos el nuevo campo
+                    "tipo_mantenimiento": tipo_mant,
                     "estado": "Abierta",
                     "fecha_creacion": datetime.now().isoformat(),
                     "tecnico_asignado": asignado_a
@@ -264,7 +277,6 @@ else:
                 res = supabase.table("ordenes").insert(datos).execute()
                 if res.data:
                     new_id = res.data[0]['id']
-                    # Mensaje WhatsApp mejorado
                     texto = f"*NUEVA OT #{new_id} ({tipo_mant})*\nResp: {asignado_a}\nEquipo: {seleccion}\nDetalle: {descripcion}\nCriticidad: {criticidad}"
                     texto_enc = urllib.parse.quote(texto)
                     
@@ -285,7 +297,6 @@ else:
         
         if 'tab_index_usuarios' not in st.session_state: st.session_state['tab_index_usuarios'] = 0 
         
-        # Mensajes de estado
         if 'user_msg' in st.session_state:
             msg = st.session_state['user_msg']
             tipo = msg['tipo']
@@ -331,7 +342,6 @@ else:
                         if rol_u == "Tecnico" and especialidad_selec == "":
                             st.warning("Selecciona una especialidad.")
                         else:
-                            # Validación de duplicado
                             existe = supabase.table("usuarios").select("id").eq("documento", documento_u).execute()
                             if existe.data:
                                 st.error(f"⛔ El documento {documento_u} ya existe.")
@@ -417,7 +427,6 @@ else:
                 mis_ots = df_ots[df_ots['estado'] != 'Concluida']
             
             if not mis_ots.empty:
-                # MOSTRAMOS LA NUEVA COLUMNA EN LA TABLA
                 st.dataframe(mis_ots[['id', 'descripcion', 'tipo_mantenimiento', 'tecnico_asignado', 'estado']], use_container_width=True)
                 
                 ot_id = st.selectbox("Seleccionar OT", mis_ots['id'].values)
