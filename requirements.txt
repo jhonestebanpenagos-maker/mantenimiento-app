@@ -1,6 +1,8 @@
 streamlit
-pandas
 supabase
+pandas
 streamlit-option-menu
 qrcode
 pillow
+opencv-python-headless
+numpy
