@@ -64,6 +64,16 @@ st.markdown(f"""
         box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
         margin-bottom: 20px;
     }}
+    /* Nuevo estilo para el FORMULARIO DE LOGIN ahora que no está en un card-style grande */
+    .login-container {{
+        background: {BG_CARD};
+        border-radius: 12px;
+        padding: 30px;
+        border: 1px solid rgba(245, 158, 11, 0.2); 
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+        margin-top: 20px;
+    }}
+
 
     /* 5. TÍTULOS DE GRÁFICAS */
     .chart-header {{
@@ -398,7 +408,7 @@ if "id_activo_qr" in query_params:
     st.stop() 
 
 # ==============================================================================
-# 🚀 LOGIN (FINAL - SOLUCIÓN AGRUPADA)
+# 🚀 LOGIN (FINAL - SIN TARJETA PRINCIPAL EXTERNA)
 # ==============================================================================
 
 if 'usuario' not in st.session_state: st.session_state['usuario'] = None
@@ -414,21 +424,27 @@ if st.session_state['usuario'] is None:
     c1, c2, c3 = st.columns([1,2,1])
     with c2:
         
-        # 1. ENCABEZADO Y TÍTULOS (Fuera de la tarjeta para que flote)
+        # 1. ENCABEZADO Y TÍTULOS (Flotante)
         render_orion_svg(PRO_ORANGE)
 
         st.markdown(f"""
             <h1 style='text-align: center; font-size: 3.5rem; margin-bottom: 0; text-shadow: 0 0 10px {PRO_ORANGE};'>ORIÓN</h1>
-            <p style='text-align: center; color: #E5E7EB; font-size: 1.2rem; letter-spacing: 2px; margin-top: 5px; margin-bottom: 40px; font-weight: 300;'>
+            <p style='text-align: center; color: #E5E7EB; font-size: 1.2rem; letter-spacing: 2px; margin-top: 5px; margin-bottom: 20px; font-weight: 300;'>
                 PLATAFORMA INTEGRAL DE MANTENIMIENTO
             </p>
         """, unsafe_allow_html=True)
         
-        # 2. TARJETA PRINCIPAL (Incluye Formulario y Firma)
-        # Aquí eliminamos el divisor extra al fusionar la firma en este mismo bloque.
-        st.markdown("<div class='card-style' style='padding: 30px; padding-bottom: 10px;'>", unsafe_allow_html=True)
+        # 2. CUADRO DE CORREO (Ahora flotante, ocupando el espacio superior persistente)
+        st.markdown(f"""
+            <div class='card-style' style='padding: 10px; margin-top: 0px; margin-bottom: 30px; text-align: center; font-size: 0.85em; color: {PRO_ORANGE}; border: none; box-shadow: none; background: #1F2937;'>
+                <p style='margin: 0;'>Desarrollado por: <b>Jhonestebanpenagos@gmail.com</b></p>
+            </div>
+            <hr style="border: none; height: 1px; background: linear-gradient(90deg, transparent, {PRO_ORANGE}, transparent); margin-bottom: 30px;">
+        """, unsafe_allow_html=True)
         
-        # SUB-ENCABEZADO
+        # 3. CONTENEDOR DE LOGIN (Ahora usando un DIV personalizado para el fondo, ya que se eliminó el card-style externo)
+        st.markdown("<div class='login-container'>", unsafe_allow_html=True)
+        
         st.markdown("<h3 style='text-align: center; margin-bottom: 20px;'>ACCESO DE USUARIOS</h3>", unsafe_allow_html=True)
         
         # FORMULARIO
@@ -447,14 +463,7 @@ if st.session_state['usuario'] is None:
                     else: st.error("Acceso denegado.")
                 except: st.error("Error de red.")
         
-        # 3. PIE DE PÁGINA (DENTRO DE LA MISMA TARJETA)
-        # Esto va inmediatamente después del formulario para evitar que Streamlit inserte un div vacío.
-        st.markdown(f"""
-            <hr style="border: none; height: 1px; background: linear-gradient(90deg, transparent, #4B5563, transparent); margin-top: 30px; margin-bottom: 10px;">
-            <p style='text-align: center; font-size: 0.8em; color: #9CA3AF; margin: 0;'>Desarrollado por: <b>Jhonestebanpenagos@gmail.com</b></p>
-        """, unsafe_allow_html=True)
-
-        # 4. CIERRE DE LA TARJETA PRINCIPAL
+        # 4. CIERRE DEL CONTENEDOR DE LOGIN
         st.markdown("</div>", unsafe_allow_html=True) 
 
     st.stop()
