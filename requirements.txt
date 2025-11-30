@@ -1,6 +1,6 @@
 streamlit
-supabase
 pandas
+supabase
 streamlit-option-menu
 qrcode
 pillow
