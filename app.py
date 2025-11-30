@@ -690,21 +690,19 @@ elif choice == "Usuarios":
             st.subheader("Seleccionar Usuario para Gestión")
             
             # --- SELECCIÓN DE USUARIO ---
-            # Mostramos la tabla y capturamos la fila seleccionada
             selection = st.dataframe(
                 df_users[['id', 'documento', 'nombre', 'rol']],
                 use_container_width=True,
                 hide_index=True,
-                # Habilitamos la selección de filas
                 selection_mode="single-row", 
                 key="user_selection_data"
             )
 
-            # 🚨 CORRECCIÓN APLICADA AQUÍ: Se verifica si la lista de filas seleccionadas tiene elementos
-            selected_rows = selection['selection']['rows']
+            # 🚨 CORRECCIÓN APLICADA: Verificación robusta de la estructura de selección
+            # Usamos .get() para evitar el KeyError/TypeError si la estructura no está lista.
+            selected_rows = selection.get('selection', {}).get('rows', [])
             
-            if selected_rows: # <--- La verificación segura
-                # Como solo permitimos una fila, tomamos el primer (y único) índice de la lista de índices
+            if selected_rows: # <--- La verificación segura es sobre la lista
                 selected_index = selected_rows[0] 
                 selected_user = df_users.iloc[selected_index]
                 user_id = selected_user['id']
@@ -722,11 +720,15 @@ elif choice == "Usuarios":
                     # Pre-cargamos los valores del usuario seleccionado
                     edit_doc = c1.text_input("Documento/ID", value=selected_user['documento'], key="edit_user_doc")
                     edit_name = c2.text_input("Nombre Completo", value=selected_user['nombre'], key="edit_user_name")
-                    edit_rol = st.selectbox("Rol", ["Tecnico", "Programador", "Admin"], index=["Tecnico", "Programador", "Admin"].index(selected_user['rol']), key="edit_user_rol")
-                    # Nota: La contraseña no se precarga por seguridad, si se deja vacío, no se actualiza.
+                    
+                    # Manejo de índice para el Selectbox
+                    rol_options = ["Tecnico", "Programador", "Admin"]
+                    current_rol_index = rol_options.index(selected_user['rol']) if selected_user['rol'] in rol_options else 0
+                    edit_rol = st.selectbox("Rol", rol_options, index=current_rol_index, key="edit_user_rol")
+                    
                     new_password = st.text_input("Nueva Contraseña (Dejar vacío para no cambiar)", type="password", key="edit_user_pass")
                     
-                    col_edit, col_delete_btn = st.columns([3, 1])
+                    col_edit, col_space = st.columns([1, 1])
                     
                     update_submitted = col_edit.form_submit_button("ACTUALIZAR USUARIO", type="primary")
                     
@@ -746,8 +748,7 @@ elif choice == "Usuarios":
                         except Exception as e:
                             st.error(f"Error al actualizar: {e}")
 
-                # Botón de Eliminación (Fuera del formulario de edición, pero en el mismo contexto)
-                # Usamos un botón de confirmación simple, aunque en producción es mejor usar un `st.popover` o `st.form` separado para confirmación de eliminación.
+                # Botón de Eliminación (Fuera de la edición, pero abajo del formulario)
                 if st.button("🔴 ELIMINAR USUARIO SELECCIONADO", type="secondary", use_container_width=True, help="Borrar el usuario seleccionado"):
                     try:
                         supabase.table("usuarios").delete().eq("id", user_id).execute()
