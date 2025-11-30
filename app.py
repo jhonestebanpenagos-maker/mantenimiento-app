@@ -692,7 +692,7 @@ elif choice == "Usuarios":
                     st.warning("Por favor, complete todos los campos.")
 
     # ----------------------------------------------------
-    # TAB 2: GESTIONAR USUARIOS (Sin card-style, con Edición/Eliminación)
+    # TAB 2: GESTIONAR USUARIOS (Con Edición/Eliminación)
     # ----------------------------------------------------
     with tab_gestionar:
         df_users = run_query("usuarios")
@@ -700,23 +700,26 @@ elif choice == "Usuarios":
         if not df_users.empty:
             
             st.subheader("Seleccionar Usuario para Gestión")
+
+            # --- SELECCIÓN RÁPIDA: Usamos un Selectbox o Radio para una selección rápida de un solo clic ---
             
-            # --- SELECCIÓN DE USUARIO ---
-            st.dataframe(
-                df_users[['id', 'documento', 'nombre', 'rol']],
-                use_container_width=True,
-                hide_index=True,
-                selection_mode="single-row", 
-                key="user_selection_data"
+            # 1. Creamos una lista de etiquetas [Nombre - Rol] para el selectbox
+            user_options = df_users.apply(lambda row: f"{row['nombre']} ({row['rol']})", axis=1).tolist()
+            
+            # 2. Permitimos seleccionar el usuario por su nombre
+            selected_user_label = st.selectbox(
+                "Seleccione un usuario", 
+                user_options, 
+                index=None, # Inicia sin selección
+                placeholder="Seleccione un usuario de la lista...",
+                key="fast_select_user"
             )
 
-            # Obtenemos la selección del estado de la sesión de forma segura
-            selection_data = st.session_state.get("user_selection_data", {})
-            selected_rows = selection_data.get('selection', {}).get('rows', [])
+            # --- LÓGICA DE GESTIÓN ---
             
-            if selected_rows: # <--- Acceso seguro
-                selected_index = selected_rows[0] 
-                selected_user = df_users.iloc[selected_index]
+            if selected_user_label:
+                # 3. Encontramos la fila del DataFrame basada en el nombre seleccionado
+                selected_user = df_users[df_users.apply(lambda row: f"{row['nombre']} ({row['rol']})", axis=1) == selected_user_label].iloc[0]
                 user_id = selected_user['id']
 
                 st.markdown("---")
@@ -750,8 +753,7 @@ elif choice == "Usuarios":
                         # Validación del cambio de rol si el rol es diferente
                         if new_rol != selected_user['rol']:
                             if check_open_orders(user_id):
-                                st.error(f"❌ ERROR: El usuario {selected_user['nombre']} tiene Órdenes de Trabajo pendientes. Debe cerrarlas antes de cambiar su rol.")
-                                # Salir de la lógica de actualización
+                                st.error(f"❌ ERROR: El usuario **{selected_user['nombre']}** tiene Órdenes de Trabajo pendientes. Debe cerrarlas antes de cambiar su rol.")
                                 st.stop()
                         
                         update_data = {
@@ -774,7 +776,7 @@ elif choice == "Usuarios":
                     
                     # Validación de eliminación
                     if check_open_orders(user_id):
-                        st.error(f"❌ ERROR: El usuario {selected_user['nombre']} tiene Órdenes de Trabajo pendientes. No puede ser eliminado.")
+                        st.error(f"❌ ERROR: El usuario **{selected_user['nombre']}** tiene Órdenes de Trabajo pendientes. No puede ser eliminado.")
                     else:
                         try:
                             supabase.table("usuarios").delete().eq("id", user_id).execute()
@@ -782,10 +784,9 @@ elif choice == "Usuarios":
                             st.rerun()
                         except Exception as e:
                             st.error(f"Error al eliminar: {e}")
-
-
+            
             else:
-                st.info("Seleccione una fila de la tabla para editar o eliminar un usuario.")
+                st.info("Utilice el selector de arriba para elegir un usuario y gestionar sus datos.")
             
         else:
             st.info("No se encontraron usuarios en la base de datos. Use la pestaña 'CREAR USUARIO'.")
