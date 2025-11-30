@@ -143,11 +143,25 @@ else:
             c3.metric("Concluidas", len(df_ordenes[df_ordenes['estado']=='Concluida']), delta="Finalizadas", delta_color="normal")
             
             st.divider()
-            col_a, col_b = st.columns(2)
-            col_a.write("### Estado de Órdenes")
-            col_a.bar_chart(df_ordenes['estado'].value_counts(), color="#00b09b") 
-            col_b.write("### Criticidad")
-            col_b.bar_chart(df_ordenes['criticidad'].value_counts(), color="#ff6b6b") 
+            
+            # Gráficos
+            c1, c2, c3 = st.columns(3)
+            
+            with c1:
+                st.write("### Estado")
+                st.bar_chart(df_ordenes['estado'].value_counts(), color="#00b09b") 
+            
+            with c2:
+                st.write("### Criticidad")
+                st.bar_chart(df_ordenes['criticidad'].value_counts(), color="#ff6b6b")
+                
+            with c3:
+                # NUEVO GRÁFICO: TIPO DE MANTENIMIENTO
+                st.write("### Tipo Mantenimiento")
+                if 'tipo_mantenimiento' in df_ordenes.columns:
+                    st.bar_chart(df_ordenes['tipo_mantenimiento'].value_counts(), color="#ffaa00")
+                else:
+                    st.caption("Sin datos de tipo aún.")
         else:
             st.info("Sin datos para mostrar.")
 
@@ -228,17 +242,21 @@ else:
             seleccion = st.selectbox("Equipo", list(activos_dict.keys()))
             activo_id = activos_dict[seleccion]
             
+            # --- NUEVO CAMPO: TIPO DE MANTENIMIENTO ---
+            col_a, col_b = st.columns(2)
+            tipo_mant = col_a.selectbox("Tipo de Mantenimiento", ["Correctivo", "Preventivo", "Predictivo"])
+            criticidad = col_b.select_slider("Criticidad", ["Baja", "Media", "Alta", "Crítica"])
+
             c1, c2 = st.columns(2)
-            descripcion = c1.text_area("Descripción")
+            descripcion = c1.text_area("Descripción de la Falla / Tarea")
             asignado_a = c2.selectbox("Asignar Técnico Responsable", lista_tecnicos)
-            
-            criticidad = st.select_slider("Criticidad", ["Baja", "Media", "Alta", "Crítica"])
             
             if st.button("Generar y Asignar"):
                 datos = {
                     "activo_id": int(activo_id),
                     "descripcion": descripcion,
                     "criticidad": criticidad,
+                    "tipo_mantenimiento": tipo_mant, # Guardamos el nuevo campo
                     "estado": "Abierta",
                     "fecha_creacion": datetime.now().isoformat(),
                     "tecnico_asignado": asignado_a
@@ -246,60 +264,43 @@ else:
                 res = supabase.table("ordenes").insert(datos).execute()
                 if res.data:
                     new_id = res.data[0]['id']
-                    texto = f"*NUEVA ASIGNACIÓN OT #{new_id}*\nResp: {asignado_a}\nEquipo: {seleccion}\nFalla: {descripcion}"
+                    # Mensaje WhatsApp mejorado
+                    texto = f"*NUEVA OT #{new_id} ({tipo_mant})*\nResp: {asignado_a}\nEquipo: {seleccion}\nDetalle: {descripcion}\nCriticidad: {criticidad}"
                     texto_enc = urllib.parse.quote(texto)
                     
                     st.balloons()
                     st.markdown(f"""
                         <div style="background-color:#d4edda; color:#155724; padding:20px; border-radius:10px; text-align:center;">
                             <h2 style="margin:0;">✅ OT #{new_id} Creada</h2>
-                            <p>Asignada a: <strong>{asignado_a}</strong></p>
+                            <p>Tipo: <strong>{tipo_mant}</strong> | Asignada a: <strong>{asignado_a}</strong></p>
                         </div>
                     """, unsafe_allow_html=True)
                     st.link_button("📲 Enviar WhatsApp al Técnico", f"https://wa.me/?text={texto_enc}")
         else:
             st.warning("No hay activos registrados.")
 
-    # 4. USUARIOS (CRUD COMPLETO CON VALIDACIÓN)
+    # 4. USUARIOS
     elif choice == "Usuarios":
         st.subheader("Gestión de Personal")
         
-        # --- VARIABLE DE CONTROL DE PESTAÑA ---
-        if 'tab_index_usuarios' not in st.session_state:
-            st.session_state['tab_index_usuarios'] = 0 
+        if 'tab_index_usuarios' not in st.session_state: st.session_state['tab_index_usuarios'] = 0 
         
-        # --- MENSAJES DE ALERTA ---
+        # Mensajes de estado
         if 'user_msg' in st.session_state:
             msg = st.session_state['user_msg']
             tipo = msg['tipo']
-            
             if tipo == 'create':
                 st.balloons()
-                st.markdown(f"""
-                    <div style="background-color: #d1e7dd; border: 2px solid #28a745; border-radius: 15px; padding: 20px; text-align: center; box-shadow: 0 4px 8px rgba(0,0,0,0.1); margin-bottom: 20px; max-width: 600px; margin: 0 auto;">
-                        <h3 style="color: #28a745; margin: 0;">✅ ¡Usuario Creado!</h3>
-                        <h2 style="margin: 0; color: #0f5132;">{msg['nombre']}</h2>
-                        <p style="margin: 0;">Rol: {msg['rol']}</p>
-                    </div><br>""", unsafe_allow_html=True)
+                st.markdown(f"""<div style="background-color:#d1e7dd;padding:20px;border-radius:10px;text-align:center;border:2px solid #28a745;margin-bottom:20px;"><h3 style="color:#28a745;margin:0;">✅ Usuario Creado</h3><h2>{msg['nombre']}</h2></div>""", unsafe_allow_html=True)
             elif tipo == 'update':
                 st.balloons()
-                st.markdown(f"""
-                    <div style="background-color: #cff4fc; border: 2px solid #0dcaf0; border-radius: 15px; padding: 20px; text-align: center; box-shadow: 0 4px 8px rgba(0,0,0,0.1); margin-bottom: 20px; max-width: 600px; margin: 0 auto;">
-                        <h3 style="color: #055160; margin: 0;">🔄 Datos Actualizados</h3>
-                        <h2 style="margin: 0; color: #055160;">{msg['nombre']}</h2>
-                    </div><br>""", unsafe_allow_html=True)
+                st.markdown(f"""<div style="background-color:#cff4fc;padding:20px;border-radius:10px;text-align:center;border:2px solid #0dcaf0;margin-bottom:20px;"><h3 style="color:#055160;margin:0;">🔄 Actualizado</h3><h2>{msg['nombre']}</h2></div>""", unsafe_allow_html=True)
             elif tipo == 'delete':
-                st.markdown(f"""
-                    <div style="background-color: #f8d7da; border: 2px solid #dc3545; border-radius: 15px; padding: 20px; text-align: center; box-shadow: 0 4px 8px rgba(0,0,0,0.1); margin-bottom: 20px; max-width: 600px; margin: 0 auto;">
-                        <h3 style="color: #842029; margin: 0;">🗑️ Usuario Eliminado</h3>
-                        <h2 style="margin: 0; color: #842029;">{msg['nombre']}</h2>
-                    </div><br>""", unsafe_allow_html=True)
-            
+                st.markdown(f"""<div style="background-color:#f8d7da;padding:20px;border-radius:10px;text-align:center;border:2px solid #dc3545;margin-bottom:20px;"><h3 style="color:#842029;margin:0;">🗑️ Eliminado</h3><h2>{msg['nombre']}</h2></div>""", unsafe_allow_html=True)
             del st.session_state['user_msg']
 
         df_usuarios = run_query("usuarios")
 
-        # --- NAVEGACIÓN ---
         selected_sub_tab = option_menu(
             menu_title=None,
             options=["Nuevo Usuario", "Editar / Eliminar"],
@@ -308,16 +309,14 @@ else:
             default_index=st.session_state['tab_index_usuarios'] 
         )
         
-        # --- VISTA 1: CREAR ---
         if selected_sub_tab == "Nuevo Usuario":
             st.write("#### Paso 1: Definir Perfil")
             if 'reset_key' not in st.session_state: st.session_state.reset_key = 0
             
-            rol_u = st.selectbox("Seleccione el Rol", ["", "Admin", "Programador", "Tecnico"], key=f"rol_{st.session_state.reset_key}")
-            
+            rol_u = st.selectbox("Rol", ["", "Admin", "Programador", "Tecnico"], key=f"rol_{st.session_state.reset_key}")
             especialidad_selec = "Gestión/Admin"
             if rol_u == "Tecnico":
-                especialidad_selec = st.selectbox("Especialidad Técnica", ["", "Técnico Infraestructura", "Tecnico Soldadura", "Tecnico Electricista", "Tecnico Aire Acondicionado", "Otros"], key=f"esp_{st.session_state.reset_key}")
+                especialidad_selec = st.selectbox("Especialidad", ["", "Técnico Infraestructura", "Tecnico Soldadura", "Tecnico Electricista", "Tecnico Aire Acondicionado", "Otros"], key=f"esp_{st.session_state.reset_key}")
             
             st.write("#### Paso 2: Datos Personales")
             with st.form("crear_user", clear_on_submit=True):
@@ -330,54 +329,39 @@ else:
                 if st.form_submit_button("Crear Usuario"):
                     if nombre_u and documento_u and pass_u and rol_u and (rol_u != ""):
                         if rol_u == "Tecnico" and especialidad_selec == "":
-                            st.warning("Debes seleccionar una especialidad.")
+                            st.warning("Selecciona una especialidad.")
                         else:
-                            # --- 1. VERIFICAR DUPLICADOS ANTES DE GUARDAR ---
+                            # Validación de duplicado
                             existe = supabase.table("usuarios").select("id").eq("documento", documento_u).execute()
-                            
                             if existe.data:
-                                # Aquí mostramos el mensaje de error básico que pediste
-                                st.error(f"⛔ El número de documento {documento_u} ya está registrado en el sistema.")
+                                st.error(f"⛔ El documento {documento_u} ya existe.")
                             else:
-                                # --- 2. Si no existe, procedemos a guardar ---
                                 try:
-                                    payload = {
-                                        "documento": documento_u, 
-                                        "email": email_u if email_u else None, 
-                                        "password": pass_u, 
-                                        "nombre": nombre_u, 
-                                        "rol": rol_u, 
-                                        "especialidad": especialidad_selec
-                                    }
-                                    supabase.table("usuarios").insert(payload).execute()
-                                    
-                                    st.session_state['user_msg'] = {'tipo': 'create', 'nombre': nombre_u, 'rol': rol_u, 'documento': documento_u}
+                                    supabase.table("usuarios").insert({
+                                        "documento": documento_u, "email": email_u if email_u else None, "password": pass_u, "nombre": nombre_u, "rol": rol_u, "especialidad": especialidad_selec
+                                    }).execute()
+                                    st.session_state['user_msg'] = {'tipo': 'create', 'nombre': nombre_u}
                                     st.session_state.reset_key += 1
                                     st.session_state['tab_index_usuarios'] = 0
                                     st.rerun()
                                 except Exception as e:
-                                    st.error(f"Error al crear: {e}")
+                                    st.error(f"Error: {e}")
                     else:
-                        st.warning("Completa los campos obligatorios.")
+                        st.warning("Faltan datos obligatorios.")
         
-        # --- VISTA 2: EDITAR / ELIMINAR ---
         elif selected_sub_tab == "Editar / Eliminar":
             st.session_state['tab_index_usuarios'] = 1 
-            
             if not df_usuarios.empty:
                 user_map = {f"{row['nombre']} - Doc: {row['documento']}": row['id'] for i, row in df_usuarios.iterrows()}
                 seleccion_user = st.selectbox("🔍 Buscar Usuario", list(user_map.keys()))
-                
                 id_user_edit = user_map[seleccion_user]
                 data_edit = df_usuarios[df_usuarios['id'] == id_user_edit].iloc[0]
                 
                 st.markdown("---")
                 st.write(f"### Editando a: **{data_edit['nombre']}**")
-                
                 suffix = id_user_edit 
 
                 new_rol = st.selectbox("Rol", ["Admin", "Programador", "Tecnico"], index=["Admin", "Programador", "Tecnico"].index(data_edit['rol']), key=f"edit_rol_{suffix}")
-                
                 new_esp = "Gestión/Admin"
                 if new_rol == "Tecnico":
                     opciones_esp = ["Técnico Infraestructura", "Tecnico Soldadura", "Tecnico Electricista", "Tecnico Aire Acondicionado", "Otros"]
@@ -390,29 +374,23 @@ else:
                     new_nombre = c1.text_input("Nombre", value=data_edit['nombre'], key=f"edit_nom_{suffix}")
                     new_documento = c2.text_input("Número de Documento", value=data_edit['documento'], key=f"edit_doc_{suffix}")
                     new_pass = st.text_input("Contraseña", value=data_edit['password'], type="password", key=f"edit_pass_{suffix}")
-                    new_email = st.text_input("Email (Opcional)", value=data_edit.get('email', '') or '', key=f"edit_mail_{suffix}")
+                    new_email = st.text_input("Email", value=data_edit.get('email', '') or '', key=f"edit_mail_{suffix}")
                     
                     if st.form_submit_button("💾 Guardar Cambios"):
                         try:
                             supabase.table("usuarios").update({
-                                "nombre": new_nombre, 
-                                "documento": new_documento, 
-                                "email": new_email if new_email else None, 
-                                "password": new_pass, 
-                                "rol": new_rol, 
-                                "especialidad": new_esp
+                                "nombre": new_nombre, "documento": new_documento, "email": new_email if new_email else None, "password": new_pass, "rol": new_rol, "especialidad": new_esp
                             }).eq("id", int(id_user_edit)).execute()
-                            
                             st.session_state['user_msg'] = {'tipo': 'update', 'nombre': new_nombre}
                             st.session_state['tab_index_usuarios'] = 1
                             st.rerun()
                         except Exception as e:
-                            st.error(f"Error al actualizar: {e}")
+                            st.error(f"Error: {e}")
                 
                 st.markdown("---")
-                with st.expander("🗑️ Zona de Peligro (Eliminar Usuario)"):
+                with st.expander("🗑️ Zona de Peligro"):
                     if data_edit['documento'] == st.session_state['doc_sesion']:
-                        st.error("⛔ No puedes eliminar tu propio usuario.")
+                        st.error("No puedes eliminarte a ti mismo.")
                     else:
                         if st.button("Sí, Eliminar", type="primary"):
                             try:
@@ -421,14 +399,11 @@ else:
                                 st.session_state['tab_index_usuarios'] = 1
                                 st.rerun()
                             except Exception as e:
-                                st.error(f"Error al eliminar: {e}")
+                                st.error(f"Error: {e}")
             else:
-                st.info("No hay usuarios registrados.")
-            
+                st.info("Sin usuarios.")
             st.markdown("---")
-            st.write("#### 📋 Listado Completo")
-            if not df_usuarios.empty:
-                st.dataframe(df_usuarios[['documento', 'nombre', 'rol', 'especialidad']], use_container_width=True)
+            if not df_usuarios.empty: st.dataframe(df_usuarios[['documento', 'nombre', 'rol', 'especialidad']], use_container_width=True)
 
     # 5. CIERRE
     elif choice == "Cierre de OTs":
@@ -442,16 +417,18 @@ else:
                 mis_ots = df_ots[df_ots['estado'] != 'Concluida']
             
             if not mis_ots.empty:
-                st.dataframe(mis_ots[['id', 'descripcion', 'tecnico_asignado', 'estado']], use_container_width=True)
+                # MOSTRAMOS LA NUEVA COLUMNA EN LA TABLA
+                st.dataframe(mis_ots[['id', 'descripcion', 'tipo_mantenimiento', 'tecnico_asignado', 'estado']], use_container_width=True)
+                
                 ot_id = st.selectbox("Seleccionar OT", mis_ots['id'].values)
                 with st.form("cierre_form"):
-                    coments = st.text_area("Informe")
-                    foto = st.file_uploader("Evidencia")
+                    coments = st.text_area("Informe Técnico")
+                    foto = st.file_uploader("Evidencia Fotográfica")
                     if st.form_submit_button("Cerrar Orden"):
                         with st.spinner("Procesando..."):
                             url = subir_imagen(foto)
                             supabase.table("ordenes").update({"estado":"Concluida", "evidencia_url": url, "comentarios_cierre": coments}).eq("id", int(ot_id)).execute()
-                            st.success("Cerrada Correctamente")
+                            st.success("Orden Cerrada Correctamente")
                             st.rerun()
             else:
                 st.info("No tienes órdenes asignadas pendientes.")
