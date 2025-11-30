@@ -17,107 +17,127 @@ import plotly.graph_objects as go
 st.set_page_config(page_title="Orión | Mantenimiento", layout="wide", initial_sidebar_state="collapsed")
 
 # ==============================================================================
-# 🎨 TEMA: "ORIÓ BIONIC" (Alto Contraste y Legibilidad)
+# 🎨 TEMA: "ORIÓN PROFESSIONAL" (Ámbar y Esmeralda con Estructura Mejorada)
 # ==============================================================================
 
-COLOR_ACCION = "#FF9F1C" # Naranja Intenso (Orión)
-COLOR_SECUNDARIO = "#2EC4B6"  # Turquesa/Verde Tecnológico
-COLOR_FONDO_OSCURO = "#0B0E14" # Negro Azulado Profundo
-COLOR_TEXTO_BLANCO = "#FFFFFF" # Blanco Puro para máximo contraste
+# PALETA DE COLORES (Tu favorita: Naranja y Verde)
+PRO_ORANGE = "#F59E0B" # Ámbar (Acción/Principal)
+PRO_GREEN = "#10B981"  # Esmeralda (Éxito/Secundario)
+BG_DARK_CLEAN = "#111827" # Gris Carbón (Fondo profesional, no negro puro)
+BG_CARD = "rgba(31, 41, 55, 0.9)" # Tarjetas oscuras pero legibles
+TEXT_WHITE = "#F9FAFB" # Blanco hueso (Alto contraste)
 
 st.markdown(f"""
     <style>
-    /* 1. FONDO GLOBAL */
+    /* 1. FONDO GENERAL */
     .stApp {{
-        background: radial-gradient(circle at 50% 0%, #1B2336, {COLOR_FONDO_OSCURO});
-        color: {COLOR_TEXTO_BLANCO};
+        background: radial-gradient(circle at 50% 0%, #374151 0%, {BG_DARK_CLEAN} 80%);
+        background-attachment: fixed;
+        color: {TEXT_WHITE};
     }}
 
-    /* 2. BARRA LATERAL (Alto Contraste) */
+    /* 2. BARRA LATERAL */
     [data-testid="stSidebar"] {{
-        background-color: #050608;
-        border-right: 1px solid #333;
+        background-color: {BG_DARK_CLEAN};
+        border-right: 1px solid #374151;
     }}
     [data-testid="stSidebar"] p, [data-testid="stSidebar"] span {{
-        color: #E0E0E0 !important; /* Texto gris muy claro */
+        color: #D1D5DB !important;
     }}
 
     /* 3. TÍTULOS (Estilo Orión) */
     h1, h2, h3 {{
-        color: {COLOR_TEXTO_BLANCO} !important;
-        font-family: 'Helvetica', sans-serif;
+        background: linear-gradient(90deg, {PRO_ORANGE}, {PRO_GREEN});
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
         font-weight: 800 !important;
         text-transform: uppercase;
-        letter-spacing: 1px;
+        letter-spacing: 0.5px;
     }}
     
-    /* 4. TARJETAS (Mejora de Contraste) */
+    /* 4. TARJETAS (Alto Contraste y Limpieza) */
     .card-style {{
-        background: rgba(22, 27, 34, 0.95); /* Fondo casi opaco para leer mejor */
+        background: {BG_CARD};
+        backdrop-filter: blur(10px);
         border-radius: 12px;
-        padding: 20px;
-        border: 1px solid rgba(255, 255, 255, 0.1);
-        box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+        padding: 25px;
+        border: 1px solid rgba(245, 158, 11, 0.2); /* Borde sutil naranja */
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
         margin-bottom: 20px;
     }}
 
-    /* 5. TÍTULOS DE LAS GRÁFICAS (Nuevo Estilo) */
-    .chart-title {{
-        font-size: 1.2rem;
-        font-weight: bold;
-        margin-bottom: 10px;
-        border-bottom: 2px solid {COLOR_ACCION};
-        padding-bottom: 5px;
-        display: inline-block;
-        color: {COLOR_TEXTO_BLANCO};
+    /* 5. TÍTULOS DE LAS SECCIONES DEL DASHBOARD */
+    .chart-header {{
+        font-size: 1.1rem;
+        font-weight: 700;
+        color: {PRO_ORANGE};
+        margin-bottom: 15px;
+        border-bottom: 1px solid #374151;
+        padding-bottom: 8px;
+        display: block;
     }}
 
-    /* 6. MENÚS DESPLEGABLES (Corrección de Texto Invisible) */
+    /* 6. MENÚS DESPLEGABLES (Corrección de Legibilidad) */
     .stSelectbox > div > div {{
-        background-color: #161B22 !important;
+        background-color: #1F2937 !important; /* Gris oscuro */
         color: white !important;
-        border: 1px solid #444 !important;
+        border: 1px solid #4B5563 !important;
     }}
     div[data-baseweb="popover"], div[data-baseweb="menu"] {{
-        background-color: #0D1117 !important;
+        background-color: #111827 !important;
+        border: 1px solid {PRO_ORANGE};
     }}
     div[data-baseweb="menu"] li {{
-        color: white !important; /* Texto de opciones blanco */
+        color: white !important;
     }}
     div[data-baseweb="menu"] li:hover {{
-        background-color: {COLOR_ACCION} !important;
-        color: black !important;
+        background-color: {PRO_ORANGE} !important;
+        color: white !important;
     }}
     
     /* 7. INPUTS */
     .stTextInput input, .stTextArea textarea {{
-        background-color: #0D1117 !important;
+        background-color: rgba(17, 24, 39, 0.8) !important;
         color: white !important;
-        border: 1px solid #333 !important;
+        border: 1px solid #4B5563 !important;
         border-radius: 6px;
     }}
     
-    /* 8. BOTONES */
+    /* 8. BOTONES (Gradiente Naranja -> Verde) */
     div.stButton > button:first-child {{
-        background: linear-gradient(90deg, {COLOR_ACCION}, #FF6B35) !important;
+        background: linear-gradient(90deg, {PRO_ORANGE} 0%, {PRO_GREEN} 100%) !important;
         color: white !important;
         border: none;
         font-weight: bold;
         border-radius: 6px;
-        padding: 0.5rem 1rem;
+        padding: 0.6rem 1.2rem;
+        transition: transform 0.2s;
+    }}
+    div.stButton > button:first-child:hover {{
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
     }}
 
-    /* 9. MÉTRICAS */
+    /* 9. MÉTRICAS (Estilo Panel) */
     [data-testid="stMetric"] {{
-        background: #161B22;
-        padding: 15px;
+        background: #1F2937;
+        padding: 20px;
         border-radius: 10px;
-        border-left: 5px solid {COLOR_SECUNDARIO};
-        box-shadow: 0 2px 5px rgba(0,0,0,0.3);
+        border-left: 5px solid {PRO_GREEN};
+        box-shadow: 0 2px 5px rgba(0,0,0,0.2);
     }}
-    [data-testid="stMetricLabel"] {{ color: #A0A0A0 !important; font-size: 0.9rem; }}
-    [data-testid="stMetricValue"] {{ color: white !important; font-size: 1.8rem; }}
+    [data-testid="stMetricLabel"] {{ color: #9CA3AF !important; font-size: 0.9rem; }}
+    [data-testid="stMetricValue"] {{ color: white !important; font-size: 2rem; font-weight: 700; }}
     
+    /* 10. ZONA DE PELIGRO */
+    .danger-zone {{
+        background: rgba(220, 38, 38, 0.1);
+        border: 1px solid #EF4444;
+        color: #EF4444;
+        padding: 15px;
+        border-radius: 8px;
+        text-align: center;
+    }}
     </style>
 """, unsafe_allow_html=True)
 
@@ -191,7 +211,7 @@ def leer_qr_imagen(uploaded_image):
     except:
         return None
 
-# --- GRÁFICOS (SIN TÍTULOS INTERNOS, SOLO DATOS) ---
+# --- GRÁFICOS MEJORADOS (PLOTLY) ---
 
 def graficar_criticidad(df):
     if df.empty: return
@@ -201,8 +221,13 @@ def graficar_criticidad(df):
     conteo['Nivel'] = pd.Categorical(conteo['Nivel'], categories=orden, ordered=True)
     conteo = conteo.sort_values('Nivel')
 
-    # Colores Semánticos (Verde -> Rojo)
-    colores = {"Baja": "#2EC4B6", "Media": "#FF9F1C", "Alta": "#E71D36", "Crítica": "#880000"}
+    # Colores semánticos (Verde -> Rojo)
+    colores = {
+        "Baja": "#10B981",    # Verde Esmeralda
+        "Media": "#F59E0B",   # Naranja Ámbar
+        "Alta": "#EA580C",    # Naranja Oscuro
+        "Crítica": "#EF4444"  # Rojo Alerta
+    }
 
     fig = px.bar(conteo, x='Nivel', y='Cantidad', color='Nivel', 
                  color_discrete_map=colores, text='Cantidad')
@@ -212,7 +237,7 @@ def graficar_criticidad(df):
         plot_bgcolor='rgba(0,0,0,0)',
         font=dict(color='white'),
         showlegend=False,
-        margin=dict(l=0, r=0, t=10, b=0), # Márgenes mínimos
+        margin=dict(l=0, r=0, t=10, b=0),
         height=250,
         xaxis=dict(title=None),
         yaxis=dict(showgrid=True, gridcolor='rgba(255,255,255,0.1)')
@@ -224,12 +249,13 @@ def graficar_torta_tipo(df):
     if df.empty: return
     conteo = df['tipo_mantenimiento'].value_counts().reset_index()
     conteo.columns = ['Tipo', 'Cantidad']
-    colores = ["#FF9F1C", "#2EC4B6", "#7209B7"] 
+    # Paleta profesional (Azul, Violeta, Rosa)
+    colores_torta = ["#3B82F6", "#8B5CF6", "#EC4899"] 
 
     fig = go.Figure(data=[go.Pie(
-        labels=conteo['Tipo'], values=conteo['Cantidad'], hole=.6, 
-        marker=dict(colors=colores), textinfo='label+percent',
-        textfont=dict(color='white')
+        labels=conteo['Tipo'], values=conteo['Cantidad'], hole=.5, 
+        marker=dict(colors=colores_torta, line=dict(color='#111827', width=2)),
+        textinfo='label+percent', textfont=dict(color='white')
     )])
     
     fig.update_layout(
@@ -245,7 +271,8 @@ def graficar_estado_barras(df):
     if df.empty: return
     conteo = df['estado'].value_counts().reset_index()
     conteo.columns = ['Estado', 'Cantidad']
-    colores = {"Abierta": "#3A86FF", "Concluida": "#2EC4B6"}
+    # Colores Naranja y Verde del tema
+    colores = {"Abierta": PRO_ORANGE, "Concluida": PRO_GREEN}
 
     fig = px.bar(conteo, x='Cantidad', y='Estado', orientation='h', 
                  color='Estado', color_discrete_map=colores, text='Cantidad')
@@ -294,7 +321,7 @@ if "id_activo_qr" in query_params:
         st.markdown(f"<h1 style='text-align: center;'>ORIÓN: {activo['nombre']}</h1>", unsafe_allow_html=True)
         st.markdown(f"""
             <div class="card-style">
-                <span class="chart-title">Ficha Técnica</span>
+                <span class="chart-header">Ficha Técnica</span>
                 <p><strong>📍 Área:</strong> {activo.get('area', 'N/A')}</p>
                 <p><strong>🏢 Ubicación:</strong> {activo['ubicacion']}</p>
                 <p><strong>🔧 Categoría:</strong> {activo.get('categoria', 'N/A')}</p>
@@ -336,9 +363,9 @@ def logout():
 
 if st.session_state['usuario'] is None:
     st.markdown("<h1 style='text-align: center; font-size: 3.5rem;'>ORIÓN</h1>", unsafe_allow_html=True)
-    st.markdown("<p style='text-align: center; color: #aaa;'>SISTEMA DE MANTENIMIENTO INTELIGENTE</p>", unsafe_allow_html=True)
+    st.markdown("<p style='text-align: center; color: #9CA3AF;'>PLATAFORMA INTEGRAL DE MANTENIMIENTO</p>", unsafe_allow_html=True)
     
-    st.markdown(f"""<style>.stTabs [aria-selected="true"] {{ color: {COLOR_ACCION} !important; border-bottom: 2px solid {COLOR_ACCION}; }}</style>""", unsafe_allow_html=True)
+    st.markdown(f"""<style>.stTabs [aria-selected="true"] {{ color: {PRO_ORANGE} !important; border-bottom: 2px solid {PRO_ORANGE}; }}</style>""", unsafe_allow_html=True)
     
     tab_login, tab_scan = st.tabs(["🔐 INGRESAR", "📷 ESCANEAR QR"])
     
@@ -383,10 +410,10 @@ usuario = st.session_state['usuario']
 
 with st.sidebar:
     st.markdown(f"""
-        <div style="background: #161B22; padding: 15px; border-radius: 10px; text-align: center; margin-bottom: 20px; border: 1px solid #333;">
-            <div style="width: 50px; height: 50px; background: {COLOR_ACCION}; border-radius: 50%; margin: 0 auto 10px auto; display: flex; align-items: center; justify-content: center; font-weight:bold; color:black; font-size: 20px;">{usuario[0]}</div>
+        <div style="background: {BG_DARK_CLEAN}; padding: 20px; border-radius: 12px; text-align: center; margin-bottom: 20px; border: 1px solid #374151;">
+            <div style="width: 60px; height: 60px; background: {PRO_ORANGE}; border-radius: 50%; margin: 0 auto 10px auto; display: flex; align-items: center; justify-content: center; font-weight:bold; color:black; font-size: 24px;">{usuario[0]}</div>
             <h3 style="margin:5px 0; font-size: 16px; color: white !important;">{usuario}</h3>
-            <span style="color: {COLOR_SECUNDARIO}; font-size: 12px; font-weight: bold; letter-spacing: 1px;">{rol.upper()}</span>
+            <span style="color: {PRO_GREEN}; font-size: 12px; font-weight: bold; letter-spacing: 1px;">{rol.upper()}</span>
         </div>
     """, unsafe_allow_html=True)
     
@@ -400,7 +427,7 @@ with st.sidebar:
     
     choice = option_menu(menu_title="NAVEGACIÓN", options=opts, 
         icons=["speedometer2", "box-seam", "plus-circle", "check2-circle", "people"], default_index=0,
-        styles={"container": {"background-color": "transparent"}, "icon": {"color": COLOR_ACCION}, "nav-link": {"color": "#bbb"}, "nav-link-selected": {"background-color": "#21262D", "color": "white", "border-left": f"4px solid {COLOR_ACCION}"}})
+        styles={"container": {"background-color": "transparent"}, "icon": {"color": PRO_ORANGE}, "nav-link": {"color": "#9CA3AF"}, "nav-link-selected": {"background-color": "#1F2937", "color": "white", "border-left": f"4px solid {PRO_ORANGE}"}})
 
 # --- PANTALLAS ---
 
@@ -416,33 +443,24 @@ if choice == "Tablero de Mando":
         c2.metric("Pendientes", len(df[df['estado']=='Abierta']))
         c3.metric("Finalizadas", len(df[df['estado']=='Concluida']))
         
-        st.write("") # Espacio
+        st.write("") 
 
-        # --- GRÁFICOS CON TÍTULOS EXTERNOS ---
+        # --- GRÁFICOS CON TÍTULOS ESTRUCTURALES ---
         c_left, c_mid, c_right = st.columns(3)
         
         with c_left:
-            st.markdown(f"""
-                <div class='card-style'>
-                    <span class='chart-title' style='border-color: #3A86FF;'>Progreso de Órdenes</span>
-            """, unsafe_allow_html=True)
+            st.markdown(f"<div class='card-style'><span class='chart-header'>Progreso de Órdenes</span>", unsafe_allow_html=True)
             graficar_estado_barras(df)
             st.markdown("</div>", unsafe_allow_html=True)
 
         with c_mid:
-            st.markdown(f"""
-                <div class='card-style'>
-                    <span class='chart-title' style='border-color: #E71D36;'>Gravedad de las Fallas</span>
-            """, unsafe_allow_html=True)
-            graficar_criticidad(df)
+            st.markdown(f"<div class='card-style'><span class='chart-header'>Gravedad de las Fallas</span>", unsafe_allow_html=True)
+            graficar_criticidad(df) # Criticidad (Verde a Rojo)
             st.markdown("</div>", unsafe_allow_html=True)
 
         with c_right:
-            st.markdown(f"""
-                <div class='card-style'>
-                    <span class='chart-title' style='border-color: #7209B7;'>Tipos de Mantenimiento</span>
-            """, unsafe_allow_html=True)
-            graficar_torta_tipo(df)
+            st.markdown(f"<div class='card-style'><span class='chart-header'>Tipos de Mantenimiento</span>", unsafe_allow_html=True)
+            graficar_torta_tipo(df) # Gráfico de Dona
             st.markdown("</div>", unsafe_allow_html=True)
 
     else: st.info("No hay datos para mostrar.")
@@ -480,11 +498,16 @@ elif choice == "Inventario Activos":
             c1, c2 = st.columns([1,3])
             c1.image(dat['qr_url'])
             c2.info(f"ID: {dat['id']} | {dat['area']}")
-            if c2.button("ELIMINAR ACTIVO"):
-                supabase.table("ordenes").delete().eq("activo_id", dat['id']).execute()
-                supabase.table("activos").delete().eq("id", dat['id']).execute()
-                st.session_state['notification'] = {'type':'delete', 'message':'Eliminado.'}
-                st.rerun()
+            
+            # Botón de eliminar con estilo rojo peligro
+            st.markdown("<br>", unsafe_allow_html=True)
+            with st.expander("Eliminar Activo"):
+                st.markdown(f"<div class='danger-zone'><p>Esto borrará el historial completo.</p></div>", unsafe_allow_html=True)
+                if st.button("ELIMINAR DEFINITIVAMENTE"):
+                    supabase.table("ordenes").delete().eq("activo_id", dat['id']).execute()
+                    supabase.table("activos").delete().eq("id", dat['id']).execute()
+                    st.session_state['notification'] = {'type':'delete', 'message':'Eliminado.'}
+                    st.rerun()
             st.markdown("</div>", unsafe_allow_html=True)
 
 elif choice == "Crear Orden":
@@ -514,7 +537,7 @@ elif choice == "Cerrar Orden":
         my_ots = df_ot[(df_ot['estado']!='Concluida')]
         if not my_ots.empty:
             st.markdown("<div class='card-style'>", unsafe_allow_html=True)
-            st.dataframe(my_ots[['id','descripcion','criticidad']])
+            st.dataframe(my_ots[['id','descripcion','criticidad']], use_container_width=True)
             sid = st.selectbox("ID Orden", my_ots['id'].values)
             with st.form("close"):
                 rep = st.text_area("Reporte Técnico")
@@ -526,3 +549,7 @@ elif choice == "Cerrar Orden":
                     st.rerun()
             st.markdown("</div>", unsafe_allow_html=True)
         else: st.info("No hay pendientes.")
+
+elif choice == "Usuarios":
+    st.title("USUARIOS")
+    st.markdown("<div class='card-style'>Panel de gestión de usuarios.</div>", unsafe_allow_html=True)
