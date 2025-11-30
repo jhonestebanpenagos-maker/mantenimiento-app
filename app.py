@@ -493,11 +493,11 @@ rol = st.session_state['rol']
 usuario = st.session_state['usuario']
 
 with st.sidebar:
+    # 🎨 SECCIÓN DE BIENVENIDA MÁS ESTILIZADA Y FLOTANTE
     st.markdown(f"""
-        <div style="background: {BG_DARK_CLEAN}; padding: 20px; border-radius: 12px; text-align: center; margin-bottom: 20px; border: 1px solid #374151;">
-            <div style="width: 60px; height: 60px; background: {PRO_ORANGE}; border-radius: 50%; margin: 0 auto 10px auto; display: flex; align-items: center; justify-content: center; font-weight:bold; color:black; font-size: 24px;">{usuario[0]}</div>
-            <h3 style="margin:5px 0; font-size: 1.1rem; color: white !important; font-weight: 600;">{usuario}</h3>
-            <span style="color: {PRO_GREEN}; font-size: 12px; font-weight: bold; letter-spacing: 1px;">{rol.upper()}</span>
+        <div style="text-align: center; margin-bottom: 25px; margin-top: 10px;">
+            <p style="margin:0; font-size: 1.2rem; color: white; font-weight: 600; letter-spacing: 0.5px;">👋 Hola, {usuario}!</p>
+            <span style="color: {PRO_GREEN}; font-size: 0.85rem; font-weight: bold; letter-spacing: 1px;">{rol.upper()}</span>
         </div>
     """, unsafe_allow_html=True)
     
