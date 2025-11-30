@@ -349,7 +349,7 @@ if "id_activo_qr" in query_params:
     st.stop() 
 
 # ==============================================================================
-# 🚀 LOGIN / SCANNER (IMAGEN SVG INTEGRADA)
+# 🚀 LOGIN / SCANNER (CORREGIDO EL CIERRE DE DIV)
 # ==============================================================================
 
 if 'usuario' not in st.session_state: st.session_state['usuario'] = None
@@ -364,8 +364,7 @@ def logout():
 if st.session_state['usuario'] is None:
     c1, c2, c3 = st.columns([1,2,1])
     with c2:
-        # 1. IMAGEN SVG DE LA CONSTELACIÓN DE ORIÓN (Código incrustado/flotante)
-        # Código SVG de la Constelación de Orión (minimalista, Blanco y Naranja)
+        # SVG de la Constelación de Orión
         ORION_SVG = f"""
         <svg width="250" height="250" viewBox="0 0 400 400" fill="none" xmlns="http://www.w3.org/2000/svg">
             <style>
@@ -376,8 +375,16 @@ if st.session_state['usuario'] is None:
             <path class="line" d="M100 150 L200 50 L300 150 L250 250 L150 250 L100 150 Z"/>
             <line class="belt" x1="160" y1="180" x2="200" y2="200"/>
             <line class="belt" x1="200" y1="200" x2="240" y2="220"/>
-            <circle class="star" cx="200" cy="50" r="5"/> <circle class="star" cx="100" cy="150" r="4"/> <circle class="star" cx="240" cy="220" r="6"/> <circle class="star" cx="200" cy="200" r="6"/> <circle class="star" cx="160" cy="180" r="6"/> <circle class="star" cx="300" cy="150" r="5"/> <circle class="star" cx="250" cy="250" r="7"/> </svg>
+            <circle class="star" cx="200" cy="50" r="5"/> 
+            <circle class="star" cx="100" cy="150" r="4"/> 
+            <circle class="star" cx="240" cy="220" r="6"/> 
+            <circle class="star" cx="200" cy="200" r="6"/> 
+            <circle class="star" cx="160" cy="180" r="6"/> 
+            <circle class="star" cx="300" cy="150" r="5"/> 
+            <circle class="star" cx="250" cy="250" r="7"/> 
+        </svg>
         """
+        # Renderizamos el SVG dentro de su propio bloque HTML
         st.markdown(f"""
             <div style="display: flex; justify-content: center; margin-bottom: 5px;">
                 {ORION_SVG}
@@ -426,6 +433,7 @@ if st.session_state['usuario'] is None:
                     st.rerun()
                 else: st.warning("QR no válido.")
         
+        # Cerramos el div de la tarjeta de acceso de forma segura
         st.markdown("</div>", unsafe_allow_html=True)
     st.stop()
 
