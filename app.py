@@ -9,7 +9,7 @@ import json
 import qrcode
 import cv2 
 import numpy as np
-import time # <--- IMPORTANTE: Importamos la librería time
+import time
 import plotly.express as px
 import plotly.graph_objects as go 
 
@@ -187,7 +187,6 @@ def init_supabase():
         key = st.secrets["SUPABASE_KEY"]
         
         # 2. Si las claves se leyeron, intentamos crear el cliente.
-        # Quitamos max_retries ya que parece que el problema está en la inicialización de Streamlit/Supabase.
         return create_client(url, key) 
         
     except KeyError as e:
@@ -465,7 +464,6 @@ if st.session_state['usuario'] is None:
                 # 📢 INICIO DE LA CORRECCIÓN DEL ERROR DE RED (FALLO EN EL PRIMER INTENTO)
                 
                 # Paso 1: Mostrar un spinner y pausar la ejecución brevemente
-                # Esto permite que la conexión Supabase cacheada se "caliente" o estabilice
                 with st.spinner("Conectando y validando credenciales..."):
                     time.sleep(1) 
                 
@@ -498,7 +496,7 @@ with st.sidebar:
     st.markdown(f"""
         <div style="background: {BG_DARK_CLEAN}; padding: 20px; border-radius: 12px; text-align: center; margin-bottom: 20px; border: 1px solid #374151;">
             <div style="width: 60px; height: 60px; background: {PRO_ORANGE}; border-radius: 50%; margin: 0 auto 10px auto; display: flex; align-items: center; justify-content: center; font-weight:bold; color:black; font-size: 24px;">{usuario[0]}</div>
-            <h3 style="margin:5px 0; font-size: 16px; color: white !important;">{usuario}</h3>
+            <h3 style="margin:5px 0; font-size: 1.1rem; color: white !important; font-weight: 600;">{usuario}</h3>
             <span style="color: {PRO_GREEN}; font-size: 12px; font-weight: bold; letter-spacing: 1px;">{rol.upper()}</span>
         </div>
     """, unsafe_allow_html=True)
