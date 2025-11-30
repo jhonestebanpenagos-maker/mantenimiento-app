@@ -358,6 +358,41 @@ def check_open_orders(user_id):
 # --- FIN FUNCIÓN DE VALIDACIÓN ---
 
 
+# --- CALLBACK PARA LA SELECCIÓN ÚNICA ---
+def handle_single_selection(df_users_original):
+    """
+    Función de callback para asegurar que solo una fila esté seleccionada en el data_editor.
+    Se ejecuta después de la edición (cuando el usuario hace clic en el checkbox).
+    """
+    # Obtenemos el estado actual del data_editor
+    data_editor_state = st.session_state['user_data_editor']
+    
+    # Buscamos qué filas fueron editadas (marcadas o desmarcadas)
+    edited_rows = data_editor_state.get('edited_rows', {})
+    
+    if not edited_rows:
+        return
+
+    # Determinamos la última fila que fue marcada como True
+    newly_selected_id = None
+    for index_key, changes in edited_rows.items():
+        if changes.get('select') is True:
+            # El índice en edited_rows es la posición en el DataFrame original.
+            # Usamos el DataFrame original para obtener el ID real.
+            index = int(index_key)
+            newly_selected_id = df_users_original.iloc[index]['id']
+            break
+
+    # Si encontramos un ID recién seleccionado, forzamos la deselección de todos los demás
+    if newly_selected_id is not None:
+        st.session_state['temp_selected_id'] = newly_selected_id
+        st.rerun()
+    elif len(df_users_original[df_users_original['id'] == st.session_state.get('temp_selected_id')]) == 0:
+        # Si el usuario desmarcó al único seleccionado, limpiamos la variable de sesión.
+        st.session_state['temp_selected_id'] = None
+        st.rerun()
+
+
 # --- FUNCIÓN AISLADA PARA EL SVG ---
 def render_orion_svg(PRO_ORANGE):
     ORION_SVG = f"""
@@ -654,9 +689,9 @@ elif choice == "Usuarios":
     # Estructura de pestañas para Crear y Gestionar usuarios
     tab_crear, tab_gestionar = st.tabs(["CREAR USUARIO", "GESTIONAR USUARIOS"])
     
-    # Inicializamos la variable de sesión para el último ID seleccionado
-    if 'last_selected_user_id' not in st.session_state:
-        st.session_state['last_selected_user_id'] = None
+    # Inicializamos la variable de sesión para el último ID seleccionado (para mantener el estado)
+    if 'temp_selected_id' not in st.session_state:
+        st.session_state['temp_selected_id'] = None
 
     # ----------------------------------------------------
     # TAB 1: CREAR USUARIO (Sin card-style)
@@ -706,16 +741,15 @@ elif choice == "Usuarios":
             st.subheader("Lista de Usuarios (Marque una casilla para gestionar)")
             
             # --- PREPARACIÓN PARA LA SELECCIÓN ÚNICA ---
+            
             # 1. Creamos la columna de selección si no existe
-            if 'select' not in df_users.columns:
-                df_users['select'] = False
+            df_users['select'] = False
             
-            # 2. Si hay un ID seleccionado previamente, marcamos su casilla
-            if st.session_state['last_selected_user_id'] is not None:
-                # Nos aseguramos de que solo la fila del ID previamente seleccionado esté marcada al cargar
-                df_users['select'] = (df_users['id'] == st.session_state['last_selected_user_id'])
+            # 2. Si tenemos un ID guardado en la sesión, marcamos la casilla correspondiente
+            if st.session_state['temp_selected_id'] is not None:
+                df_users.loc[df_users['id'] == st.session_state['temp_selected_id'], 'select'] = True
             
-            # 3. Configuramos y mostramos el data_editor (la columna 'select' actúa como nuestro checkbox)
+            # 3. Configuramos y mostramos el data_editor. Usamos un CALLBACK para gestionar la selección única.
             edited_df = st.data_editor(
                 df_users[['select', 'id', 'documento', 'nombre', 'rol']],
                 column_config={
@@ -731,19 +765,20 @@ elif choice == "Usuarios":
                 },
                 hide_index=True,
                 use_container_width=True,
-                key="user_data_editor"
+                key="user_data_editor",
+                on_change=lambda: handle_single_selection(df_users) # Llama al callback después de cualquier edición
             )
 
-            # 4. Identificamos el usuario seleccionado en el data_editor
+            # 4. Identificamos el usuario seleccionado después de la edición/callback
             selected_user_row = edited_df[edited_df['select'] == True]
             
             if len(selected_user_row) == 1:
-                # --- NUEVA SELECCIÓN VÁLIDA ---
+                # --- GESTIÓN ACTIVA ---
                 selected_user = selected_user_row.iloc[0]
                 user_id = selected_user['id']
                 
-                # Actualizamos la variable de sesión para mantener la selección en la próxima recarga
-                st.session_state['last_selected_user_id'] = user_id
+                # Sincronizamos la variable de sesión después de la edición para asegurar el estado visual
+                st.session_state['temp_selected_id'] = user_id
                 
                 st.markdown("---")
                 st.markdown(f"**Usuario seleccionado:** **{selected_user['nombre']}** (ID: {user_id})")
@@ -803,21 +838,21 @@ elif choice == "Usuarios":
                         try:
                             supabase.table("usuarios").delete().eq("id", user_id).execute()
                             # Limpiar la selección después de la eliminación
-                            st.session_state['last_selected_user_id'] = None 
+                            st.session_state['temp_selected_id'] = None 
                             st.session_state['notification'] = {'type':'delete', 'message':f'Usuario {selected_user["nombre"]} eliminado.'}
                             st.rerun()
                         except Exception as e:
                             st.error(f"Error al eliminar: {e}")
                             
             elif len(selected_user_row) > 1:
-                st.warning("⚠️ Seleccione solo un usuario a la vez para gestionar su información.")
+                st.warning("⚠️ Se seleccionaron múltiples usuarios. Por favor, desmarque las casillas y seleccione solo un usuario a la vez para gestionar su información.")
 
             else:
-                # Si el data_editor se actualiza y no hay nada seleccionado, borramos la variable de sesión
-                if st.session_state['last_selected_user_id'] is not None:
-                    st.session_state['last_selected_user_id'] = None
-                    st.rerun() # Forzamos recarga para limpiar la interfaz si se desmarcó
-
+                # Si no hay selección, pero antes la había, reseteamos la variable de sesión
+                if st.session_state['temp_selected_id'] is not None:
+                    st.session_state['temp_selected_id'] = None
+                    # No hacemos rerun aquí para evitar un bucle innecesario si la deselección fue intencional.
+                
                 st.info("Haga clic en la columna 'Seleccionar' para elegir un usuario y gestionar sus datos.")
             
         else:
