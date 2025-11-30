@@ -690,7 +690,8 @@ elif choice == "Usuarios":
             st.subheader("Seleccionar Usuario para Gestión")
             
             # --- SELECCIÓN DE USUARIO ---
-            selection = st.dataframe(
+            # Mostramos la tabla y guardamos la selección en el estado de la sesión
+            st.dataframe(
                 df_users[['id', 'documento', 'nombre', 'rol']],
                 use_container_width=True,
                 hide_index=True,
@@ -698,11 +699,12 @@ elif choice == "Usuarios":
                 key="user_selection_data"
             )
 
-            # 🚨 CORRECCIÓN APLICADA: Verificación robusta de la estructura de selección
-            # Usamos .get() para evitar el KeyError/TypeError si la estructura no está lista.
-            selected_rows = selection.get('selection', {}).get('rows', [])
+            # Obtenemos la selección del estado de la sesión de forma segura
+            selection_data = st.session_state.get("user_selection_data", {})
+            selected_rows = selection_data.get('selection', {}).get('rows', [])
             
-            if selected_rows: # <--- La verificación segura es sobre la lista
+            if selected_rows: # <--- Acceso seguro
+                # Como solo permitimos una fila, tomamos el primer (y único) índice de la lista de índices
                 selected_index = selected_rows[0] 
                 selected_user = df_users.iloc[selected_index]
                 user_id = selected_user['id']
