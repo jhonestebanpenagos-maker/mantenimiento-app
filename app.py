@@ -9,7 +9,7 @@ import json
 import qrcode
 import cv2 
 import numpy as np
-import time
+import time # <--- IMPORTANTE: Importamos la librería time
 import plotly.express as px
 import plotly.graph_objects as go 
 
@@ -187,7 +187,7 @@ def init_supabase():
         key = st.secrets["SUPABASE_KEY"]
         
         # 2. Si las claves se leyeron, intentamos crear el cliente.
-        # Retiramos 'max_retries' para no introducir más variables si el problema es de conexión inicial.
+        # Quitamos max_retries ya que parece que el problema está en la inicialización de Streamlit/Supabase.
         return create_client(url, key) 
         
     except KeyError as e:
@@ -435,7 +435,6 @@ if st.session_state['usuario'] is None:
     with c2:
         
         # 1. ENCABEZADO Y TÍTULOS (Flotante)
-        # El margen del SVG se redujo a -30px
         render_orion_svg(PRO_ORANGE)
 
         st.markdown(f"""
@@ -463,16 +462,28 @@ if st.session_state['usuario'] is None:
             password = st.text_input("Contraseña", type="password")
             submitted = st.form_submit_button("ACCEDER AL SISTEMA", type="primary", use_container_width=True)
             if submitted:
+                # 📢 INICIO DE LA CORRECCIÓN DEL ERROR DE RED (FALLO EN EL PRIMER INTENTO)
+                
+                # Paso 1: Mostrar un spinner y pausar la ejecución brevemente
+                # Esto permite que la conexión Supabase cacheada se "caliente" o estabilice
+                with st.spinner("Conectando y validando credenciales..."):
+                    time.sleep(1) 
+                
+                # Paso 2: Intentar la consulta a Supabase
                 try:
                     response = supabase.table("usuarios").select("*").eq("documento", documento).eq("password", password).execute()
+                    
                     if response.data:
                         user = response.data[0]
                         st.session_state['usuario'] = user['nombre']
                         st.session_state['rol'] = user['rol']
                         st.rerun()
-                    else: st.error("Acceso denegado.")
-                except: st.error("Error de red.")
-        
+                    else: 
+                        st.error("Acceso denegado. Usuario o contraseña incorrectos.")
+                except Exception as e: 
+                    # El error de red ocurrirá aquí si el retardo no fue suficiente
+                    st.error(f"Error de conexión. Intente nuevamente. Detalles: {e}")
+                # 📢 FIN DE LA CORRECCIÓN DEL ERROR DE RED
 
     st.stop()
 
