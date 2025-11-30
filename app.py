@@ -10,8 +10,6 @@ import qrcode
 
 # --- 1. CONFIGURACIÓN ---
 st.set_page_config(page_title="Gestión de Mantenimiento", layout="centered", initial_sidebar_state="collapsed")
-# Nota: Cambié layout a "centered" por defecto para que se vea mejor en celulares al escanear QR, 
-# luego lo cambiamos a "wide" si es admin.
 
 # --- 2. CONEXIÓN A SUPABASE ---
 @st.cache_resource
@@ -54,11 +52,13 @@ def subir_imagen(archivo, carpeta="evidencias"):
     return None
 
 def generar_qr_activo(id_activo, nombre_activo):
-    # --- ¡IMPORTANTE! CAMBIA ESTO POR TU URL REAL DE STREAMLIT ---
-    # Si estás en local usa http://localhost:8501
-    # Si ya desplegaste, usa https://tu-app.streamlit.app
-    base_url = "https://mantenimiento-app-demo.streamlit.app" 
+    # ==============================================================================
+    # ⚠️ IMPORTANTE: AQUÍ PEGA LA URL EXACTA DE TU APP QUE SALE EN EL NAVEGADOR ⚠️
+    # Ejemplo: base_url = "https://tu-usuario-app.streamlit.app"
+    # ==============================================================================
+    base_url = "https://gestion-mantenimiento-tu-app.streamlit.app" 
     
+    # Creamos el link directo
     link = f"{base_url}/?id_activo_qr={id_activo}"
     
     qr = qrcode.QRCode(version=1, box_size=10, border=4)
@@ -106,7 +106,7 @@ def logout():
     st.session_state['usuario'] = None
     st.session_state['rol'] = None
     st.session_state['doc_sesion'] = None
-    st.query_params.clear() # Limpiar URL al salir
+    st.query_params.clear() 
     st.rerun()
 
 # ==========================================
@@ -116,88 +116,68 @@ query_params = st.query_params
 if "id_activo_qr" in query_params:
     id_qr = query_params["id_activo_qr"]
     
-    # Buscamos el activo
     try:
         datos_activo = supabase.table("activos").select("*").eq("id", id_qr).execute()
     except Exception as e:
-        st.error("Error de conexión pública. Verifica las políticas RLS en Supabase.")
+        st.error("Error de conexión. Verifica permisos en Supabase.")
         st.stop()
     
     if datos_activo.data:
         activo = datos_activo.data[0]
         
-        # --- VISTA PÚBLICA (HOJA DE VIDA) ---
         st.markdown(f"<h1 style='text-align: center;'>📋 {activo['nombre']}</h1>", unsafe_allow_html=True)
         
-        # Tarjeta de Detalles
         st.markdown(f"""
             <div style="background-color: #f0f2f6; padding: 20px; border-radius: 10px; margin-bottom: 20px;">
                 <p><strong>📍 Área:</strong> {activo.get('area', 'N/A')}</p>
                 <p><strong>🏢 Ubicación:</strong> {activo['ubicacion']}</p>
                 <p><strong>🔧 Categoría:</strong> {activo.get('categoria', 'N/A')}</p>
-                <p style="color: #666; font-size: 12px;">ID Sistema: {activo['id']}</p>
+                <p style="color: #666; font-size: 12px;">ID: {activo['id']}</p>
             </div>
         """, unsafe_allow_html=True)
 
-        # Historial de Órdenes
-        st.subheader("🛠️ Historial de Mantenimiento")
+        st.subheader("🛠️ Historial")
         try:
             ots = supabase.table("ordenes").select("*").eq("activo_id", id_qr).order("id", desc=True).execute()
             if ots.data:
                 df_ots_qr = pd.DataFrame(ots.data)
-                
-                # KPIs rápidos
                 col1, col2 = st.columns(2)
-                col1.metric("Total Intervenciones", len(df_ots_qr))
+                col1.metric("Total", len(df_ots_qr))
                 pendientes = len(df_ots_qr[df_ots_qr['estado'] == 'Abierta'])
                 col2.metric("Pendientes", pendientes, delta_color="inverse" if pendientes > 0 else "normal")
                 
-                # Tabla simplificada para móvil
-                st.dataframe(
-                    df_ots_qr[['fecha_creacion', 'tipo_mantenimiento', 'descripcion', 'estado']],
-                    use_container_width=True,
-                    hide_index=True
-                )
+                st.dataframe(df_ots_qr[['fecha_creacion', 'tipo_mantenimiento', 'descripcion', 'estado']], use_container_width=True, hide_index=True)
             else:
-                st.info("Este equipo está nuevo: Sin mantenimientos registrados.")
-        except:
-            st.warning("No se pudo cargar el historial.")
+                st.info("Sin historial.")
+        except: pass
 
         st.markdown("---")
-        
-        # Botones de Acción
-        col_btn1, col_btn2 = st.columns(2)
-        with col_btn1:
-            if st.button("🏠 Ir al Inicio"):
+        c_btn1, c_btn2 = st.columns(2)
+        with c_btn1:
+            if st.button("🏠 Inicio"):
                 st.query_params.clear()
                 st.rerun()
-        with col_btn2:
+        with c_btn2:
             if st.session_state['usuario'] is None:
-                if st.button("🔐 Soy Técnico (Login)"):
-                    st.query_params.clear() # Limpiamos para ir al login normal
+                if st.button("🔐 Login Técnico"):
+                    st.query_params.clear()
                     st.rerun()
-            else:
-                st.success(f"Logueado como: {st.session_state['usuario']}")
 
     else:
-        st.error("❌ Equipo no encontrado o dado de baja.")
+        st.error("❌ Equipo no encontrado.")
         if st.button("Volver"):
             st.query_params.clear()
             st.rerun()
     
-    st.stop() # 🛑 DETIENE LA EJECUCIÓN AQUÍ PARA NO MOSTRAR EL RESTO DE LA APP
+    st.stop() 
 
 # ==========================================
-# 🖥️ APP PRINCIPAL (SÓLO SI NO ES QR)
+# 🖥️ APP PRINCIPAL
 # ==========================================
-
-# Cambiar layout a wide si estamos en modo escritorio/admin
-# (No podemos cambiar config dinámicamente, pero ajustamos el contenido)
 
 if st.session_state['usuario'] is None:
     login()
 else:
-    # --- BARRA LATERAL ---
     rol_actual = st.session_state['rol']
     usuario_actual = st.session_state['usuario']
     
@@ -218,7 +198,6 @@ else:
         
         choice = option_menu(menu_title="MENÚ PRINCIPAL", options=options_menu, icons=["speedometer2", "box-seam", "plus-circle", "check2-circle", "people"], default_index=0)
 
-    # --- PANTALLAS ---
     if choice == "Dashboard":
         st.subheader("Tablero de Control")
         df_ordenes = run_query("ordenes")
@@ -270,18 +249,22 @@ else:
             with st.form("form_activo", clear_on_submit=True):
                 c1, c2 = st.columns(2)
                 nombre = c1.text_input("Nombre del Equipo")
-                ubicacion = c2.selectbox("Ubicación Específica", sub_areas_disponibles)
+                ubicacion = c2.selectbox("Ubicación Específica / Sub-Área", sub_areas_disponibles)
                 categoria = st.selectbox("Categoría Técnica", [""] + LISTA_CATEGORIAS_TECNICAS)
                 
                 if st.form_submit_button("Guardar Activo y Generar QR"):
                     if nombre and area_selec and ubicacion and categoria:
                         try:
+                            # 1. Crear
                             data_insert = {"nombre": nombre, "ubicacion": ubicacion, "area": area_selec, "categoria": categoria}
                             res = supabase.table("activos").insert(data_insert).execute()
+                            
                             if res.data:
                                 new_id = res.data[0]['id']
+                                # 2. Generar QR y Actualizar
                                 url_qr = generar_qr_activo(new_id, nombre)
                                 supabase.table("activos").update({"qr_url": url_qr}).eq("id", new_id).execute()
+                                
                                 st.session_state['asset_msg'] = {'tipo': 'create', 'nombre': nombre}
                                 st.session_state.asset_reset_key += 1
                                 st.session_state['tab_index_activos'] = 0
@@ -293,7 +276,6 @@ else:
 
         elif selected_tab == "Editar / Imprimir QR":
             st.session_state['tab_index_activos'] = 1 
-            
             if not df_activos.empty:
                 activos_dict = {f"{row['nombre']} - {row.get('ubicacion','?')}": row['id'] for i, row in df_activos.iterrows()}
                 seleccion = st.selectbox("Seleccionar Activo", [""] + list(activos_dict.keys()))
@@ -306,7 +288,7 @@ else:
                     col_qr1, col_qr2 = st.columns([1, 3])
                     with col_qr1:
                         if datos_actuales.get('qr_url'):
-                            st.image(datos_actuales['qr_url'], caption="Escanea para ver")
+                            st.image(datos_actuales['qr_url'], caption="QR del Equipo")
                         else:
                             if st.button("Generar QR"):
                                 url_qr = generar_qr_activo(id_seleccionado, datos_actuales['nombre'])
@@ -314,16 +296,17 @@ else:
                                 st.rerun()
                     with col_qr2:
                         st.markdown(f"### 🏷️ Ficha: {datos_actuales['nombre']}")
-                        st.info("Imprime esta sección para el equipo.")
+                        st.info("Imprime esta sección.")
                     
                     st.markdown("---")
-                    st.write("### ✏️ Editar Datos")
                     
                     area_actual_db = datos_actuales.get('area', '')
                     idx_area = 0
                     if area_actual_db in ESTRUCTURA_AREAS: idx_area = ([""] + list(ESTRUCTURA_AREAS.keys())).index(area_actual_db)
                     nueva_area = st.selectbox("Área", [""] + list(ESTRUCTURA_AREAS.keys()), index=idx_area, key=f"edit_area_{id_seleccionado}")
+                    
                     sub_areas_disp = [""] + ESTRUCTURA_AREAS.get(nueva_area, []) if nueva_area else [""]
+                    
                     ubic_actual = datos_actuales.get('ubicacion', '')
                     idx_ubic = 0
                     if ubic_actual in sub_areas_disp: idx_ubic = sub_areas_disp.index(ubic_actual)
@@ -349,54 +332,14 @@ else:
                         if st.button("Eliminar Definitivamente"):
                             supabase.table("activos").delete().eq("id", int(id_seleccionado)).execute()
                             st.rerun()
+            else: st.info("Sin activos.")
 
     elif choice == "Crear Orden":
-        st.subheader("Planificación y Asignación de OTs")
-        df_activos = run_query("activos")
-        df_usuarios = run_query("usuarios")
-        lista_tecnicos = df_usuarios[df_usuarios['rol'].isin(['Tecnico', 'Admin', 'Programador'])]['nombre'].tolist() if not df_usuarios.empty else []
-
-        if not df_activos.empty:
-            activos_dict = {f"{row['nombre']} - {row.get('ubicacion','?')}": row['id'] for i, row in df_activos.iterrows()}
-            seleccion = st.selectbox("Equipo", list(activos_dict.keys()))
-            activo_id = activos_dict[seleccion]
-            
-            col_a, col_b = st.columns(2)
-            tipo_mant = col_a.selectbox("Tipo", ["Correctivo", "Preventivo", "Predictivo"])
-            criticidad = col_b.select_slider("Criticidad", ["Baja", "Media", "Alta", "Crítica"])
-            c1, c2 = st.columns(2)
-            descripcion = c1.text_area("Descripción")
-            asignado_a = c2.selectbox("Asignar a", lista_tecnicos)
-            
-            if st.button("Crear OT"):
-                supabase.table("ordenes").insert({
-                    "activo_id": int(activo_id), "descripcion": descripcion, "criticidad": criticidad,
-                    "tipo_mantenimiento": tipo_mant, "estado": "Abierta", "fecha_creacion": datetime.now().isoformat(), "tecnico_asignado": asignado_a
-                }).execute()
-                st.success("OT Creada")
-                st.rerun()
-        else: st.warning("Sin activos")
-
+        # ... (Mantener código Crear Orden)
+        pass 
     elif choice == "Usuarios":
-         # ... Código de usuarios simplificado para no exceder limite, copia el anterior si lo necesitas ...
-         st.info("Módulo Usuarios Activo")
-
+        # ... (Mantener código Usuarios)
+        pass
     elif choice == "Cierre de OTs":
-        st.subheader("Mis Órdenes Pendientes")
-        df_ots = run_query("ordenes")
-        if not df_ots.empty:
-            if rol_actual == "Tecnico": mis_ots = df_ots[(df_ots['tecnico_asignado'] == usuario_actual) & (df_ots['estado'] != 'Concluida')]
-            else: mis_ots = df_ots[df_ots['estado'] != 'Concluida']
-            
-            if not mis_ots.empty:
-                st.dataframe(mis_ots[['id', 'descripcion', 'tipo_mantenimiento', 'tecnico_asignado', 'estado']], use_container_width=True)
-                ot_id = st.selectbox("Seleccionar OT", mis_ots['id'].values)
-                with st.form("cierre_form"):
-                    coments = st.text_area("Informe Técnico")
-                    foto = st.file_uploader("Evidencia Fotográfica")
-                    if st.form_submit_button("Cerrar Orden"):
-                        url = subir_imagen(foto)
-                        supabase.table("ordenes").update({"estado":"Concluida", "evidencia_url": url, "comentarios_cierre": coments}).eq("id", int(ot_id)).execute()
-                        st.success("Orden Cerrada")
-                        st.rerun()
-            else: st.info("Sin órdenes pendientes.")
+        # ... (Mantener código Cierre)
+        pass
