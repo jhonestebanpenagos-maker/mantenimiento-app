@@ -356,7 +356,7 @@ def render_orion_svg(PRO_ORANGE):
         </svg>
     """
     st.markdown(f"""
-        <div style="display: flex; justify-content: center; margin-bottom: 0px;">
+        <div style="display: flex; justify-content: center; margin-bottom: -30px;">
             {ORION_SVG}
         </div>
     """, unsafe_allow_html=True)
@@ -407,7 +407,7 @@ if "id_activo_qr" in query_params:
     st.stop() 
 
 # ==============================================================================
-# 🚀 LOGIN (FINAL - SIN CONTENEDOR DE LOGIN)
+# 🚀 LOGIN (FINAL - ESPACIO OPTIMIZADO)
 # ==============================================================================
 
 if 'usuario' not in st.session_state: st.session_state['usuario'] = None
@@ -424,16 +424,17 @@ if st.session_state['usuario'] is None:
     with c2:
         
         # 1. ENCABEZADO Y TÍTULOS (Flotante)
+        # El margen del SVG se redujo a -30px
         render_orion_svg(PRO_ORANGE)
 
         st.markdown(f"""
-            <h1 style='text-align: center; font-size: 3.5rem; margin-bottom: 0; text-shadow: 0 0 10px {PRO_ORANGE};'>ORIÓN</h1>
+            <h1 style='text-align: center; font-size: 3.5rem; margin-bottom: -15px; text-shadow: 0 0 10px {PRO_ORANGE};'>ORIÓN</h1>
             <p style='text-align: center; color: #E5E7EB; font-size: 1.2rem; letter-spacing: 2px; margin-top: 5px; margin-bottom: 20px; font-weight: 300;'>
                 PLATAFORMA INTEGRAL DE MANTENIMIENTO
             </p>
         """, unsafe_allow_html=True)
         
-        # 2. CUADRO DE CORREO (Ahora flotante, ocupando el espacio superior persistente)
+        # 2. CUADRO DE CORREO (Ubicado para ocupar el espacio)
         st.markdown(f"""
             <div class='card-style' style='padding: 10px; margin-top: 0px; margin-bottom: 30px; text-align: center; font-size: 0.85em; color: {PRO_ORANGE}; border: none; box-shadow: none; background: #1F2937;'>
                 <p style='margin: 0;'>Desarrollado por: <b>Jhonestebanpenagos@gmail.com</b></p>
@@ -441,7 +442,7 @@ if st.session_state['usuario'] is None:
             <hr style="border: none; height: 1px; background: linear-gradient(90deg, transparent, {PRO_ORANGE}, transparent); margin-bottom: 30px;">
         """, unsafe_allow_html=True)
         
-        # 3. CONTENIDO DE LOGIN (Sin contenedor DIV externo, solo elementos Streamlit)
+        # 3. CONTENIDO DE LOGIN (Elementos Streamlit)
         
         st.markdown("<h3 style='text-align: center; margin-bottom: 20px;'>ACCESO DE USUARIOS</h3>", unsafe_allow_html=True)
         
@@ -461,7 +462,6 @@ if st.session_state['usuario'] is None:
                     else: st.error("Acceso denegado.")
                 except: st.error("Error de red.")
         
-        # 4. No hay cierre de div aquí.
 
     st.stop()
 
