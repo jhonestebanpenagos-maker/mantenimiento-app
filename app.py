@@ -184,7 +184,8 @@ def init_supabase():
     try:
         url = st.secrets["SUPABASE_URL"]
         key = st.secrets["SUPABASE_KEY"]
-        return create_client(url, key)
+        # Implementamos max_retries=3 para una conexión más robusta
+        return create_client(url, key, options={"max_retries": 3}) 
     except:
         return None
 
@@ -453,14 +454,19 @@ if st.session_state['usuario'] is None:
             submitted = st.form_submit_button("ACCEDER AL SISTEMA", type="primary", use_container_width=True)
             if submitted:
                 try:
+                    # Intento de consulta a Supabase
                     response = supabase.table("usuarios").select("*").eq("documento", documento).eq("password", password).execute()
+                    
                     if response.data:
                         user = response.data[0]
                         st.session_state['usuario'] = user['nombre']
                         st.session_state['rol'] = user['rol']
                         st.rerun()
-                    else: st.error("Acceso denegado.")
-                except: st.error("Error de red.")
+                    else: 
+                        st.error("Acceso denegado. Usuario o contraseña incorrectos.")
+                except Exception as e: 
+                    # Capturamos el error para ver si es un problema de red o de la consulta
+                    st.error(f"Error de red o conexión. Intente nuevamente. Detalles: {e}")
         
 
     st.stop()
