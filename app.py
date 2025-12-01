@@ -940,7 +940,122 @@ elif choice == "Inventario Activos":
             foto_archivo = st.file_uploader("Subir imagen", type=["jpg", "png", "jpeg"])
             
             if foto_archivo:
-                st.image(foto_archivo, width=1
+                # CORRECCIÓN DE LA LÍNEA QUE DABA ERROR
+                st.image(foto_archivo, width=150)
+
+            st.markdown("---")
+            st.markdown("#### ⚙️ Especificaciones y Componentes")
+            st.info("Agregue aquí los datos técnicos variables.")
+
+            # Tabla editable
+            edited_df = st.data_editor(
+                st.session_state.specs_data,
+                num_rows="dynamic",
+                use_container_width=True,
+                column_config={
+                    "Componente/Dato": st.column_config.TextColumn("Característica"),
+                    "Valor": st.column_config.TextColumn("Valor")
+                },
+                key="editor_componentes"
+            )
+
+            st.markdown("<br>", unsafe_allow_html=True)
+            
+            if st.button("💾 GUARDAR ACTIVO", type="primary", use_container_width=True):
+                if not nom:
+                    agregar_notificacion('error', 'El nombre es obligatorio.')
+                elif not foto_archivo:
+                    agregar_notificacion('error', '⚠️ Debe subir una foto obligatoriamente.')
+                else:
+                    try:
+                        with st.spinner("Guardando en la nube..."):
+                            # 1. Subir Foto
+                            foto_url = subir_imagen(foto_archivo, "evidencias")
+                            
+                            # 2. JSON de detalles
+                            detalles_json = {}
+                            if not edited_df.empty:
+                                for index, row in edited_df.iterrows():
+                                    if row["Componente/Dato"] and row["Valor"]:
+                                        detalles_json[row["Componente/Dato"]] = row["Valor"]
+
+                            ubicacion_final = f"[{sub_area}] {ubic_detalle}" if ubic_detalle else f"[{sub_area}]"
+
+                            # 3. Insertar
+                            res = supabase.table("activos").insert({
+                                "nombre": nom, 
+                                "area": area_principal,
+                                "ubicacion": ubicacion_final, 
+                                "categoria": cat,
+                                "foto_url": foto_url,
+                                "detalles": detalles_json
+                            }).execute()
+                            
+                            if res.data:
+                                nid = res.data[0]['id']
+                                url = generar_qr_activo(nid, nom)
+                                supabase.table("activos").update({"qr_url":url}).eq("id", nid).execute()
+                                
+                                st.cache_data.clear()
+                                
+                                # --- AQUÍ OCURRE LA MAGIA ---
+                                # Guardamos los datos en session_state para mostrarlos en la "pantalla de éxito"
+                                st.session_state.activo_creado_info = {
+                                    "id": nid,
+                                    "nombre": nom,
+                                    "area": area_principal,
+                                    "ubicacion": ubicacion_final,
+                                    "categoria": cat,
+                                    "foto_url": foto_url,
+                                    "detalles": detalles_json
+                                }
+                                st.rerun() # Recargamos para mostrar la pantalla de éxito
+
+                    except Exception as e:
+                        agregar_notificacion('error', f'Error crítico: {e}')
+
+    with tab2:
+        if not df_act.empty:
+            all_assets = df_act['nombre'].values
+            sel = st.selectbox("Buscar Activo por Nombre", all_assets)
+            
+            dat = df_act[df_act['nombre']==sel].iloc[0]
+            
+            col_img, col_info = st.columns([1, 2])
+            
+            with col_img:
+                if dat.get('foto_url'):
+                    st.image(dat['foto_url'], caption="Foto Real", use_container_width=True)
+                else:
+                    st.warning("Sin foto")
+                    
+                if dat.get('qr_url'):
+                    st.image(dat['qr_url'], width=100, caption="QR")
+
+            with col_info:
+                st.markdown(f"### {dat['nombre']}")
+                st.info(f"**Ubicación:** {dat['area']} > {dat['ubicacion']}")
+                st.write(f"**Categoría:** {dat.get('categoria', 'N/A')}")
+                
+                st.markdown("#### ⚙️ Especificaciones:")
+                detalles = dat.get('detalles')
+                if detalles and isinstance(detalles, dict):
+                    df_detalles = pd.DataFrame(list(detalles.items()), columns=["Componente", "Valor"])
+                    st.table(df_detalles)
+
+            st.markdown("---")
+            with st.expander("🗑️ Zona de Peligro"):
+                if st.button("ELIMINAR DEFINITIVAMENTE"):
+                    try:
+                        supabase.table("ordenes").delete().eq("activo_id", dat['id']).execute()
+                        supabase.table("activos").delete().eq("id", dat['id']).execute()
+                        st.cache_data.clear()
+                        agregar_notificacion('delete', 'Activo eliminado correctamente.')
+                        st.rerun()
+                    except Exception as e:
+                        agregar_notificacion('error', f'Error: {e}')
+        else:
+            st.info("No hay activos registrados.")
 elif choice == "Crear Orden":
     st.title("GENERAR ORDEN")
     mostrar_notificaciones()
