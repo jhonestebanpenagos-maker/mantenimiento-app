@@ -814,6 +814,9 @@ elif choice == "Gestionar Órdenes":
     st.title("GESTIONAR ÓRDENES DE TRABAJO")
     mostrar_notificaciones()
     
+    # FORZAR ACTUALIZACIÓN DEL CACHE AL ENTRAR A ESTA SECCIÓN
+    st.cache_data.clear()
+    
     with mostrar_estado_carga("Cargando órdenes..."):
         df_ordenes = run_query("ordenes")
         df_activos = run_query("activos")
@@ -871,12 +874,12 @@ elif choice == "Gestionar Órdenes":
                 activo_map = dict(zip(df_activos['id'], df_activos['nombre']))
                 df_display['activo_nombre'] = df_display['activo_id'].map(activo_map)
             
-            # Mapear nombres de técnicos
+            # Mapear nombres de técnicos - ACTUALIZADO PARA USAR DATOS EN TIEMPO REAL
             if not df_users.empty:
                 user_map = dict(zip(df_users['id'].astype(str), df_users['nombre']))
                 df_display['tecnico_nombre'] = df_display['tecnico_asignado'].astype(str).map(user_map).fillna('Sin asignar')
             
-            # Mostrar tabla
+            # Mostrar tabla con clave única para forzar actualización
             st.dataframe(
                 df_display[['id', 'activo_nombre', 'tipo_mantenimiento', 'criticidad', 
                            'estado', 'tecnico_nombre', 'fecha_creacion']].rename(columns={
@@ -889,7 +892,8 @@ elif choice == "Gestionar Órdenes":
                     'fecha_creacion': 'Fecha Creación'
                 }),
                 hide_index=True,
-                use_container_width=True
+                use_container_width=True,
+                key=f"tabla_ordenes_{datetime.now().timestamp()}"  # Clave única para forzar actualización
             )
             
             # Selector de orden para editar
@@ -1055,11 +1059,16 @@ elif choice == "Gestionar Órdenes":
                                 # Ejecutar actualización
                                 supabase.table("ordenes").update(update_data).eq("id", int(orden_id)).execute()
                                 
+                                # LIMPIAR CACHE Y FORZAR ACTUALIZACIÓN
+                                st.cache_data.clear()
+                                
                                 # Mensaje personalizado
                                 if nuevo_tecnico_id != tecnico_actual_id:
                                     agregar_notificacion('success', f'Orden OT-{orden_id} actualizada y reasignada a {nuevo_tecnico_option.split(" - ")[0]}.')
                                 else:
                                     agregar_notificacion('success', f'Orden OT-{orden_id} actualizada correctamente.')
+                                
+                                # Forzar recarga completa de la página
                                 st.rerun()
                                 
                         except Exception as e:
@@ -1074,6 +1083,10 @@ elif choice == "Gestionar Órdenes":
                             
                             if confirmar:
                                 supabase.table("ordenes").delete().eq("id", int(orden_id)).execute()
+                                
+                                # LIMPIAR CACHE Y FORZAR ACTUALIZACIÓN
+                                st.cache_data.clear()
+                                
                                 agregar_notificacion('delete', f'Orden OT-{orden_id} eliminada permanentemente.')
                                 st.rerun()
                                 
@@ -1085,7 +1098,6 @@ elif choice == "Gestionar Órdenes":
     
     else:
         st.info("📭 No hay órdenes de trabajo registradas en el sistema.")
-        
 elif choice == "Cerrar Orden":
     st.title("CERRAR ORDEN")
     mostrar_notificaciones()
