@@ -819,9 +819,8 @@ if choice == "Tablero de Mando":
 
         # SEGUNDA FILA: GRÁFICO DE TÉCNICOS (MÁS ANCHO)
         st.markdown("### 👥 Órdenes de Trabajo por Técnico")
-        st.markdown(f"<div class='card-style'>", unsafe_allow_html=True)
-        graficar_ordenes_por_tecnico(df, df_users)
-        st.markdown("</div>", unsafe_allow_html=True)
+        with st.container():
+            graficar_ordenes_por_tecnico(df, df_users)
 
     else: 
         st.info("No hay datos para mostrar.")
