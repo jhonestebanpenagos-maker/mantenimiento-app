@@ -867,11 +867,9 @@ elif choice == "Inventario Activos":
     df_act = run_query("activos")
     
     # --- ESTADOS DE SESIÓN ---
-    # Para tabla de componentes
     if 'specs_data' not in st.session_state:
         st.session_state.specs_data = pd.DataFrame(columns=["Componente/Dato", "Valor"])
     
-    # Para recuperar datos si se da clic en "Editar"
     if 'draft_data' not in st.session_state:
         st.session_state.draft_data = {}
 
@@ -902,7 +900,8 @@ elif choice == "Inventario Activos":
             with c_foto:
                 st.markdown("##### 📸 Fotografía")
                 if info['foto_url']:
-                    st.image(info['foto_url'], use_container_width=True, style="border-radius: 10px;")
+                    # CORRECCIÓN AQUÍ: Se eliminó el parámetro 'style' que causaba el error
+                    st.image(info['foto_url'], use_container_width=True)
             
             with c_datos:
                 st.markdown(f"### {info['nombre']}")
@@ -911,7 +910,6 @@ elif choice == "Inventario Activos":
                 
                 st.markdown("---")
                 st.markdown("##### ⚙️ Componentes / Ficha")
-                # Mostrar componentes como tabla limpia (No JSON, No Código)
                 detalles = info['detalles']
                 if detalles and isinstance(detalles, dict) and len(detalles) > 0:
                     df_detalles = pd.DataFrame(list(detalles.items()), columns=["Característica", "Dato"])
@@ -931,226 +929,22 @@ elif choice == "Inventario Activos":
             # --- BOTONES DE ACCIÓN ---
             b1, b2, b3 = st.columns(3)
             
-            # 1. FINALIZAR (Todo bien)
+            # 1. FINALIZAR
             with b1:
                 if st.button("✅ FINALIZAR Y NUEVO", type="primary", use_container_width=True):
                     del st.session_state['activo_creado_info']
                     st.session_state.specs_data = pd.DataFrame(columns=["Componente/Dato", "Valor"])
-                    st.session_state.draft_data = {} # Limpiar borradores
+                    st.session_state.draft_data = {}
                     st.rerun()
 
-            # 2. EDITAR (Algo salió mal -> Borrar de DB y volver al form con datos)
+            # 2. EDITAR
             with b2:
                 if st.button("✏️ EDITAR (CORREGIR)", use_container_width=True):
-                    # Borramos el registro "malo" de la base de datos
                     try:
                         supabase.table("activos").delete().eq("id", info['id']).execute()
                         st.cache_data.clear()
                         
-                        # Guardamos los datos en 'draft' para rellenar el formulario
                         st.session_state.draft_data = info
-                        
-                        # Si había detalles, reconstruimos el DataFrame para la tabla editable
-                        if info['detalles']:
-                             st.session_state.specs_data = pd.DataFrame(
-                                 list(info['detalles'].items()), 
-                                 columns=["Componente/Dato", "Valor"]
-                             )
-                        
-                        del st.session_state['activo_creado_info']
-                        st.rerun()
-                    except Exception as e:
-                        st.error(f"Error al intentar editar: {e}")
-
-            # 3. NO GUARDAR (Borrar definitivamente y limpiar)
-            with b3:
-                if st.button("🗑️ NO GUARDAR (DESHACER)", type="secondary", use_container_width=True):
-                    try:
-                        supabase.table("activos").delete().eq("id", info['id']).execute()
-                        st.cache_data.clear()
-                        
-                        del st.session_state['activo_creado_info']
-                        st.session_state.specs_data = pd.DataFrame(columns=["Componente/Dato", "Valor"])
-                        st.session_state.draft_data = {}
-                        agregar_notificacion('warning', 'Registro deshecho. El activo no fue guardado.')
-                        st.rerun()
-                    except Exception as e:
-                        st.error(f"Error al deshacer: {e}")
-
-        # ==============================================================================
-        # 📝 VISTA FORMULARIO (CREACIÓN)
-        # ==============================================================================
-        else:
-            st.markdown("### Registrar Nuevo Activo")
-            
-            # Recuperar datos de borrador si existen (Modo Edición/Corrección)
-            draft = st.session_state.get('draft_data', {})
-            
-            c1, c2 = st.columns(2)
-            
-            # Pre-seleccionar índices si estamos en modo edición
-            def get_index(options, value):
-                try: return list(options).index(value)
-                except: return 0
-            
-            # Áreas
-            keys_areas = sorted(areas_data.keys())
-            idx_area = get_index(keys_areas, draft.get('area'))
-            area_principal = c1.selectbox("Área Principal", keys_areas, index=idx_area)
-            
-            # Sub-áreas
-            sub_areas_disponibles = sorted(areas_data[area_principal])
-            
-            # Extracción limpia de la sub-área desde el string guardado "[Subarea] Detalle"
-            default_sub = ""
-            default_detail = ""
-            if draft.get('ubicacion'):
-                parts = draft['ubicacion'].split('] ', 1)
-                default_sub = parts[0].replace('[', '')
-                default_detail = parts[1] if len(parts) > 1 else ""
-            
-            idx_sub = get_index(sub_areas_disponibles, default_sub)
-            sub_area = c2.selectbox("Sub-área", sub_areas_disponibles, index=idx_sub)
-            
-            # Inputs con valores por defecto del borrador
-            nom = c1.text_input("Nombre del Activo", value=draft.get('nombre', ''))
-            ubic_detalle = c2.text_input("Ubicación Exacta / Detalle", value=default_detail)
-            
-            idx_cat = get_index(categorias_list, draft.get('categoria'))
-            cat = c1.selectbox("Categoría", categorias_list, index=idx_cat)
-            
-            st.markdown("---")
-            st.markdown("#### 📸 Fotografía del Activo (Obligatorio)")
-            
-            # Nota: Streamlit no permite pre-cargar archivos en file_uploader por seguridad.
-            # Si estamos editando, avisamos que la foto anterior existe pero pedimos confirmar o subir nueva.
-            if draft.get('foto_url'):
-                st.info("ℹ️ Estás corrigiendo un activo. Si no subes una foto nueva, se usará la anterior.")
-                st.image(draft['foto_url'], width=100, caption="Foto actual")
-                
-            foto_archivo = st.file_uploader("Subir imagen", type=["jpg", "png", "jpeg"])
-            if foto_archivo:
-                st.image(foto_archivo, width=150)
-
-            st.markdown("---")
-            st.markdown("#### ⚙️ Especificaciones y Componentes")
-            
-            # Tabla editable (se llena automáticamente con st.session_state.specs_data)
-            edited_df = st.data_editor(
-                st.session_state.specs_data,
-                num_rows="dynamic",
-                use_container_width=True,
-                column_config={
-                    "Componente/Dato": st.column_config.TextColumn("Característica (Ej: Gas, Marca)"),
-                    "Valor": st.column_config.TextColumn("Valor (Ej: R404a, Siemens)")
-                },
-                key="editor_componentes"
-            )
-
-            st.markdown("<br>", unsafe_allow_html=True)
-            
-            if st.button("💾 GUARDAR ACTIVO", type="primary", use_container_width=True):
-                # Validación de foto: Si es nuevo requiere foto, si es editado (draft) puede reusar la URL
-                foto_final_url = None
-                
-                if foto_archivo:
-                    with st.spinner("Subiendo imagen nueva..."):
-                        foto_final_url = subir_imagen(foto_archivo, "evidencias")
-                elif draft.get('foto_url'):
-                    foto_final_url = draft['foto_url'] # Reusar la que ya tenía
-                
-                if not nom:
-                    agregar_notificacion('error', 'El nombre es obligatorio.')
-                elif not foto_final_url:
-                    agregar_notificacion('error', '⚠️ Debe subir una foto obligatoriamente.')
-                else:
-                    try:
-                        with st.spinner("Procesando datos..."):
-                            # Procesar tabla a JSON
-                            detalles_json = {}
-                            if not edited_df.empty:
-                                for index, row in edited_df.iterrows():
-                                    if row["Componente/Dato"] and row["Valor"]:
-                                        detalles_json[row["Componente/Dato"]] = row["Valor"]
-
-                            ubicacion_final = f"[{sub_area}] {ubic_detalle}" if ubic_detalle else f"[{sub_area}]"
-
-                            res = supabase.table("activos").insert({
-                                "nombre": nom, 
-                                "area": area_principal,
-                                "ubicacion": ubicacion_final, 
-                                "categoria": cat,
-                                "foto_url": foto_final_url,
-                                "detalles": detalles_json
-                            }).execute()
-                            
-                            if res.data:
-                                nid = res.data[0]['id']
-                                qr_url = generar_qr_activo(nid, nom)
-                                supabase.table("activos").update({"qr_url":qr_url}).eq("id", nid).execute()
-                                
-                                st.cache_data.clear()
-                                # Limpiar borrador ya que se guardó bien
-                                st.session_state.draft_data = {}
-                                
-                                # Guardar info para la VISTA RESUMEN
-                                st.session_state.activo_creado_info = {
-                                    "id": nid,
-                                    "nombre": nom,
-                                    "area": area_principal,
-                                    "ubicacion": ubicacion_final,
-                                    "categoria": cat,
-                                    "foto_url": foto_final_url,
-                                    "detalles": detalles_json,
-                                    "qr_url": qr_url
-                                }
-                                st.rerun()
-
-                    except Exception as e:
-                        agregar_notificacion('error', f'Error crítico: {e}')
-
-    with tab2:
-        # Se mantiene igual que antes...
-        if not df_act.empty:
-            all_assets = df_act['nombre'].values
-            sel = st.selectbox("Buscar Activo por Nombre", all_assets)
-            
-            dat = df_act[df_act['nombre']==sel].iloc[0]
-            
-            col_img, col_info = st.columns([1, 2])
-            
-            with col_img:
-                if dat.get('foto_url'):
-                    st.image(dat['foto_url'], caption="Foto Real", use_container_width=True)
-                else:
-                    st.warning("Sin foto")
-                if dat.get('qr_url'):
-                    st.image(dat['qr_url'], width=100, caption="QR")
-
-            with col_info:
-                st.markdown(f"### {dat['nombre']}")
-                st.info(f"**Ubicación:** {dat['area']} > {dat['ubicacion']}")
-                st.write(f"**Categoría:** {dat.get('categoria', 'N/A')}")
-                
-                st.markdown("#### ⚙️ Especificaciones:")
-                detalles = dat.get('detalles')
-                if detalles and isinstance(detalles, dict):
-                    df_detalles = pd.DataFrame(list(detalles.items()), columns=["Componente", "Valor"])
-                    st.table(df_detalles)
-
-            st.markdown("---")
-            with st.expander("🗑️ Zona de Peligro"):
-                if st.button("ELIMINAR DEFINITIVAMENTE"):
-                    try:
-                        supabase.table("ordenes").delete().eq("activo_id", dat['id']).execute()
-                        supabase.table("activos").delete().eq("id", dat['id']).execute()
-                        st.cache_data.clear()
-                        agregar_notificacion('delete', 'Activo eliminado correctamente.')
-                        st.rerun()
-                    except Exception as e:
-                        agregar_notificacion('error', f'Error: {e}')
-        else:
-            st.info("No hay activos registrados.")
 elif choice == "Crear Orden":
     st.title("GENERAR ORDEN")
     mostrar_notificaciones()
