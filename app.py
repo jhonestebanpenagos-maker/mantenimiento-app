@@ -793,106 +793,78 @@ rol = st.session_state['rol']
 usuario = st.session_state['usuario']
 
 with st.sidebar:
+    # Saludo y rol
     st.markdown(f"""
-        <div style="text-align: center; margin-bottom: 25px; margin-top: 10px;">
-            <p style="margin:0; font-size: 1.2rem; color: white; font-weight: 600; letter-spacing: 0.5px;">👋 Hola, {usuario}!</p>
-            <span style="color: {PRO_GREEN}; font-size: 0.85rem; font-weight: bold; letter-spacing: 1px;">{rol.upper()}</span>
+        <div style="text-align: center; margin-bottom: 20px; margin-top: 10px;">
+            <p style="margin:0; font-size: 1.1rem; color: white; font-weight: 600;">👋 Hola, {usuario}!</p>
+            <span style="color: #10B981; font-size: 0.8rem; font-weight: bold;">{rol.upper()}</span>
         </div>
     """, unsafe_allow_html=True)
 
-    if st.button("Cerrar Sesión", use_container_width=True): 
+    # Botón de cerrar sesión
+    if st.button("🔓 Cerrar Sesión", use_container_width=True, type="primary"): 
         logout()
     
-    st.markdown("---")
+    st.divider()
     
-    # Inicializar choice
+    # Inicializar choice si no existe
     if 'nav_choice' not in st.session_state:
         st.session_state.nav_choice = "Tablero de Mando"
     
-    # Definir páginas según rol con iconos simples
+    # Definir menú según rol - TEXTO CORTO CON EMOJI
     if rol == "Admin":
-        menu_items = [
-            {"icon": "📊", "label": "Tablero de Mando", "key": "dashboard"},
-            {"icon": "📦", "label": "Inventario Activos", "key": "inventory"},
-            {"icon": "➕", "label": "Crear Orden", "key": "create_order"},
-            {"icon": "📋", "label": "Gestionar Órdenes", "key": "manage_orders"},
-            {"icon": "✅", "label": "Cerrar Orden", "key": "close_order"},
-            {"icon": "👤", "label": "Usuarios", "key": "users"}
+        menu_opciones = [
+            ("📊", "Tablero"),
+            ("📦", "Inventario"), 
+            ("➕", "Crear OT"),
+            ("📋", "Gestionar"),
+            ("✅", "Cerrar OT"),
+            ("👥", "Usuarios")
+        ]
+        menu_valores = [
+            "Tablero de Mando",
+            "Inventario Activos", 
+            "Crear Orden",
+            "Gestionar Órdenes",
+            "Cerrar Orden",
+            "Usuarios"
         ]
     elif rol == "Programador":
-        menu_items = [
-            {"icon": "📊", "label": "Tablero de Mando", "key": "dashboard"},
-            {"icon": "➕", "label": "Crear Orden", "key": "create_order"},
-            {"icon": "📋", "label": "Gestionar Órdenes", "key": "manage_orders"},
-            {"icon": "👤", "label": "Usuarios", "key": "users"}
+        menu_opciones = [
+            ("📊", "Tablero"),
+            ("➕", "Crear OT"),
+            ("📋", "Gestionar"),
+            ("👥", "Usuarios")
+        ]
+        menu_valores = [
+            "Tablero de Mando",
+            "Crear Orden",
+            "Gestionar Órdenes",
+            "Usuarios"
         ]
     elif rol == "Tecnico":
-        menu_items = [
-            {"icon": "✅", "label": "Cerrar Orden", "key": "close_order"}
-        ]
+        menu_opciones = [("✅", "Cerrar OT")]
+        menu_valores = ["Cerrar Orden"]
     
-    # CSS mínimo y elegante
-    st.markdown("""
-    <style>
-    /* Asegurar que los iconos sean visibles cuando la sidebar está colapsada */
-    [data-testid="stSidebar"] button div p {
-        font-size: 18px !important;
-    }
-    
-    /* Cuando la barra está colapsada, mostrar solo el primer elemento (icono) */
-    @media (max-width: 900px) {
-        [data-testid="stSidebar"] button div p {
-            font-size: 22px !important;
-        }
+    # Crear botones del menú
+    for (emoji, texto_corto), valor_real in zip(menu_opciones, menu_valores):
+        # Determinar si está activo
+        is_active = st.session_state.nav_choice == valor_real
         
-        /* Ocultar el texto pero mantener el icono */
-        [data-testid="stSidebar"] button span {
-            display: none !important;
-        }
+        # Crear etiqueta del botón
+        btn_label = f"{emoji} {texto_corto}"
         
-        /* Mostrar solo el primer span (que contiene el icono) */
-        [data-testid="stSidebar"] button p {
-            display: block !important;
-            margin: 0 auto !important;
-        }
-    }
-    
-    /* Estilo para botones activos - más sutil */
-    [data-testid="stSidebar"] button[kind="primary"] {
-        background: rgba(31, 41, 55, 0.9) !important;
-        border-left: 3px solid #F59E0B !important;
-        color: white !important;
-    }
-    
-    [data-testid="stSidebar"] button[kind="secondary"] {
-        background: rgba(31, 41, 55, 0.6) !important;
-        color: #D1D5DB !important;
-        border: 1px solid rgba(75, 85, 99, 0.3) !important;
-    }
-    
-    [data-testid="stSidebar"] button:hover {
-        background: rgba(55, 65, 81, 0.8) !important;
-        border-color: rgba(245, 158, 11, 0.4) !important;
-    }
-    </style>
-    """, unsafe_allow_html=True)
-    
-    # Crear los botones del menú - FORMATO SIMPLE
-    for item in menu_items:
-        # Formato: Icono + Espacio + Texto
-        btn_text = f"{item['icon']}  {item['label']}"
-        
-        # Determinar el tipo de botón
-        btn_type = "primary" if st.session_state.nav_choice == item["label"] else "secondary"
+        # Tipo de botón: primary si está activo, secondary si no
+        btn_type = "primary" if is_active else "secondary"
         
         # Crear el botón
         if st.button(
-            btn_text,
-            key=f"nav_{item['key']}",
+            btn_label,
+            key=f"nav_{valor_real.replace(' ', '_')}",
             use_container_width=True,
             type=btn_type
         ):
-            st.session_state.nav_choice = item["label"]
+            st.session_state.nav_choice = valor_real
             st.rerun()
     
     choice = st.session_state.nav_choice
