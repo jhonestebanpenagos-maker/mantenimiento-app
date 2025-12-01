@@ -793,42 +793,132 @@ rol = st.session_state['rol']
 usuario = st.session_state['usuario']
 
 with st.sidebar:
-    # Información del usuario
-    st.markdown(f"**👋 {usuario}**")
-    st.markdown(f"<small style='color: #10B981;'>{rol.upper()}</small>", unsafe_allow_html=True)
+    # Información del usuario - diseño limpio
+    st.markdown(f"""
+        <div style="
+            background: rgba(30, 41, 59, 0.7);
+            border-radius: 10px;
+            padding: 15px;
+            margin-bottom: 20px;
+            border: 1px solid rgba(245, 158, 11, 0.2);
+        ">
+            <p style="margin:0; color: white; font-size: 1rem; font-weight: 600;">👤 {usuario}</p>
+            <p style="margin:5px 0 0 0; color: #F59E0B; font-size: 0.85rem; font-weight: 500;">{rol.upper()}</p>
+        </div>
+    """, unsafe_allow_html=True)
     
-    # Botón de cerrar sesión
-    col1, col2 = st.columns([1, 3])
-    with col2:
-        if st.button("🔓 Salir", use_container_width=True):
-            logout()
+    # Botón de cerrar sesión - sutil con borde amarillo
+    if st.button(
+        "🚪 Cerrar Sesión", 
+        use_container_width=True,
+        type="secondary"
+    ): 
+        logout()
     
-    st.divider()
+    st.markdown("<div style='height: 15px;'></div>", unsafe_allow_html=True)
     
     # Inicializar navegación
     if 'current_page' not in st.session_state:
         st.session_state.current_page = "Tablero de Mando"
     
-    # Menú simple basado en el rol
+    # Definir menú según rol
     if rol == "Admin":
-        pages = ["📊 Dashboard", "📦 Inventario", "➕ Nueva OT", "📋 Gestionar", "✅ Cerrar OT", "👤 Usuarios"]
-        page_values = ["Tablero de Mando", "Inventario Activos", "Crear Orden", "Gestionar Órdenes", "Cerrar Orden", "Usuarios"]
+        menu_items = [
+            ("📊", "Dashboard", "Tablero de Mando"),
+            ("📦", "Inventario", "Inventario Activos"),
+            ("➕", "Nueva Orden", "Crear Orden"),
+            ("📋", "Gestionar", "Gestionar Órdenes"),
+            ("✅", "Cerrar", "Cerrar Orden"),
+            ("👤", "Usuarios", "Usuarios")
+        ]
     elif rol == "Programador":
-        pages = ["📊 Dashboard", "➕ Nueva OT", "📋 Gestionar", "👤 Usuarios"]
-        page_values = ["Tablero de Mando", "Crear Orden", "Gestionar Órdenes", "Usuarios"]
+        menu_items = [
+            ("📊", "Dashboard", "Tablero de Mando"),
+            ("➕", "Nueva Orden", "Crear Orden"),
+            ("📋", "Gestionar", "Gestionar Órdenes"),
+            ("👤", "Usuarios", "Usuarios")
+        ]
     elif rol == "Tecnico":
-        pages = ["✅ Cerrar OT"]
-        page_values = ["Cerrar Orden"]
+        menu_items = [
+            ("✅", "Cerrar Orden", "Cerrar Orden")
+        ]
     
-    # Navegación simple
-    for page_display, page_value in zip(pages, page_values):
+    # CSS para botones sutiles
+    st.markdown("""
+    <style>
+    /* Estilos generales para botones del sidebar */
+    div[data-testid="stSidebar"] button {
+        background: rgba(30, 41, 59, 0.8) !important;
+        color: white !important;
+        border: 1px solid rgba(245, 158, 11, 0.3) !important;
+        border-radius: 8px !important;
+        margin: 6px 0 !important;
+        padding: 12px 16px !important;
+        font-size: 14px !important;
+        font-weight: 500 !important;
+        transition: all 0.2s ease !important;
+    }
+    
+    /* Botón activo - borde amarillo más visible */
+    div[data-testid="stSidebar"] button[kind="primary"] {
+        background: rgba(30, 41, 59, 0.9) !important;
+        border: 2px solid #F59E0B !important;
+        box-shadow: 0 0 10px rgba(245, 158, 11, 0.2) !important;
+    }
+    
+    /* Botón inactivo - hover sutil */
+    div[data-testid="stSidebar"] button[kind="secondary"]:hover {
+        background: rgba(40, 51, 69, 0.9) !important;
+        border-color: rgba(245, 158, 11, 0.5) !important;
+        transform: translateX(3px);
+    }
+    
+    /* Cuando el sidebar está colapsado */
+    @media (max-width: 900px) {
+        div[data-testid="stSidebar"] button {
+            padding: 14px 8px !important;
+            justify-content: center !important;
+            margin: 8px 0 !important;
+        }
+        
+        /* Ocultar texto, mostrar solo emojis cuando colapsado */
+        div[data-testid="stSidebar"] button span {
+            display: none !important;
+        }
+        
+        /* Asegurar que los emojis se muestren */
+        div[data-testid="stSidebar"] button p {
+            font-size: 20px !important;
+            margin: 0 !important;
+        }
+        
+        /* Botón activo en modo colapsado */
+        div[data-testid="stSidebar"] button[kind="primary"] {
+            border: 2px solid #F59E0B !important;
+            box-shadow: 0 0 15px rgba(245, 158, 11, 0.3) !important;
+        }
+    }
+    </style>
+    """, unsafe_allow_html=True)
+    
+    # Crear botones de navegación
+    for emoji, texto, valor in menu_items:
+        is_active = st.session_state.current_page == valor
+        
+        # Determinar tipo de botón
+        btn_type = "primary" if is_active else "secondary"
+        
+        # Texto del botón (emoji + texto)
+        btn_text = f"{emoji} {texto}"
+        
+        # Crear botón
         if st.button(
-            page_display,
-            key=f"btn_{page_value}",
+            btn_text,
+            key=f"nav_{valor.replace(' ', '_')}",
             use_container_width=True,
-            type="primary" if st.session_state.current_page == page_value else "secondary"
+            type=btn_type
         ):
-            st.session_state.current_page = page_value
+            st.session_state.current_page = valor
             st.rerun()
     
     choice = st.session_state.current_page
