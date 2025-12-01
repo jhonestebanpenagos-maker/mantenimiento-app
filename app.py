@@ -64,16 +64,11 @@ st.markdown(f"""
         box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
         margin-bottom: 20px;
     }}
-    /* ELIMINADO: Nuevo estilo para el FORMULARIO DE LOGIN ahora que no está en un card-style grande */
     .login-container {{
-        /* background: {BG_CARD}; */
         border-radius: 12px;
         padding: 30px;
-        /* border: 1px solid rgba(245, 158, 11, 0.2); 
-        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3); */
         margin-top: 20px;
     }}
-
 
     /* 5. TÍTULOS DE GRÁFICAS */
     .chart-header {{
@@ -156,6 +151,32 @@ st.markdown(f"""
         border-radius: 8px;
         text-align: center;
     }}
+
+    /* 12. BOTÓN DE ELIMINACIÓN CON ALTO CONTRASTE */
+    div.stButton > button[kind="secondary"] {{
+        background: linear-gradient(135deg, #DC2626 0%, #991B1B 100%) !important;
+        color: #FFFFFF !important;
+        border: 2px solid #FCA5A5 !important;
+        font-weight: 700 !important;
+        border-radius: 8px !important;
+        padding: 0.75rem 1.5rem !important;
+        transition: all 0.3s ease !important;
+        box-shadow: 0 4px 12px rgba(220, 38, 38, 0.4) !important;
+        text-transform: uppercase !important;
+        letter-spacing: 0.5px !important;
+    }}
+
+    div.stButton > button[kind="secondary"]:hover {{
+        background: linear-gradient(135deg, #991B1B 0%, #7F1D1D 100%) !important;
+        border-color: #FEE2E2 !important;
+        transform: translateY(-2px) !important;
+        box-shadow: 0 6px 20px rgba(220, 38, 38, 0.6) !important;
+    }}
+
+    div.stButton > button[kind="secondary"]:active {{
+        transform: translateY(0px) !important;
+        box-shadow: 0 2px 8px rgba(220, 38, 38, 0.5) !important;
+    }}
     
     /* --- HACK AVANZADO: OCULTAR CONTENEDORES VACÍOS --- */
     div[data-testid="stVerticalBlock"] > div:empty,
@@ -170,7 +191,6 @@ st.markdown(f"""
         overflow: hidden !important;
     }}
     
-    /* Aseguramos que no haya padding extra en la columna central del login */
     div.stVerticalBlock > div:first-child > div:nth-child(2) > div:first-child {{
         padding-top: 0 !important;
     }}
@@ -182,22 +202,15 @@ st.markdown(f"""
 @st.cache_resource
 def init_supabase():
     try:
-        # 1. Intentamos leer las claves. Si fallan, se lanza KeyError.
         url = st.secrets["SUPABASE_URL"]
         key = st.secrets["SUPABASE_KEY"]
-        
-        # 2. Si las claves se leyeron, intentamos crear el cliente.
         return create_client(url, key) 
-        
     except KeyError as e:
-        # Captura específica si la clave no existe en secrets.toml
         st.error(f"❌ ERROR CRÍTICO: La clave {e} no se encuentra en la configuración de Streamlit Secrets (secrets.toml).")
         return None
     except Exception as e:
-        # Captura de cualquier otro error (conexión, SSL, URL malformada, etc.)
         st.error(f"❌ Error desconocido al conectar a Supabase. Verifique URL y clave. Detalles: {e}")
         return None
-
 
 supabase = init_supabase()
 if not supabase:
@@ -258,6 +271,50 @@ def leer_qr_imagen(uploaded_image):
     except:
         return None
 
+# --- FUNCIÓN DE VALIDACIÓN DE ÓRDENES ABIERTAS (MEJORADA) ---
+def check_open_orders(user_id):
+    """
+    Verifica si el usuario tiene órdenes de trabajo activas (no concluidas).
+    
+    Busca en dos campos:
+    - tecnico_asignado: ID del técnico asignado a la orden
+    - estado: debe ser diferente de "Concluida"
+    
+    Args:
+        user_id: ID del usuario a verificar (puede ser string o int)
+    
+    Returns:
+        bool: True si tiene órdenes pendientes, False si no tiene
+    """
+    try:
+        user_id_str = str(user_id)
+        response = supabase.table("ordenes") \
+            .select("id, descripcion, fecha_creacion, estado") \
+            .eq("tecnico_asignado", user_id_str) \
+            .neq("estado", "Concluida") \
+            .execute()
+        
+        if response.data and len(response.data) > 0:
+            print(f"Usuario {user_id} tiene {len(response.data)} órdenes pendientes")
+            return True
+        return False
+    except Exception as e:
+        print(f"Error al verificar órdenes del usuario {user_id}: {e}")
+        return True
+
+def get_open_orders_details(user_id):
+    """Obtiene los detalles de las órdenes pendientes de un usuario."""
+    try:
+        user_id_str = str(user_id)
+        response = supabase.table("ordenes") \
+            .select("id, descripcion, criticidad, tipo_mantenimiento, fecha_creacion, estado") \
+            .eq("tecnico_asignado", user_id_str) \
+            .neq("estado", "Concluida") \
+            .execute()
+        return response.data if response.data else []
+    except:
+        return []
+
 # --- GRÁFICOS (PLOTLY) ---
 
 def graficar_criticidad(df):
@@ -267,19 +324,13 @@ def graficar_criticidad(df):
     orden = ["Baja", "Media", "Alta", "Crítica"]
     conteo['Nivel'] = pd.Categorical(conteo['Nivel'], categories=orden, ordered=True)
     conteo = conteo.sort_values('Nivel')
-
     colores = {"Baja": "#10B981", "Media": "#F59E0B", "Alta": "#EA580C", "Crítica": "#EF4444"}
-
     fig = px.bar(conteo, x='Nivel', y='Cantidad', color='Nivel', 
                  color_discrete_map=colores, text='Cantidad')
-    
     fig.update_layout(
-        paper_bgcolor='rgba(0,0,0,0)',
-        plot_bgcolor='rgba(0,0,0,0)',
-        font=dict(color='white'),
-        showlegend=False,
-        margin=dict(l=0, r=0, t=10, b=0),
-        height=250,
+        paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)',
+        font=dict(color='white'), showlegend=False,
+        margin=dict(l=0, r=0, t=10, b=0), height=250,
         xaxis=dict(title=None),
         yaxis=dict(showgrid=True, gridcolor='rgba(255,255,255,0.1)')
     )
@@ -291,19 +342,14 @@ def graficar_torta_tipo(df):
     conteo = df['tipo_mantenimiento'].value_counts().reset_index()
     conteo.columns = ['Tipo', 'Cantidad']
     colores_torta = ["#3B82F6", "#8B5CF6", "#EC4899"] 
-
     fig = go.Figure(data=[go.Pie(
         labels=conteo['Tipo'], values=conteo['Cantidad'], hole=.5, 
         marker=dict(colors=colores_torta, line=dict(color='#111827', width=2)),
         textinfo='label+percent', textfont=dict(color='white')
     )])
-    
     fig.update_layout(
-        paper_bgcolor='rgba(0,0,0,0)',
-        font=dict(color='white'),
-        height=250,
-        showlegend=False,
-        margin=dict(l=0, r=0, t=10, b=10)
+        paper_bgcolor='rgba(0,0,0,0)', font=dict(color='white'),
+        height=250, showlegend=False, margin=dict(l=0, r=0, t=10, b=10)
     )
     st.plotly_chart(fig, use_container_width=True)
 
@@ -312,19 +358,13 @@ def graficar_estado_barras(df):
     conteo = df['estado'].value_counts().reset_index()
     conteo.columns = ['Estado', 'Cantidad']
     colores = {"Abierta": PRO_ORANGE, "Concluida": PRO_GREEN}
-
     fig = px.bar(conteo, x='Cantidad', y='Estado', orientation='h', 
                  color='Estado', color_discrete_map=colores, text='Cantidad')
-    
     fig.update_layout(
-        paper_bgcolor='rgba(0,0,0,0)',
-        plot_bgcolor='rgba(0,0,0,0)',
-        font=dict(color='white'),
-        showlegend=False,
-        margin=dict(l=0, r=0, t=10, b=0),
-        height=250,
-        xaxis=dict(showgrid=False),
-        yaxis=dict(title=None)
+        paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)',
+        font=dict(color='white'), showlegend=False,
+        margin=dict(l=0, r=0, t=10, b=0), height=250,
+        xaxis=dict(showgrid=False), yaxis=dict(title=None)
     )
     fig.update_traces(textfont_size=14, textposition='inside')
     st.plotly_chart(fig, use_container_width=True)
@@ -342,19 +382,6 @@ def mostrar_notificaciones():
             elif tipo == 'delete':
                 st.error(f"🗑️ {msg}")
         del st.session_state['notification']
-
-
-# --- FUNCIÓN DE VALIDACIÓN DE ÓRDENES ABIERTAS ---
-def check_open_orders(user_id):
-    """Verifica si el ID de usuario tiene órdenes de trabajo activas."""
-    try:
-        # Se asume que tecnico_asignado en 'ordenes' guarda el ID del usuario de la tabla 'usuarios'
-        response = supabase.table("ordenes").select("id").eq("tecnico_asignado", user_id).neq("estado", "Concluida").execute()
-        return len(response.data) > 0
-    except Exception as e:
-        return False
-# --- FIN FUNCIÓN DE VALIDACIÓN ---
-
 
 # --- FUNCIÓN AISLADA PARA EL SVG ---
 def render_orion_svg(PRO_ORANGE):
@@ -383,7 +410,6 @@ def render_orion_svg(PRO_ORANGE):
         </div>
     """, unsafe_allow_html=True)
 
-
 # ==============================================================================
 # 🚀 INTERCEPTOR PÚBLICO (ACCESO QR)
 # ==============================================================================
@@ -395,7 +421,7 @@ if "id_activo_qr" in query_params:
     except:
         st.error("Error de conexión.")
         st.stop()
-    
+
     if datos_activo.data:
         activo = datos_activo.data[0]
         st.markdown(f"<h1 style='text-align: center;'>ORIÓN: {activo['nombre']}</h1>", unsafe_allow_html=True)
@@ -416,7 +442,7 @@ if "id_activo_qr" in query_params:
             else:
                 st.info("Sin registros.")
         except: pass
-        
+
         st.markdown("---")
         if st.button("🏠 Inicio"):
             st.query_params.clear()
@@ -429,7 +455,7 @@ if "id_activo_qr" in query_params:
     st.stop() 
 
 # ==============================================================================
-# 🚀 LOGIN (FINAL - ESPACIO OPTIMIZADO)
+# 🚀 LOGIN
 # ==============================================================================
 
 if 'usuario' not in st.session_state: st.session_state['usuario'] = None
@@ -444,8 +470,6 @@ def logout():
 if st.session_state['usuario'] is None:
     c1, c2, c3 = st.columns([1,2,1])
     with c2:
-        
-        # 1. ENCABEZADO Y TÍTULOS (Flotante)
         render_orion_svg(PRO_ORANGE)
 
         st.markdown(f"""
@@ -454,35 +478,27 @@ if st.session_state['usuario'] is None:
                 PLATAFORMA INTEGRAL DE MANTENIMIENTO
             </p>
         """, unsafe_allow_html=True)
-        
-        # 2. CUADRO DE CORREO (Ubicado para ocupar el espacio)
+
         st.markdown(f"""
             <div class='card-style' style='padding: 10px; margin-top: 0px; margin-bottom: 30px; text-align: center; font-size: 0.85em; color: {PRO_ORANGE}; border: none; box-shadow: none; background: #1F2937;'>
                 <p style='margin: 0;'>Desarrollado por: <b>Jhonestebanpenagos@gmail.com</b></p>
             </div>
             <hr style="border: none; height: 1px; background: linear-gradient(90deg, transparent, {PRO_ORANGE}, transparent); margin-bottom: 30px;">
         """, unsafe_allow_html=True)
-        
-        # 3. CONTENIDO DE LOGIN (Elementos Streamlit)
-        
+
         st.markdown("<h3 style='text-align: center; margin-bottom: 20px;'>ACCESO DE USUARIOS</h3>", unsafe_allow_html=True)
-        
-        # FORMULARIO
+
         with st.form("login_form"):
             documento = st.text_input("Usuario")
             password = st.text_input("Contraseña", type="password")
             submitted = st.form_submit_button("ACCEDER AL SISTEMA", type="primary", use_container_width=True)
             if submitted:
-                # 📢 INICIO DE LA CORRECCIÓN DEL ERROR DE RED (FALLO EN EL PRIMER INTENTO)
-                
-                # Paso 1: Mostrar un spinner y pausar la ejecución brevemente
                 with st.spinner("Conectando y validando credenciales..."):
                     time.sleep(1) 
-                
-                # Paso 2: Intentar la consulta a Supabase
+
                 try:
                     response = supabase.table("usuarios").select("*").eq("documento", documento).eq("password", password).execute()
-                    
+
                     if response.data:
                         user = response.data[0]
                         st.session_state['usuario'] = user['nombre']
@@ -491,9 +507,7 @@ if st.session_state['usuario'] is None:
                     else: 
                         st.error("Acceso denegado. Usuario o contraseña incorrectos.")
                 except Exception as e: 
-                    # El error de red ocurrirá aquí si el retardo no fue suficiente
                     st.error(f"Error de conexión. Intente nuevamente. Detalles: {e}")
-                # 📢 FIN DE LA CORRECCIÓN DEL ERROR DE RED
 
     st.stop()
 
@@ -505,14 +519,13 @@ rol = st.session_state['rol']
 usuario = st.session_state['usuario']
 
 with st.sidebar:
-    # 🎨 SECCIÓN DE BIENVENIDA MÁS ESTILIZADA Y FLOTANTE
     st.markdown(f"""
         <div style="text-align: center; margin-bottom: 25px; margin-top: 10px;">
             <p style="margin:0; font-size: 1.2rem; color: white; font-weight: 600; letter-spacing: 0.5px;">👋 Hola, {usuario}!</p>
             <span style="color: {PRO_GREEN}; font-size: 0.85rem; font-weight: bold; letter-spacing: 1px;">{rol.upper()}</span>
         </div>
     """, unsafe_allow_html=True)
-    
+
     if st.button("Cerrar Sesión", use_container_width=True): logout()
     st.write("") 
 
@@ -520,30 +533,30 @@ with st.sidebar:
     if rol == "Admin": opts = ["Tablero de Mando", "Inventario Activos", "Crear Orden", "Cerrar Orden", "Usuarios"]
     elif rol == "Programador": opts = ["Tablero de Mando", "Crear Orden", "Usuarios"] 
     elif rol == "Tecnico": opts = ["Cerrar Orden"] 
-    
+
     choice = option_menu(menu_title="NAVEGACIÓN", options=opts, 
         icons=["speedometer2", "box-seam", "plus-circle", "check2-circle", "people"], default_index=0,
         styles={"container": {"background-color": "transparent"}, "icon": {"color": PRO_ORANGE}, "nav-link": {"color": "#9CA3AF"}, "nav-link-selected": {"background-color": "#1F2937", "color": "white", "border-left": f"4px solid {PRO_ORANGE}"}})
 
-# --- PANTALLAS ---
+# ==============================================================================
+# 📊 PANTALLAS
+# ==============================================================================
 
 if choice == "Tablero de Mando":
     st.title("TABLERO DE MANDO")
     mostrar_notificaciones()
-    
+
     df = run_query("ordenes")
     if not df.empty:
-        # MÉTRICAS
         c1, c2, c3 = st.columns(3)
         c1.metric("Total Órdenes", len(df))
         c2.metric("Pendientes", len(df[df['estado']=='Abierta']))
         c3.metric("Finalizadas", len(df[df['estado']=='Concluida']))
-        
+
         st.write("") 
 
-        # --- GRÁFICOS ---
         c_left, c_mid, c_right = st.columns(3)
-        
+
         with c_left:
             st.markdown(f"<div class='card-style'><span class='chart-header'>Progreso de Órdenes</span>", unsafe_allow_html=True)
             graficar_estado_barras(df)
@@ -565,9 +578,9 @@ elif choice == "Inventario Activos":
     st.title("INVENTARIO")
     mostrar_notificaciones()
     df_act = run_query("activos")
-    
+
     tab1, tab2 = st.tabs(["NUEVO ACTIVO", "EDITAR / QR"])
-    
+
     with tab1:
         st.markdown("<div class='card-style'>", unsafe_allow_html=True)
         with st.form("new_asset"):
@@ -594,7 +607,7 @@ elif choice == "Inventario Activos":
             c1, c2 = st.columns([1,3])
             c1.image(dat['qr_url'])
             c2.info(f"ID: {dat['id']} | {dat['area']}")
-            
+
             st.markdown("<br>", unsafe_allow_html=True)
             with st.expander("Eliminar Activo"):
                 st.markdown(f"<div class='danger-zone'><p>Esto borrará el historial completo.</p></div>", unsafe_allow_html=True)
@@ -649,12 +662,8 @@ elif choice == "Usuarios":
     st.title("USUARIOS")
     mostrar_notificaciones()
 
-    # Estructura de pestañas para Crear y Gestionar usuarios
     tab_crear, tab_gestionar = st.tabs(["CREAR USUARIO", "GESTIONAR USUARIOS"])
 
-    # ----------------------------------------------------
-    # TAB 1: CREAR USUARIO
-    # ----------------------------------------------------
     with tab_crear:
         st.subheader("Registrar Nuevo Usuario")
 
@@ -688,21 +697,15 @@ elif choice == "Usuarios":
                 else:
                     st.warning("Por favor, complete todos los campos.")
 
-    # ----------------------------------------------------
-    # TAB 2: GESTIONAR USUARIOS (VERSIÓN CORREGIDA)
-    # ----------------------------------------------------
     with tab_gestionar:
         df_users = run_query("usuarios")
 
         if not df_users.empty:
             st.subheader("Seleccionar Usuario para Gestionar")
 
-            # Crear un selectbox en lugar de checkboxes para evitar parpadeos
-            # Usamos un diccionario para mapear nombre + ID al ID real
             user_options = {f"{row['nombre']} (ID: {row['id']})": row['id'] 
                            for _, row in df_users.iterrows()}
             
-            # Añadimos una opción por defecto
             user_options_list = ["-- Seleccione un usuario --"] + list(user_options.keys())
             
             selected_option = st.selectbox(
@@ -711,7 +714,6 @@ elif choice == "Usuarios":
                 key="user_selector"
             )
 
-            # Mostrar la tabla completa de usuarios (solo lectura)
             st.markdown("### Lista Completa de Usuarios")
             st.dataframe(
                 df_users[['id', 'documento', 'nombre', 'rol']],
@@ -719,17 +721,13 @@ elif choice == "Usuarios":
                 use_container_width=True
             )
 
-            # Si se seleccionó un usuario válido
             if selected_option != "-- Seleccione un usuario --":
                 user_id = user_options[selected_option]
-                
-                # Obtener los datos actuales del usuario seleccionado
                 selected_user = df_users[df_users['id'] == user_id].iloc[0]
 
                 st.markdown("---")
                 st.markdown(f"### Editando: **{selected_user['nombre']}** (ID: {user_id})")
 
-                # Formulario de Edición
                 with st.form(key=f"edit_user_form_{user_id}"):
                     st.subheader("Información del Usuario")
 
@@ -744,7 +742,6 @@ elif choice == "Usuarios":
                         value=selected_user['nombre']
                     )
 
-                    # Manejo de índice para el Selectbox
                     rol_options = ["Tecnico", "Programador", "Admin"]
                     current_rol_index = rol_options.index(selected_user['rol']) if selected_user['rol'] in rol_options else 0
                     new_rol = st.selectbox("Rol", rol_options, index=current_rol_index)
@@ -754,12 +751,10 @@ elif choice == "Usuarios":
                         type="password"
                     )
 
-                    col1, col2 = st.columns(2)
-                    update_submitted = col1.form_submit_button("✅ ACTUALIZAR", type="primary")
-                    delete_submitted = col2.form_submit_button("🗑️ ELIMINAR", type="secondary")
+                    st.markdown("<br>", unsafe_allow_html=True)
+                    update_submitted = st.form_submit_button("✅ ACTUALIZAR USUARIO", type="primary", use_container_width=True)
 
                     if update_submitted:
-                        # Validación del cambio de rol
                         if new_rol != selected_user['rol']:
                             if check_open_orders(user_id):
                                 st.error(f"❌ ERROR: El usuario **{selected_user['nombre']}** tiene Órdenes de Trabajo pendientes. Debe cerrarlas antes de cambiar su rol.")
@@ -780,19 +775,42 @@ elif choice == "Usuarios":
                         except Exception as e:
                             st.error(f"Error al actualizar: {e}")
 
-                    if delete_submitted:
-                        # Validación de eliminación
-                        if check_open_orders(user_id):
-                            st.error(f"❌ ERROR: El usuario **{selected_user['nombre']}** tiene Órdenes de Trabajo pendientes. No puede ser eliminado.")
-                        else:
-                            try:
-                                supabase.table("usuarios").delete().eq("id", user_id).execute()
-                                st.session_state['notification'] = {'type':'delete', 'message':f'Usuario {selected_user["nombre"]} eliminado.'}
-                                st.rerun()
-                            except Exception as e:
-                                st.error(f"Error al eliminar: {e}")
+                st.markdown("---")
+                st.markdown("### 🗑️ Zona de Eliminación")
+                
+                has_open_orders = check_open_orders(user_id)
+                
+                if has_open_orders:
+                    st.markdown(f"""
+                        <div style='background: rgba(239, 68, 68, 0.15); 
+                                    border: 2px solid #EF4444; 
+                                    border-radius: 8px; 
+                                    padding: 20px; 
+                                    text-align: center;'>
+                            <p style='color: #FCA5A5; margin: 0; font-size: 1.1rem;'>
+                                ⚠️ <strong>ELIMINACIÓN BLOQUEADA</strong>
+                            </p>
+                            <p style='color: #FEE2E2; margin-top: 10px; font-size: 0.95rem;'>
+                                El usuario <strong>{selected_user['nombre']}</strong> tiene Órdenes de Trabajo pendientes.<br>
+                                Debe cerrarlas o reasignarlas antes de eliminar este usuario.
+                            </p>
+                        </div>
+                    """, unsafe_allow_html=True)
+                else:
+                    st.warning(f"⚠️ Esta acción eliminará permanentemente al usuario **{selected_user['nombre']}**")
+                    
+                    if st.button(
+                        "🗑️ ELIMINAR USUARIO PERMANENTEMENTE",
+                        type="secondary",
+                        use_container_width=True,
+                        key=f"delete_btn_{user_id}"
+                    ):
+                        try:
+                            supabase.table("usuarios").delete().eq("id", user_id).execute()
+                            st.session_state['notification'] = {'type':'delete', 'message':f'Usuario {selected_user["nombre"]} eliminado.'}
+                            st.rerun()
+                        except Exception as e:
+                            st.error(f"Error al eliminar: {e}")
 
         else:
             st.info("No se encontraron usuarios en la base de datos. Use la pestaña 'CREAR USUARIO'.")
-
-
