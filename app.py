@@ -284,6 +284,28 @@ def leer_qr_imagen(uploaded_image):
         return None
     except:
         return None
+def convertir_tipos_python(data_dict):
+    """
+    Convierte los valores de un diccionario a tipos nativos de Python
+    para evitar errores de serialización JSON
+    """
+    converted = {}
+    for key, value in data_dict.items():
+        if value is None:
+            converted[key] = None
+        elif isinstance(value, (pd.Timestamp, datetime)):
+            converted[key] = value.isoformat()
+        elif isinstance(value, (np.integer, np.int64)):
+            converted[key] = int(value)
+        elif isinstance(value, (np.floating, np.float64)):
+            converted[key] = float(value)
+        elif isinstance(value, (np.bool_, bool)):
+            converted[key] = bool(value)
+        elif isinstance(value, (np.ndarray, pd.Series)):
+            converted[key] = value.tolist()
+        else:
+            converted[key] = value
+    return converted
 
 # --- SISTEMA DE NOTIFICACIONES MEJORADO ---
 def mostrar_notificaciones():
@@ -1007,33 +1029,34 @@ elif choice == "Gestionar Órdenes":
                         use_container_width=True
                     )
                     
-                    if actualizar_btn:
-                        # Obtener el ID del activo seleccionado
-                        nuevo_activo_id = df_activos[df_activos['nombre'] == nuevo_activo].iloc[0]['id']
-                        
-                        # Preparar los datos actualizados
-                        update_data = {
-                            "activo_id": nuevo_activo_id,
-                            "tipo_mantenimiento": nuevo_tipo,
-                            "criticidad": nueva_crit,
-                            "estado": nuevo_estado,
-                            "descripcion": nueva_desc,
-                            "tecnico_asignado": nuevo_tecnico_id,
-                            "comentarios_cierre": comentarios
-                        }
-                        
-                        try:
-                            supabase.table("ordenes").update(update_data).eq("id", orden_id).execute()
-                            
-                            # Mensaje personalizado si cambió el técnico
-                            if nuevo_tecnico_id != tecnico_actual_id:
-                                agregar_notificacion('success', f'Orden OT-{orden_id} actualizada y reasignada a {nuevo_tecnico_option.split(" - ")[0]}.')
-                            else:
-                                agregar_notificacion('success', f'Orden OT-{orden_id} actualizada correctamente.')
-                            st.rerun()
-                            
-                        except Exception as e:
-                            agregar_notificacion('error', f'Error al actualizar la orden: {e}')
+# Busca esta sección en el código y reemplázala:
+if actualizar_btn:
+    # Obtener el ID del activo seleccionado
+    nuevo_activo_id = df_activos[df_activos['nombre'] == nuevo_activo].iloc[0]['id']
+    
+    # Preparar los datos actualizados - CONVERSIÓN A TIPOS NATIVOS
+    update_data = {
+        "activo_id": int(nuevo_activo_id),  # Convertir a int nativo
+        "tipo_mantenimiento": str(nuevo_tipo),  # Asegurar string
+        "criticidad": str(nueva_crit),  # Asegurar string
+        "estado": str(nuevo_estado),  # Asegurar string
+        "descripcion": str(nueva_desc),  # Asegurar string
+        "tecnico_asignado": str(nuevo_tecnico_id),  # Convertir a string
+        "comentarios_cierre": str(comentarios) if comentarios else None
+    }
+    
+    try:
+        supabase.table("ordenes").update(update_data).eq("id", int(orden_id)).execute()  # Convertir orden_id
+        
+        # Mensaje personalizado si cambió el técnico
+        if nuevo_tecnico_id != tecnico_actual_id:
+            agregar_notificacion('success', f'Orden OT-{orden_id} actualizada y reasignada a {nuevo_tecnico_option.split(" - ")[0]}.')
+        else:
+            agregar_notificacion('success', f'Orden OT-{orden_id} actualizada correctamente.')
+        st.rerun()
+        
+    except Exception as e:
+        agregar_notificacion('error', f'Error al actualizar la orden: {e}')
                     
                     if cancelar_btn:
                         # Verificar que realmente quiera eliminar
