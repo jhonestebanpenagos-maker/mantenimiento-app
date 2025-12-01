@@ -530,14 +530,34 @@ with st.sidebar:
     st.write("") 
 
     opts = []
-    if rol == "Admin": opts = ["Tablero de Mando", "Inventario Activos", "Crear Orden", "Cerrar Orden", "Usuarios"]
-    elif rol == "Programador": opts = ["Tablero de Mando", "Crear Orden", "Usuarios"] 
-    elif rol == "Tecnico": opts = ["Cerrar Orden"] 
+    icons_list = []
+    
+    if rol == "Admin":
+        opts = ["Tablero de Mando", "Inventario Activos", "Crear Orden", "Gestionar Órdenes", "Cerrar Orden", "Usuarios"]
+        icons_list = ["speedometer2", "box-seam", "plus-circle", "list-task", "check2-circle", "people"]
+    elif rol == "Programador":
+        opts = ["Tablero de Mando", "Crear Orden", "Gestionar Órdenes", "Usuarios"]
+        icons_list = ["speedometer2", "plus-circle", "list-task", "people"]
+    elif rol == "Tecnico":
+        opts = ["Cerrar Orden"]
+        icons_list = ["check2-circle"]
 
-    choice = option_menu(menu_title="NAVEGACIÓN", options=opts, 
-        icons=["speedometer2", "box-seam", "plus-circle", "check2-circle", "people"], default_index=0,
-        styles={"container": {"background-color": "transparent"}, "icon": {"color": PRO_ORANGE}, "nav-link": {"color": "#9CA3AF"}, "nav-link-selected": {"background-color": "#1F2937", "color": "white", "border-left": f"4px solid {PRO_ORANGE}"}})
-
+    choice = option_menu(
+        menu_title="NAVEGACIÓN",
+        options=opts,
+        icons=icons_list,
+        default_index=0,
+        styles={
+            "container": {"background-color": "transparent"},
+            "icon": {"color": PRO_ORANGE},
+            "nav-link": {"color": "#9CA3AF"},
+            "nav-link-selected": {
+                "background-color": "#1F2937",
+                "color": "white",
+                "border-left": f"4px solid {PRO_ORANGE}"
+            }
+        }
+    )
 # ==============================================================================
 # 📊 PANTALLAS
 # ==============================================================================
@@ -688,6 +708,276 @@ elif choice == "Crear Orden":
         st.markdown("</div>", unsafe_allow_html=True)
     else:
         st.warning("⚠️ No hay activos registrados. Debe crear activos antes de generar órdenes.")
+elif choice == "Gestionar Órdenes":
+    st.title("GESTIONAR ÓRDENES DE TRABAJO")
+    mostrar_notificaciones()
+    
+    df_ordenes = run_query("ordenes")
+    df_activos = run_query("activos")
+    df_users = run_query("usuarios")
+    
+    if not df_ordenes.empty:
+        
+        # Filtros en la parte superior
+        st.markdown("### 🔍 Filtros")
+        col_f1, col_f2, col_f3 = st.columns(3)
+        
+        with col_f1:
+            filter_estado = st.selectbox(
+                "Estado:",
+                ["Todas", "Abierta", "Concluida"],
+                key="filter_estado"
+            )
+        
+        with col_f2:
+            filter_criticidad = st.selectbox(
+                "Criticidad:",
+                ["Todas", "Baja", "Media", "Alta", "Crítica"],
+                key="filter_criticidad"
+            )
+        
+        with col_f3:
+            filter_tipo = st.selectbox(
+                "Tipo:",
+                ["Todos", "Correctivo", "Preventivo"],
+                key="filter_tipo"
+            )
+        
+        # Aplicar filtros
+        df_filtered = df_ordenes.copy()
+        
+        if filter_estado != "Todas":
+            df_filtered = df_filtered[df_filtered['estado'] == filter_estado]
+        
+        if filter_criticidad != "Todas":
+            df_filtered = df_filtered[df_filtered['criticidad'] == filter_criticidad]
+        
+        if filter_tipo != "Todos":
+            df_filtered = df_filtered[df_filtered['tipo_mantenimiento'] == filter_tipo]
+        
+        # Mostrar tabla con las órdenes filtradas
+        st.markdown("---")
+        st.markdown(f"### 📋 Órdenes Encontradas: **{len(df_filtered)}**")
+        
+        if not df_filtered.empty:
+            # Crear DataFrame mejorado con información de activo y técnico
+            df_display = df_filtered.copy()
+            
+            # Mapear nombres de activos
+            if not df_activos.empty:
+                activo_map = dict(zip(df_activos['id'], df_activos['nombre']))
+                df_display['activo_nombre'] = df_display['activo_id'].map(activo_map)
+            
+            # Mapear nombres de técnicos
+            if not df_users.empty:
+                user_map = dict(zip(df_users['id'].astype(str), df_users['nombre']))
+                df_display['tecnico_nombre'] = df_display['tecnico_asignado'].astype(str).map(user_map).fillna('Sin asignar')
+            
+            # Mostrar tabla
+            st.dataframe(
+                df_display[['id', 'activo_nombre', 'tipo_mantenimiento', 'criticidad', 
+                           'estado', 'tecnico_nombre', 'fecha_creacion']].rename(columns={
+                    'id': 'ID',
+                    'activo_nombre': 'Activo',
+                    'tipo_mantenimiento': 'Tipo',
+                    'criticidad': 'Criticidad',
+                    'estado': 'Estado',
+                    'tecnico_nombre': 'Asignado a',
+                    'fecha_creacion': 'Fecha Creación'
+                }),
+                hide_index=True,
+                use_container_width=True
+            )
+            
+            # Selector de orden para editar
+            st.markdown("---")
+            st.markdown("### ✏️ Editar / Reasignar Orden")
+            
+            # Crear opciones para el selectbox
+            orden_options = {
+                f"OT-{row['id']} | {activo_map.get(row['activo_id'], 'N/A')} | {row['estado']}": row['id']
+                for _, row in df_filtered.iterrows()
+            }
+            
+            orden_options_list = ["-- Seleccione una orden --"] + list(orden_options.keys())
+            
+            selected_orden_option = st.selectbox(
+                "Orden de Trabajo:",
+                orden_options_list,
+                key="orden_selector"
+            )
+            
+            if selected_orden_option != "-- Seleccione una orden --":
+                orden_id = orden_options[selected_orden_option]
+                orden_actual = df_ordenes[df_ordenes['id'] == orden_id].iloc[0]
+                
+                st.markdown(f"""
+                    <div class='card-style' style='border-left: 4px solid {PRO_ORANGE}; background: rgba(245, 158, 11, 0.05);'>
+                        <p><strong>📌 Orden Seleccionada:</strong> OT-{orden_actual['id']}</p>
+                        <p><strong>🔧 Activo:</strong> {activo_map.get(orden_actual['activo_id'], 'N/A')}</p>
+                        <p><strong>📅 Creada:</strong> {orden_actual['fecha_creacion']}</p>
+                    </div>
+                """, unsafe_allow_html=True)
+                
+                # Formulario de edición
+                with st.form(key=f"edit_orden_form_{orden_id}"):
+                    st.markdown("#### Información de la Orden")
+                    
+                    col1, col2 = st.columns(2)
+                    
+                    # Campo Activo
+                    activo_actual = activo_map.get(orden_actual['activo_id'], 'N/A')
+                    activo_index = list(df_activos['nombre']).index(activo_actual) if activo_actual in df_activos['nombre'].values else 0
+                    nuevo_activo = col1.selectbox(
+                        "Activo",
+                        df_activos['nombre'].values,
+                        index=activo_index
+                    )
+                    
+                    # Campo Tipo
+                    tipo_options = ["Correctivo", "Preventivo"]
+                    tipo_index = tipo_options.index(orden_actual['tipo_mantenimiento']) if orden_actual['tipo_mantenimiento'] in tipo_options else 0
+                    nuevo_tipo = col2.selectbox(
+                        "Tipo de Mantenimiento",
+                        tipo_options,
+                        index=tipo_index
+                    )
+                    
+                    # Campo Criticidad
+                    crit_options = ["Baja", "Media", "Alta", "Crítica"]
+                    crit_index = crit_options.index(orden_actual['criticidad']) if orden_actual['criticidad'] in crit_options else 0
+                    nueva_crit = col1.select_slider(
+                        "Criticidad",
+                        crit_options,
+                        value=crit_options[crit_index]
+                    )
+                    
+                    # Campo Estado
+                    estado_options = ["Abierta", "Concluida"]
+                    estado_index = estado_options.index(orden_actual['estado']) if orden_actual['estado'] in estado_options else 0
+                    nuevo_estado = col2.selectbox(
+                        "Estado",
+                        estado_options,
+                        index=estado_index
+                    )
+                    
+                    # Campo Descripción
+                    nueva_desc = st.text_area(
+                        "Descripción",
+                        value=orden_actual.get('descripcion', ''),
+                        height=100
+                    )
+                    
+                    # Campo Reasignar Técnico
+                    st.markdown("#### 👤 Reasignación de Técnico")
+                    
+                    if not df_users.empty:
+                        user_options = {
+                            f"{row['nombre']} - {row['rol']}": str(row['id'])
+                            for _, row in df_users.iterrows()
+                        }
+                        
+                        # Encontrar el índice del técnico actual
+                        tecnico_actual_id = str(orden_actual.get('tecnico_asignado', ''))
+                        tecnico_actual_nombre = user_map.get(tecnico_actual_id, 'Sin asignar')
+                        
+                        # Buscar la opción que corresponde al técnico actual
+                        current_tech_option = None
+                        for option, uid in user_options.items():
+                            if uid == tecnico_actual_id:
+                                current_tech_option = option
+                                break
+                        
+                        user_options_list = list(user_options.keys())
+                        current_index = user_options_list.index(current_tech_option) if current_tech_option else 0
+                        
+                        nuevo_tecnico_option = st.selectbox(
+                            "Asignar a:",
+                            user_options_list,
+                            index=current_index,
+                            help=f"Actualmente asignado a: {tecnico_actual_nombre}"
+                        )
+                        
+                        nuevo_tecnico_id = user_options[nuevo_tecnico_option]
+                    else:
+                        st.warning("No hay usuarios disponibles")
+                        nuevo_tecnico_id = tecnico_actual_id
+                    
+                    # Comentarios adicionales
+                    comentarios = st.text_area(
+                        "Comentarios de cierre (Opcional)",
+                        value=orden_actual.get('comentarios_cierre', ''),
+                        height=80
+                    )
+                    
+                    # Botones de acción
+                    st.markdown("<br>", unsafe_allow_html=True)
+                    col_btn1, col_btn2 = st.columns(2)
+                    
+                    actualizar_btn = col_btn1.form_submit_button(
+                        "✅ ACTUALIZAR ORDEN",
+                        type="primary",
+                        use_container_width=True
+                    )
+                    
+                    cancelar_btn = col_btn2.form_submit_button(
+                        "🗑️ ELIMINAR ORDEN",
+                        type="secondary",
+                        use_container_width=True
+                    )
+                    
+                    if actualizar_btn:
+                        # Obtener el ID del activo seleccionado
+                        nuevo_activo_id = df_activos[df_activos['nombre'] == nuevo_activo].iloc[0]['id']
+                        
+                        # Preparar los datos actualizados
+                        update_data = {
+                            "activo_id": nuevo_activo_id,
+                            "tipo_mantenimiento": nuevo_tipo,
+                            "criticidad": nueva_crit,
+                            "estado": nuevo_estado,
+                            "descripcion": nueva_desc,
+                            "tecnico_asignado": nuevo_tecnico_id,
+                            "comentarios_cierre": comentarios
+                        }
+                        
+                        try:
+                            supabase.table("ordenes").update(update_data).eq("id", orden_id).execute()
+                            
+                            # Mensaje personalizado si cambió el técnico
+                            if nuevo_tecnico_id != tecnico_actual_id:
+                                st.session_state['notification'] = {
+                                    'type': 'success',
+                                    'message': f'Orden OT-{orden_id} actualizada y reasignada a {nuevo_tecnico_option.split(" - ")[0]}.'
+                                }
+                            else:
+                                st.session_state['notification'] = {
+                                    'type': 'success',
+                                    'message': f'Orden OT-{orden_id} actualizada correctamente.'
+                                }
+                            st.rerun()
+                            
+                        except Exception as e:
+                            st.error(f"Error al actualizar la orden: {e}")
+                    
+                    if cancelar_btn:
+                        # Verificar que realmente quiera eliminar
+                        try:
+                            supabase.table("ordenes").delete().eq("id", orden_id).execute()
+                            st.session_state['notification'] = {
+                                'type': 'delete',
+                                'message': f'Orden OT-{orden_id} eliminada permanentemente.'
+                            }
+                            st.rerun()
+                        except Exception as e:
+                            st.error(f"Error al eliminar la orden: {e}")
+        
+        else:
+            st.info("No se encontraron órdenes con los filtros seleccionados.")
+    
+    else:
+        st.info("📭 No hay órdenes de trabajo registradas en el sistema.")
+        
 elif choice == "Cerrar Orden":
     st.title("CERRAR ORDEN")
     mostrar_notificaciones()
