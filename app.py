@@ -831,7 +831,7 @@ elif choice == "Inventario Activos":
     st.title("INVENTARIO DE ACTIVOS")
     mostrar_notificaciones()
     
-    # --- 1. CONFIGURACIÓN DE DATOS (ÁREAS Y CATEGORÍAS) ---
+    # --- 1. CONFIGURACIÓN DE DATOS ---
     areas_data = {
         "Producción": [
             "Agua Cristal", "B&B", "Calderas", "Cuarto de Lubricación", 
@@ -857,21 +857,11 @@ elif choice == "Inventario Activos":
         ]
     }
 
-    # Lista de categorías actualizada con los nuevos ítems
     categorias_list = sorted([
-        "Aire Acondicionado", 
-        "CCTV", 
-        "Control de Acceso", 
-        "Eléctrico", 
-        "Estanterías", 
-        "Extraccion", 
-        "Hidrosanitario", 
-        "Infraestructura", 
-        "Mecánico", 
-        "Muelles", 
-        "Red Contra Incendio", 
-        "Refrigeración Industrial", 
-        "Ventilacion"
+        "Aire Acondicionado", "CCTV", "Control de Acceso", "Eléctrico", 
+        "Estanterías", "Extraccion", "Hidrosanitario", "Infraestructura", 
+        "Mecánico", "Muelles", "Red Contra Incendio", 
+        "Refrigeración Industrial", "Ventilacion"
     ])
 
     df_act = run_query("activos")
@@ -879,56 +869,104 @@ elif choice == "Inventario Activos":
     tab1, tab2 = st.tabs(["NUEVO ACTIVO", "EDITAR / QR"])
 
     with tab1:
-        # --- ELIMINAMOS st.form PARA PERMITIR INTERACTIVIDAD ---
         st.markdown("### Registrar Nuevo Activo")
         
+        # --- COLUMNAS PRINCIPALES ---
         c1, c2 = st.columns(2)
         
-        # 1. Área Principal (Al cambiar esto, se recarga la página automáticamente)
+        # Selección de Áreas
         area_principal = c1.selectbox("Área Principal", sorted(areas_data.keys()))
-        
-        # 2. Sub-área (Se actualiza dinámicamente según lo elegido arriba)
         sub_areas_disponibles = sorted(areas_data[area_principal])
         sub_area = c2.selectbox("Sub-área", sub_areas_disponibles)
         
-        nom = c1.text_input("Nombre del Activo")
-        
-        # 3. Ubicación específica
-        ubic_detalle = c2.text_input("Ubicación Exacta / Detalle", placeholder="Ej: Lado norte, Motor 3...")
-        
-        # 4. Categoría
+        nom = c1.text_input("Nombre del Activo (Ej: Compresor Amoniaco #1)")
+        ubic_detalle = c2.text_input("Ubicación Exacta / Detalle")
         cat = c1.selectbox("Categoría", categorias_list)
         
+        # --- FOTO OBLIGATORIA ---
+        st.markdown("---")
+        st.markdown("#### 📸 Fotografía del Activo (Obligatorio)")
+        foto_archivo = st.file_uploader("Subir imagen", type=["jpg", "png", "jpeg"])
+        
+        if foto_archivo:
+            st.image(foto_archivo, width=150, caption="Vista previa")
+
+        # --- COMPONENTES VARIABLES (ESPECIFICACIONES TÉCNICAS) ---
+        st.markdown("---")
+        st.markdown("#### ⚙️ Especificaciones y Componentes")
+        st.info("Agregue aquí los datos técnicos específicos (Marca, Modelo, Voltaje, Gas, etc.)")
+
+        # Inicializamos un DataFrame vacío para la tabla editable si no existe
+        if 'specs_data' not in st.session_state:
+            st.session_state.specs_data = pd.DataFrame(columns=["Componente/Dato", "Valor"])
+
+        # Tabla editable para agregar N cantidad de datos
+        edited_df = st.data_editor(
+            st.session_state.specs_data,
+            num_rows="dynamic",
+            use_container_width=True,
+            column_config={
+                "Componente/Dato": st.column_config.TextColumn("Característica (Ej: Marca, Gas, HP)"),
+                "Valor": st.column_config.TextColumn("Valor (Ej: Siemens, R-404, 50HP)")
+            },
+            key="editor_componentes"
+        )
+
         st.markdown("<br>", unsafe_allow_html=True)
         
-        # Usamos un botón normal en lugar de form_submit_button
-        if st.button("💾 GUARDAR ACTIVO", type="primary", use_container_width=True):
-            if nom and sub_area:
-                # Construimos la ubicación final
-                ubicacion_final = f"[{sub_area}] {ubic_detalle}" if ubic_detalle else f"[{sub_area}]"
-                
+        # --- BOTÓN DE GUARDADO ---
+        if st.button("💾 GUARDAR ACTIVO COMPLETO", type="primary", use_container_width=True):
+            # 1. Validaciones
+            if not nom:
+                agregar_notificacion('error', 'El nombre del activo es obligatorio.')
+            elif not foto_archivo:
+                agregar_notificacion('error', '⚠️ La fotografía del activo es OBLIGATORIA.')
+            else:
                 try:
+                    # 2. Procesar Foto
+                    with st.spinner("Subiendo fotografía..."):
+                        foto_url = subir_imagen(foto_archivo, "evidencias") # Reutilizamos tu función
+                        if not foto_url:
+                            raise Exception("Fallo al subir la imagen al servidor.")
+
+                    # 3. Procesar Componentes Variables (DataFrame a JSON)
+                    # Convertimos la tabla a un diccionario limpio { "Marca": "X", "Modelo": "Y" }
+                    detalles_json = {}
+                    if not edited_df.empty:
+                        for index, row in edited_df.iterrows():
+                            if row["Componente/Dato"] and row["Valor"]:
+                                detalles_json[row["Componente/Dato"]] = row["Valor"]
+
+                    # 4. Preparar Datos Finales
+                    ubicacion_final = f"[{sub_area}] {ubic_detalle}" if ubic_detalle else f"[{sub_area}]"
+
+                    # 5. Insertar en Base de Datos
                     res = supabase.table("activos").insert({
                         "nombre": nom, 
                         "area": area_principal,
                         "ubicacion": ubicacion_final, 
-                        "categoria": cat
+                        "categoria": cat,
+                        "foto_url": foto_url,       # Nueva columna
+                        "detalles": detalles_json   # Nueva columna JSON
                     }).execute()
                     
                     if res.data:
                         nid = res.data[0]['id']
                         # Generar QR
-                        url = generar_qr_activo(nid, nom)
-                        supabase.table("activos").update({"qr_url":url}).eq("id", nid).execute()
+                        qr_url = generar_qr_activo(nid, nom)
+                        supabase.table("activos").update({"qr_url": qr_url}).eq("id", nid).execute()
                         
+                        # Limpieza
                         st.cache_data.clear()
-                        agregar_notificacion('success', f'Activo "{nom}" creado exitosamente en {sub_area}.')
-                        time.sleep(1) # Pequeña pausa para ver el mensaje
+                        # Limpiamos la tabla de especificaciones
+                        st.session_state.specs_data = pd.DataFrame(columns=["Componente/Dato", "Valor"])
+                        
+                        agregar_notificacion('success', 'Activo registrado con foto y componentes.')
+                        time.sleep(1.5)
                         st.rerun()
+
                 except Exception as e:
-                    agregar_notificacion('error', f'Error al guardar: {e}')
-            else:
-                agregar_notificacion('error', 'El nombre y la sub-área son obligatorios.')
+                    agregar_notificacion('error', f'Error crítico: {e}')
 
     with tab2:
         if not df_act.empty:
@@ -937,19 +975,38 @@ elif choice == "Inventario Activos":
             
             dat = df_act[df_act['nombre']==sel].iloc[0]
             
-            c1, c2 = st.columns([1,3])
-            if dat['qr_url']:
-                c1.image(dat['qr_url'], width=200)
+            # Layout de visualización
+            col_img, col_info = st.columns([1, 2])
             
-            c2.markdown(f"### {dat['nombre']}")
-            c2.info(f"**ID:** {dat['id']}")
-            c2.write(f"**Área:** {dat['area']}")
-            c2.write(f"**Ubicación:** {dat['ubicacion']}")
-            c2.write(f"**Categoría:** {dat.get('categoria', 'N/A')}")
+            with col_img:
+                # Mostrar Foto del Activo
+                if dat.get('foto_url'):
+                    st.image(dat['foto_url'], caption="Foto Real", use_container_width=True)
+                else:
+                    st.warning("Sin foto real")
+                
+                # Mostrar QR
+                if dat.get('qr_url'):
+                    st.image(dat['qr_url'], width=100, caption="QR")
 
-            st.markdown("<br>", unsafe_allow_html=True)
+            with col_info:
+                st.markdown(f"### {dat['nombre']}")
+                st.info(f"**Ubicación:** {dat['area']} > {dat['ubicacion']}")
+                st.write(f"**Categoría:** {dat.get('categoria', 'N/A')}")
+                
+                # Visualizar Componentes Variables (JSON)
+                st.markdown("#### ⚙️ Especificaciones:")
+                detalles = dat.get('detalles')
+                
+                if detalles and isinstance(detalles, dict) and len(detalles) > 0:
+                    # Convertimos el JSON a una tabla bonita para ver
+                    df_detalles = pd.DataFrame(list(detalles.items()), columns=["Componente", "Valor"])
+                    st.table(df_detalles)
+                else:
+                    st.text("No se registraron especificaciones adicionales.")
+
+            st.markdown("---")
             with st.expander("🗑️ Zona de Peligro"):
-                st.warning("Eliminar este activo borrará también su historial de órdenes.")
                 if st.button("ELIMINAR DEFINITIVAMENTE"):
                     try:
                         supabase.table("ordenes").delete().eq("activo_id", dat['id']).execute()
