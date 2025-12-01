@@ -1097,8 +1097,7 @@ elif choice == "Cerrar Orden":
     st.title("CERRAR ORDEN")
     mostrar_notificaciones()
     
-
-        df_ot = run_query("ordenes")
+    df_ot = run_query("ordenes")
         
     if not df_ot.empty:
         my_ots = df_ot[(df_ot['estado']!='Concluida')]
