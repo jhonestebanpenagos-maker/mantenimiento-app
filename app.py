@@ -805,61 +805,30 @@ with st.sidebar:
     
     st.markdown("---")
     
-    # Configurar páginas según rol
-    if rol == "Admin":
-        pages_config = {
-            "dashboard": {"icon": "📊", "label": "Tablero"},
-            "inventory": {"icon": "📦", "label": "Inventario"},
-            "create": {"icon": "➕", "label": "Crear OT"},
-            "manage": {"icon": "📋", "label": "Gestionar"},
-            "close": {"icon": "✅", "label": "Cerrar OT"},
-            "users": {"icon": "👤", "label": "Usuarios"}
-        }
-        page_mapping = {
-            "dashboard": "Tablero de Mando",
-            "inventory": "Inventario Activos",
-            "create": "Crear Orden",
-            "manage": "Gestionar Órdenes",
-            "close": "Cerrar Orden",
-            "users": "Usuarios"
-        }
-    elif rol == "Programador":
-        pages_config = {
-            "dashboard": {"icon": "📊", "label": "Tablero"},
-            "create": {"icon": "➕", "label": "Crear OT"},
-            "manage": {"icon": "📋", "label": "Gestionar"},
-            "users": {"icon": "👤", "label": "Usuarios"}
-        }
-        page_mapping = {
-            "dashboard": "Tablero de Mando",
-            "create": "Crear Orden",
-            "manage": "Gestionar Órdenes",
-            "users": "Usuarios"
-        }
-    elif rol == "Tecnico":
-        pages_config = {
-            "close": {"icon": "✅", "label": "Cerrar OT"}
-        }
-        page_mapping = {
-            "close": "Cerrar Orden"
-        }
-    
     # Inicializar choice
     if 'nav_choice' not in st.session_state:
         st.session_state.nav_choice = "Tablero de Mando"
     
-    # Crear navegación
-    for page_key, page_info in pages_config.items():
-        display_text = f"{page_info['icon']}  {page_info['label']}"
-        actual_page = page_mapping[page_key]
+    # Definir páginas
+    if rol == "Admin":
+        pages = ["📊 Tablero", "📦 Inventario", "➕ Crear OT", "📋 Gestionar", "✅ Cerrar OT", "👤 Usuarios"]
+        actual_pages = ["Tablero de Mando", "Inventario Activos", "Crear Orden", "Gestionar Órdenes", "Cerrar Orden", "Usuarios"]
+    elif rol == "Programador":
+        pages = ["📊 Tablero", "➕ Crear OT", "📋 Gestionar", "👤 Usuarios"]
+        actual_pages = ["Tablero de Mando", "Crear Orden", "Gestionar Órdenes", "Usuarios"]
+    elif rol == "Tecnico":
+        pages = ["✅ Cerrar OT"]
+        actual_pages = ["Cerrar Orden"]
+    
+    # Crear botones con texto corto e icono
+    for display_text, actual_page in zip(pages, actual_pages):
+        btn_type = "primary" if st.session_state.nav_choice == actual_page else "secondary"
         
-        # Usar st.page_link (si estás en Streamlit >= 1.28)
-        # O usar botón simple como fallback
         if st.button(
             display_text,
-            key=f"nav_{page_key}",
+            key=f"nav_{actual_page.replace(' ', '_')}",
             use_container_width=True,
-            type="primary" if st.session_state.nav_choice == actual_page else "secondary"
+            type=btn_type
         ):
             st.session_state.nav_choice = actual_page
             st.rerun()
