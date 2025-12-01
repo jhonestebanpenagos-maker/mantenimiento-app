@@ -197,7 +197,6 @@ st.markdown(f"""
     </style>
 """, unsafe_allow_html=True)
 
-
 # --- 2. CONEXIÓN A SUPABASE ---
 @st.cache_resource
 def init_supabase():
@@ -216,14 +215,29 @@ supabase = init_supabase()
 if not supabase:
     st.stop()
 
-# --- 3. FUNCIONES AUXILIARES ---
+# --- 3. FUNCIONES AUXILIARES MEJORADAS ---
 
-def run_query(table_name):
+@st.cache_data(ttl=300)  # Cache de 5 minutos
+def run_query(table_name, filters=None, order_by="id"):
+    """Función optimizada para consultas con cache y filtros"""
     try:
-        response = supabase.table(table_name).select("*").order("id").execute()
-        return pd.DataFrame(response.data)
-    except:
+        query = supabase.table(table_name).select("*")
+        
+        if filters:
+            for key, value in filters.items():
+                if value is not None:
+                    query = query.eq(key, value)
+        
+        query = query.order(order_by)
+        response = query.execute()
+        return pd.DataFrame(response.data) if response.data else pd.DataFrame()
+    except Exception as e:
+        st.error(f"Error en consulta {table_name}: {e}")
         return pd.DataFrame()
+
+def mostrar_estado_carga(mensaje):
+    """Muestra un estado de carga elegante"""
+    return st.status(f"⏳ {mensaje}", expanded=False)
 
 def subir_imagen(archivo, carpeta="evidencias"):
     if archivo:
@@ -271,21 +285,62 @@ def leer_qr_imagen(uploaded_image):
     except:
         return None
 
-# --- FUNCIÓN DE VALIDACIÓN DE ÓRDENES ABIERTAS (MEJORADA) ---
+# --- SISTEMA DE NOTIFICACIONES MEJORADO ---
+def mostrar_notificaciones():
+    """Sistema de notificaciones más robusto"""
+    if 'notifications' not in st.session_state:
+        st.session_state.notifications = []
+    
+    for notif in st.session_state.notifications[:]:
+        tipo = notif.get('type')
+        mensaje = notif.get('message')
+        
+        if tipo == 'success':
+            st.success(f"✅ {mensaje}")
+        elif tipo == 'error':
+            st.error(f"❌ {mensaje}")
+        elif tipo == 'warning':
+            st.warning(f"⚠️ {mensaje}")
+        elif tipo == 'info':
+            st.info(f"ℹ️ {mensaje}")
+        
+        st.session_state.notifications.remove(notif)
+
+def agregar_notificacion(tipo, mensaje):
+    """Agrega una notificación al sistema"""
+    if 'notifications' not in st.session_state:
+        st.session_state.notifications = []
+    
+    st.session_state.notifications.append({
+        'type': tipo,
+        'message': mensaje
+    })
+
+# --- COMPONENTE REUTILIZABLE PARA TARJETAS ---
+def tarjeta_estilo(titulo, contenido, color_borde=PRO_ORANGE):
+    """Componente reutilizable para tarjetas con estilo"""
+    return st.markdown(f"""
+        <div class='card-style' style='border-left: 4px solid {color_border}'>
+            <span class='chart-header'>{titulo}</span>
+            {contenido}
+        </div>
+    """, unsafe_allow_html=True)
+
+# --- VALIDACIONES MEJORADAS ---
+def validar_usuario_unico(documento, usuario_id=None):
+    """Valida que el documento sea único en el sistema"""
+    try:
+        query = supabase.table("usuarios").select("id").eq("documento", documento)
+        if usuario_id:
+            query = query.neq("id", usuario_id)
+        
+        response = query.execute()
+        return len(response.data) == 0
+    except:
+        return False
+
 def check_open_orders(user_id):
-    """
-    Verifica si el usuario tiene órdenes de trabajo activas (no concluidas).
-    
-    Busca en dos campos:
-    - tecnico_asignado: ID del técnico asignado a la orden
-    - estado: debe ser diferente de "Concluida"
-    
-    Args:
-        user_id: ID del usuario a verificar (puede ser string o int)
-    
-    Returns:
-        bool: True si tiene órdenes pendientes, False si no tiene
-    """
+    """Verifica si el usuario tiene órdenes de trabajo activas"""
     try:
         user_id_str = str(user_id)
         response = supabase.table("ordenes") \
@@ -295,15 +350,13 @@ def check_open_orders(user_id):
             .execute()
         
         if response.data and len(response.data) > 0:
-            print(f"Usuario {user_id} tiene {len(response.data)} órdenes pendientes")
             return True
         return False
     except Exception as e:
-        print(f"Error al verificar órdenes del usuario {user_id}: {e}")
         return True
 
 def get_open_orders_details(user_id):
-    """Obtiene los detalles de las órdenes pendientes de un usuario."""
+    """Obtiene los detalles de las órdenes pendientes de un usuario"""
     try:
         user_id_str = str(user_id)
         response = supabase.table("ordenes") \
@@ -315,8 +368,36 @@ def get_open_orders_details(user_id):
     except:
         return []
 
-# --- GRÁFICOS (PLOTLY) ---
+# --- MÉTRICAS INTELIGENTES ---
+def mostrar_metricas_inteligentes(df_ordenes):
+    """Muestra métricas con análisis contextual"""
+    if df_ordenes.empty:
+        st.info("No hay datos para mostrar métricas")
+        return
+    
+    total = len(df_ordenes)
+    pendientes = len(df_ordenes[df_ordenes['estado'] == 'Abierta'])
+    concluidas = len(df_ordenes[df_ordenes['estado'] == 'Concluida'])
+    
+    # Calcular porcentajes
+    porcentaje_concluidas = (concluidas / total * 100) if total > 0 else 0
+    eficiencia = "🟢 Excelente" if porcentaje_concluidas > 80 else "🟡 Regular" if porcentaje_concluidas > 50 else "🔴 Crítico"
+    
+    col1, col2, col3, col4 = st.columns(4)
+    
+    with col1:
+        st.metric("Total Órdenes", total)
+    
+    with col2:
+        st.metric("Pendientes", pendientes)
+    
+    with col3:
+        st.metric("Finalizadas", concluidas, f"{porcentaje_concluidas:.1f}%")
+    
+    with col4:
+        st.metric("Eficiencia", eficiencia)
 
+# --- GRÁFICOS (PLOTLY) ---
 def graficar_criticidad(df):
     if df.empty: return
     conteo = df['criticidad'].value_counts().reset_index()
@@ -368,20 +449,6 @@ def graficar_estado_barras(df):
     )
     fig.update_traces(textfont_size=14, textposition='inside')
     st.plotly_chart(fig, use_container_width=True)
-
-# --- NOTIFICACIONES ---
-def mostrar_notificaciones():
-    if 'notification' in st.session_state:
-        notif = st.session_state['notification']
-        if notif:
-            tipo = notif.get('type')
-            msg = notif.get('message')
-            if tipo == 'success':
-                st.balloons()
-                st.success(f"✅ {msg}")
-            elif tipo == 'delete':
-                st.error(f"🗑️ {msg}")
-        del st.session_state['notification']
 
 # --- FUNCIÓN AISLADA PARA EL SVG ---
 def render_orion_svg(PRO_ORANGE):
@@ -558,6 +625,7 @@ with st.sidebar:
             }
         }
     )
+
 # ==============================================================================
 # 📊 PANTALLAS
 # ==============================================================================
@@ -566,12 +634,12 @@ if choice == "Tablero de Mando":
     st.title("TABLERO DE MANDO")
     mostrar_notificaciones()
 
-    df = run_query("ordenes")
+    with mostrar_estado_carga("Cargando datos del dashboard..."):
+        df = run_query("ordenes")
+    
     if not df.empty:
-        c1, c2, c3 = st.columns(3)
-        c1.metric("Total Órdenes", len(df))
-        c2.metric("Pendientes", len(df[df['estado']=='Abierta']))
-        c3.metric("Finalizadas", len(df[df['estado']=='Concluida']))
+        # Métricas inteligentes
+        mostrar_metricas_inteligentes(df)
 
         st.write("") 
 
@@ -592,12 +660,15 @@ if choice == "Tablero de Mando":
             graficar_torta_tipo(df) 
             st.markdown("</div>", unsafe_allow_html=True)
 
-    else: st.info("No hay datos para mostrar.")
+    else: 
+        st.info("No hay datos para mostrar.")
 
 elif choice == "Inventario Activos":
     st.title("INVENTARIO")
     mostrar_notificaciones()
-    df_act = run_query("activos")
+    
+    with mostrar_estado_carga("Cargando inventario..."):
+        df_act = run_query("activos")
 
     tab1, tab2 = st.tabs(["NUEVO ACTIVO", "EDITAR / QR"])
 
@@ -610,13 +681,16 @@ elif choice == "Inventario Activos":
             ubic = c1.text_input("Ubicación Exacta")
             cat = c2.selectbox("Categoría", ["Mecánico", "Eléctrico", "Hidráulico", "Infraestructura"])
             if st.form_submit_button("GUARDAR"):
-                res = supabase.table("activos").insert({"nombre":nom, "area":area, "ubicacion":ubic, "categoria":cat}).execute()
-                if res.data:
-                    nid = res.data[0]['id']
-                    url = generar_qr_activo(nid, nom)
-                    supabase.table("activos").update({"qr_url":url}).eq("id", nid).execute()
-                    st.session_state['notification'] = {'type':'success', 'message':'Activo creado.'}
-                    st.rerun()
+                if nom and ubic:
+                    res = supabase.table("activos").insert({"nombre":nom, "area":area, "ubicacion":ubic, "categoria":cat}).execute()
+                    if res.data:
+                        nid = res.data[0]['id']
+                        url = generar_qr_activo(nid, nom)
+                        supabase.table("activos").update({"qr_url":url}).eq("id", nid).execute()
+                        agregar_notificacion('success', 'Activo creado exitosamente.')
+                        st.rerun()
+                else:
+                    agregar_notificacion('error', 'Nombre y ubicación son obligatorios.')
         st.markdown("</div>", unsafe_allow_html=True)
 
     with tab2:
@@ -625,25 +699,30 @@ elif choice == "Inventario Activos":
             dat = df_act[df_act['nombre']==sel].iloc[0]
             st.markdown("<div class='card-style'>", unsafe_allow_html=True)
             c1, c2 = st.columns([1,3])
-            c1.image(dat['qr_url'])
+            if dat['qr_url']:
+                c1.image(dat['qr_url'])
             c2.info(f"ID: {dat['id']} | {dat['area']}")
 
             st.markdown("<br>", unsafe_allow_html=True)
             with st.expander("Eliminar Activo"):
                 st.markdown(f"<div class='danger-zone'><p>Esto borrará el historial completo.</p></div>", unsafe_allow_html=True)
                 if st.button("ELIMINAR DEFINITIVAMENTE"):
-                    supabase.table("ordenes").delete().eq("activo_id", dat['id']).execute()
-                    supabase.table("activos").delete().eq("id", dat['id']).execute()
-                    st.session_state['notification'] = {'type':'delete', 'message':'Eliminado.'}
-                    st.rerun()
+                    try:
+                        supabase.table("ordenes").delete().eq("activo_id", dat['id']).execute()
+                        supabase.table("activos").delete().eq("id", dat['id']).execute()
+                        agregar_notificacion('delete', 'Activo eliminado permanentemente.')
+                        st.rerun()
+                    except Exception as e:
+                        agregar_notificacion('error', f'Error al eliminar: {e}')
             st.markdown("</div>", unsafe_allow_html=True)
 
 elif choice == "Crear Orden":
     st.title("GENERAR ORDEN")
     mostrar_notificaciones()
     
-    df_act = run_query("activos")
-    df_users = run_query("usuarios")
+    with mostrar_estado_carga("Cargando datos..."):
+        df_act = run_query("activos")
+        df_users = run_query("usuarios")
     
     if not df_act.empty:
         act_dict = dict(zip(df_act['nombre'], df_act['id']))
@@ -679,42 +758,44 @@ elif choice == "Crear Orden":
             # Validar que se haya seleccionado un técnico
             if st.button("CREAR ORDEN", type="primary", use_container_width=True):
                 if selected_tech == "-- Seleccione un técnico --":
-                    st.error("⚠️ Debe seleccionar un técnico para asignar la orden.")
+                    agregar_notificacion('error', 'Debe seleccionar un técnico para asignar la orden.')
                 elif not desc.strip():
-                    st.error("⚠️ Debe ingresar una descripción para la orden.")
+                    agregar_notificacion('error', 'Debe ingresar una descripción para la orden.')
                 else:
                     # Obtener el ID del técnico seleccionado
                     tecnico_id = user_options[selected_tech]
                     
                     # Insertar la orden en la base de datos
-                    supabase.table("ordenes").insert({
-                        "activo_id": act_dict[sel], 
-                        "descripcion": desc, 
-                        "criticidad": crit, 
-                        "tipo_mantenimiento": tipo, 
-                        "estado": "Abierta", 
-                        "tecnico_asignado": tecnico_id, 
-                        "fecha_creacion": datetime.now().isoformat()
-                    }).execute()
-                    
-                    st.session_state['notification'] = {
-                        'type': 'success', 
-                        'message': f'Orden creada y asignada a {selected_tech.split(" - ")[0]}.'
-                    }
-                    st.rerun()
+                    try:
+                        supabase.table("ordenes").insert({
+                            "activo_id": act_dict[sel], 
+                            "descripcion": desc, 
+                            "criticidad": crit, 
+                            "tipo_mantenimiento": tipo, 
+                            "estado": "Abierta", 
+                            "tecnico_asignado": tecnico_id, 
+                            "fecha_creacion": datetime.now().isoformat()
+                        }).execute()
+                        
+                        agregar_notificacion('success', f'Orden creada y asignada a {selected_tech.split(" - ")[0]}.')
+                        st.rerun()
+                    except Exception as e:
+                        agregar_notificacion('error', f'Error al crear orden: {e}')
         else:
             st.warning("⚠️ No hay usuarios registrados. Debe crear usuarios antes de generar órdenes.")
             
         st.markdown("</div>", unsafe_allow_html=True)
     else:
         st.warning("⚠️ No hay activos registrados. Debe crear activos antes de generar órdenes.")
+
 elif choice == "Gestionar Órdenes":
     st.title("GESTIONAR ÓRDENES DE TRABAJO")
     mostrar_notificaciones()
     
-    df_ordenes = run_query("ordenes")
-    df_activos = run_query("activos")
-    df_users = run_query("usuarios")
+    with mostrar_estado_carga("Cargando órdenes..."):
+        df_ordenes = run_query("ordenes")
+        df_activos = run_query("activos")
+        df_users = run_query("usuarios")
     
     if not df_ordenes.empty:
         
@@ -946,31 +1027,22 @@ elif choice == "Gestionar Órdenes":
                             
                             # Mensaje personalizado si cambió el técnico
                             if nuevo_tecnico_id != tecnico_actual_id:
-                                st.session_state['notification'] = {
-                                    'type': 'success',
-                                    'message': f'Orden OT-{orden_id} actualizada y reasignada a {nuevo_tecnico_option.split(" - ")[0]}.'
-                                }
+                                agregar_notificacion('success', f'Orden OT-{orden_id} actualizada y reasignada a {nuevo_tecnico_option.split(" - ")[0]}.')
                             else:
-                                st.session_state['notification'] = {
-                                    'type': 'success',
-                                    'message': f'Orden OT-{orden_id} actualizada correctamente.'
-                                }
+                                agregar_notificacion('success', f'Orden OT-{orden_id} actualizada correctamente.')
                             st.rerun()
                             
                         except Exception as e:
-                            st.error(f"Error al actualizar la orden: {e}")
+                            agregar_notificacion('error', f'Error al actualizar la orden: {e}')
                     
                     if cancelar_btn:
                         # Verificar que realmente quiera eliminar
                         try:
                             supabase.table("ordenes").delete().eq("id", orden_id).execute()
-                            st.session_state['notification'] = {
-                                'type': 'delete',
-                                'message': f'Orden OT-{orden_id} eliminada permanentemente.'
-                            }
+                            agregar_notificacion('delete', f'Orden OT-{orden_id} eliminada permanentemente.')
                             st.rerun()
                         except Exception as e:
-                            st.error(f"Error al eliminar la orden: {e}")
+                            agregar_notificacion('error', f'Error al eliminar la orden: {e}')
         
         else:
             st.info("No se encontraron órdenes con los filtros seleccionados.")
@@ -981,7 +1053,10 @@ elif choice == "Gestionar Órdenes":
 elif choice == "Cerrar Orden":
     st.title("CERRAR ORDEN")
     mostrar_notificaciones()
-    df_ot = run_query("ordenes")
+    
+    with mostrar_estado_carga("Cargando órdenes pendientes..."):
+        df_ot = run_query("ordenes")
+        
     if not df_ot.empty:
         my_ots = df_ot[(df_ot['estado']!='Concluida')]
         if not my_ots.empty:
@@ -994,10 +1069,11 @@ elif choice == "Cerrar Orden":
                 if st.form_submit_button("FINALIZAR"):
                     url = subir_imagen(img)
                     supabase.table("ordenes").update({"estado":"Concluida", "comentarios_cierre":rep, "evidencia_url":url}).eq("id",sid).execute()
-                    st.session_state['notification'] = {'type':'success', 'message':'Orden cerrada.'}
+                    agregar_notificacion('success', 'Orden cerrada exitosamente.')
                     st.rerun()
             st.markdown("</div>", unsafe_allow_html=True)
-        else: st.info("No hay pendientes.")
+        else: 
+            st.info("No hay órdenes pendientes para cerrar.")
 
 elif choice == "Usuarios":
     st.title("USUARIOS")
@@ -1019,27 +1095,32 @@ elif choice == "Usuarios":
 
             if submitted:
                 if documento and nombre and password and rol:
-                    try:
-                        res = supabase.table("usuarios").insert({
-                            "documento": documento, 
-                            "nombre": nombre, 
-                            "password": password, 
-                            "rol": rol
-                        }).execute()
+                    if not validar_usuario_unico(documento):
+                        agregar_notificacion('error', 'El documento ya existe en el sistema.')
+                    elif len(password) < 4:
+                        agregar_notificacion('error', 'La contraseña debe tener al menos 4 caracteres.')
+                    else:
+                        try:
+                            res = supabase.table("usuarios").insert({
+                                "documento": documento, 
+                                "nombre": nombre, 
+                                "password": password, 
+                                "rol": rol
+                            }).execute()
 
-                        if res.data:
-                            st.session_state['notification'] = {'type':'success', 'message':f'Usuario {nombre} registrado con éxito.'}
-                            st.rerun()
-                        else:
-                            st.error("Error al registrar el usuario en la base de datos.")
-
-                    except Exception as e:
-                        st.error(f"Error de base de datos: Asegúrese de que el Documento no exista ya. Detalles: {e}")
+                            if res.data:
+                                agregar_notificacion('success', f'Usuario {nombre} registrado con éxito.')
+                                st.rerun()
+                            else:
+                                agregar_notificacion('error', 'Error al registrar el usuario en la base de datos.')
+                        except Exception as e:
+                            agregar_notificacion('error', f'Error de base de datos: {e}')
                 else:
-                    st.warning("Por favor, complete todos los campos.")
+                    agregar_notificacion('warning', 'Por favor, complete todos los campos.')
 
     with tab_gestionar:
-        df_users = run_query("usuarios")
+        with mostrar_estado_carga("Cargando usuarios..."):
+            df_users = run_query("usuarios")
 
         if not df_users.empty:
             st.subheader("Seleccionar Usuario para Gestionar")
@@ -1098,23 +1179,29 @@ elif choice == "Usuarios":
                     if update_submitted:
                         if new_rol != selected_user['rol']:
                             if check_open_orders(user_id):
-                                st.error(f"❌ ERROR: El usuario **{selected_user['nombre']}** tiene Órdenes de Trabajo pendientes. Debe cerrarlas antes de cambiar su rol.")
+                                agregar_notificacion('error', f'El usuario **{selected_user["nombre"]}** tiene Órdenes de Trabajo pendientes. Debe cerrarlas antes de cambiar su rol.')
                                 st.stop()
 
-                        update_data = {
-                            "documento": edit_doc,
-                            "nombre": edit_name,
-                            "rol": new_rol
-                        }
-                        if new_password:
-                            update_data["password"] = new_password
+                        if not validar_usuario_unico(edit_doc, user_id):
+                            agregar_notificacion('error', 'El documento ya está en uso por otro usuario.')
+                        else:
+                            update_data = {
+                                "documento": edit_doc,
+                                "nombre": edit_name,
+                                "rol": new_rol
+                            }
+                            if new_password:
+                                if len(new_password) < 4:
+                                    agregar_notificacion('error', 'La contraseña debe tener al menos 4 caracteres.')
+                                else:
+                                    update_data["password"] = new_password
 
-                        try:
-                            supabase.table("usuarios").update(update_data).eq("id", user_id).execute()
-                            st.session_state['notification'] = {'type':'success', 'message':f'Usuario {edit_name} actualizado.'}
-                            st.rerun()
-                        except Exception as e:
-                            st.error(f"Error al actualizar: {e}")
+                            try:
+                                supabase.table("usuarios").update(update_data).eq("id", user_id).execute()
+                                agregar_notificacion('success', f'Usuario {edit_name} actualizado.')
+                                st.rerun()
+                            except Exception as e:
+                                agregar_notificacion('error', f'Error al actualizar: {e}')
 
                 st.markdown("---")
                 st.markdown("### 🗑️ Zona de Eliminación")
@@ -1148,10 +1235,10 @@ elif choice == "Usuarios":
                     ):
                         try:
                             supabase.table("usuarios").delete().eq("id", user_id).execute()
-                            st.session_state['notification'] = {'type':'delete', 'message':f'Usuario {selected_user["nombre"]} eliminado.'}
+                            agregar_notificacion('delete', f'Usuario {selected_user["nombre"]} eliminado.')
                             st.rerun()
                         except Exception as e:
-                            st.error(f"Error al eliminar: {e}")
+                            agregar_notificacion('error', f'Error al eliminar: {e}')
 
         else:
             st.info("No se encontraron usuarios en la base de datos. Use la pestaña 'CREAR USUARIO'.")
