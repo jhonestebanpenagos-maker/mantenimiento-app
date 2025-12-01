@@ -7,7 +7,7 @@ import io
 import urllib.parse
 import json
 import qrcode
-import cv2 
+import cv2
 import numpy as np
 import time
 import plotly.express as px
