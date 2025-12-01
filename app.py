@@ -796,13 +796,12 @@ with st.sidebar:
         opts = ["Cerrar Orden"]
         icons_list = ["check2-circle"]
 
-    # MENÚ MEJORADO CON TODAS LAS CARACTERÍSTICAS SOLICITADAS
+    # MENÚ CORREGIDO - SIN ERRORES DE SINTAXIS
     choice = option_menu(
-        menu_title=None,  # ELIMINADO el título "NAVEGACIÓN" con icono
+        menu_title=None,  # Sin título
         options=opts,
         icons=icons_list,
         default_index=0,
-        menu_icon="",  # Sin icono en el título (ya que no hay título)
         styles={
             "container": {
                 "background-color": "transparent",
@@ -821,20 +820,20 @@ with st.sidebar:
                 "padding": "12px 15px",
                 "margin": "2px 0px",
                 "border-radius": "8px",
-                "cursor": "default",  # Evita la manito del cursor
+                "cursor": "default",
                 "transition": "all 0.3s ease"
             },
             "nav-link:hover": {
                 "background-color": "#374151",
                 "color": "white",
-                "cursor": "default"  # Evita la manito al hacer hover
+                "cursor": "default"
             },
             "nav-link-selected": {
                 "background-color": "#1F2937",
                 "color": "white",
                 "border-left": f"4px solid {PRO_ORANGE}",
                 "font-weight": "600",
-                "cursor": "default"  # Evita la manito en elemento seleccionado
+                "cursor": "default"
             }
         }
     )
