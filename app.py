@@ -644,7 +644,8 @@ elif choice == "Cerrar Orden":
                     st.rerun()
             st.markdown("</div>", unsafe_allow_html=True)
         else: st.info("No hay pendientes.")
-            elif choice == "Usuarios":
+
+elif choice == "Usuarios":
     st.title("USUARIOS")
     mostrar_notificaciones()
 
