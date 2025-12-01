@@ -271,35 +271,27 @@ def leer_qr_imagen(uploaded_image):
     except:
         return None
 
-# --- FUNCIÓN DE VALIDACIÓN DE ÓRDENES ABIERTAS (MEJORADA) ---
+# --- FUNCIÓN DE VALIDACIÓN DE ÓRDENES ABIERTAS ---
 def check_open_orders(user_id):
     """
     Verifica si el usuario tiene órdenes de trabajo activas (no concluidas).
-    
-    Busca en dos campos:
-    - tecnico_asignado: ID del técnico asignado a la orden
-    - estado: debe ser diferente de "Concluida"
-    
     Args:
-        user_id: ID del usuario a verificar (puede ser string o int)
-    
+        user_id: ID del usuario a verificar (se convierte a str para la consulta).
     Returns:
         bool: True si tiene órdenes pendientes, False si no tiene
     """
     try:
         user_id_str = str(user_id)
         response = supabase.table("ordenes") \
-            .select("id, descripcion, fecha_creacion, estado") \
+            .select("id") \
             .eq("tecnico_asignado", user_id_str) \
             .neq("estado", "Concluida") \
             .execute()
         
-        if response.data and len(response.data) > 0:
-            print(f"Usuario {user_id} tiene {len(response.data)} órdenes pendientes")
-            return True
-        return False
+        return len(response.data) > 0
     except Exception as e:
         print(f"Error al verificar órdenes del usuario {user_id}: {e}")
+        # Retornamos True en caso de error de conexión para prevenir la eliminación accidental
         return True
 
 def get_open_orders_details(user_id):
@@ -708,6 +700,7 @@ elif choice == "Crear Orden":
         st.markdown("</div>", unsafe_allow_html=True)
     else:
         st.warning("⚠️ No hay activos registrados. Debe crear activos antes de generar órdenes.")
+
 elif choice == "Gestionar Órdenes":
     st.title("GESTIONAR ÓRDENES DE TRABAJO")
     mostrar_notificaciones()
@@ -879,29 +872,31 @@ elif choice == "Gestionar Órdenes":
                         
                         # Encontrar el índice del técnico actual
                         tecnico_actual_id = str(orden_actual.get('tecnico_asignado', ''))
-                        tecnico_actual_nombre = user_map.get(tecnico_actual_id, 'Sin asignar')
-                        
-                        # Buscar la opción que corresponde al técnico actual
-                        current_tech_option = None
-                        for option, uid in user_options.items():
-                            if uid == tecnico_actual_id:
-                                current_tech_option = option
-                                break
-                        
+                        user_map_reverse = {uid: option for option, uid in user_options.items()}
+                        current_tech_option = user_map_reverse.get(tecnico_actual_id, None)
+
                         user_options_list = list(user_options.keys())
-                        current_index = user_options_list.index(current_tech_option) if current_tech_option else 0
                         
+                        # Añadimos "Sin Asignar" a la lista para el índice 0 si no hay técnico.
+                        if not current_tech_option:
+                            user_options_list.insert(0, "Sin asignar")
+                            current_index = 0
+                        else:
+                            current_index = user_options_list.index(current_tech_option)
+
                         nuevo_tecnico_option = st.selectbox(
                             "Asignar a:",
                             user_options_list,
                             index=current_index,
-                            help=f"Actualmente asignado a: {tecnico_actual_nombre}"
+                            key=f"tecnico_selector_{orden_id}"
                         )
                         
-                        nuevo_tecnico_id = user_options[nuevo_tecnico_option]
+                        nuevo_tecnico_id = user_options.get(nuevo_tecnico_option)
+                        if nuevo_tecnico_option == "Sin asignar":
+                             nuevo_tecnico_id = None 
                     else:
                         st.warning("No hay usuarios disponibles")
-                        nuevo_tecnico_id = tecnico_actual_id
+                        nuevo_tecnico_id = orden_actual.get('tecnico_asignado')
                     
                     # Comentarios adicionales
                     comentarios = st.text_area(
@@ -945,10 +940,11 @@ elif choice == "Gestionar Órdenes":
                             supabase.table("ordenes").update(update_data).eq("id", orden_id).execute()
                             
                             # Mensaje personalizado si cambió el técnico
-                            if nuevo_tecnico_id != tecnico_actual_id:
+                            if str(nuevo_tecnico_id) != str(orden_actual.get('tecnico_asignado')):
+                                new_tech_name = nuevo_tecnico_option.split(" - ")[0] if nuevo_tecnico_id else "nadie"
                                 st.session_state['notification'] = {
                                     'type': 'success',
-                                    'message': f'Orden OT-{orden_id} actualizada y reasignada a {nuevo_tecnico_option.split(" - ")[0]}.'
+                                    'message': f'Orden OT-{orden_id} actualizada y reasignada a {new_tech_name}.'
                                 }
                             else:
                                 st.session_state['notification'] = {
@@ -959,7 +955,7 @@ elif choice == "Gestionar Órdenes":
                             
                         except Exception as e:
                             st.error(f"Error al actualizar la orden: {e}")
-                    
+                            
                     if cancelar_btn:
                         # Verificar que realmente quiera eliminar
                         try:
@@ -1005,6 +1001,11 @@ elif choice == "Usuarios":
 
     tab_crear, tab_gestionar = st.tabs(["CREAR USUARIO", "GESTIONAR USUARIOS"])
 
+    # Inicializamos la variable de sesión para el ID del usuario actualmente seleccionado
+    if 'selected_user_id_gestion' not in st.session_state:
+        st.session_state['selected_user_id_gestion'] = None
+
+    # --- TAB 1: CREAR USUARIO ---
     with tab_crear:
         st.subheader("Registrar Nuevo Usuario")
 
@@ -1026,46 +1027,73 @@ elif choice == "Usuarios":
                             "password": password, 
                             "rol": rol
                         }).execute()
-
                         if res.data:
                             st.session_state['notification'] = {'type':'success', 'message':f'Usuario {nombre} registrado con éxito.'}
                             st.rerun()
                         else:
                             st.error("Error al registrar el usuario en la base de datos.")
-
                     except Exception as e:
                         st.error(f"Error de base de datos: Asegúrese de que el Documento no exista ya. Detalles: {e}")
                 else:
                     st.warning("Por favor, complete todos los campos.")
 
+    # --- TAB 2: GESTIONAR USUARIOS (data_editor para selección) ---
     with tab_gestionar:
         df_users = run_query("usuarios")
+        
+        # --- Lógica de Sincronización de Selección ---
+        # 1. Obtenemos el ID seleccionado de la ejecución anterior (si existe)
+        current_selected_id = st.session_state.get('selected_user_id_gestion')
 
         if not df_users.empty:
-            st.subheader("Seleccionar Usuario para Gestionar")
-
-            user_options = {f"{row['nombre']} (ID: {row['id']})": row['id'] 
-                           for _, row in df_users.iterrows()}
+            st.subheader("Lista de Usuarios (Haga clic en una fila para editar)")
             
-            user_options_list = ["-- Seleccione un usuario --"] + list(user_options.keys())
-            
-            selected_option = st.selectbox(
-                "Usuario:",
-                user_options_list,
-                key="user_selector"
-            )
-
-            st.markdown("### Lista Completa de Usuarios")
-            st.dataframe(
+            # 2. Mostramos el data_editor con SELECCIÓN DE FILA (sin checkboxes)
+            # Nota: Usamos selection_mode="single-row" que funciona bien con st.data_editor
+            edited_df_state = st.data_editor(
                 df_users[['id', 'documento', 'nombre', 'rol']],
+                column_config={
+                    "id": st.column_config.Column("ID", disabled=True),
+                    "documento": st.column_config.Column("Documento", disabled=True),
+                    "nombre": st.column_config.Column("Nombre Completo", disabled=True),
+                    "rol": st.column_config.Column("Rol", disabled=True),
+                },
                 hide_index=True,
-                use_container_width=True
+                use_container_width=True,
+                num_rows="fixed",
+                key="user_selection_data_editor",
+                # Configuramos la selección para que sea de una sola fila.
+                # Esto manejará la deselección automáticamente cuando se haga clic en otra fila.
+                column_order=['id', 'documento', 'nombre', 'rol'] 
             )
+            
+            # 3. Extraer la fila seleccionada por Streamlit (índice interno)
+            selected_rows_indices = st.session_state.user_selection_data_editor.get("selection", {}).get("rows", [])
+            
+            selected_user = None
+            new_selection_id = None
+            
+            if selected_rows_indices:
+                # El índice corresponde a la posición en el DataFrame mostrado/editado
+                selected_index = selected_rows_indices[0] 
+                
+                # Obtenemos el ID de la fila seleccionada del estado del editor
+                new_selection_id = edited_df_state.loc[selected_index, 'id']
+                
+                # Buscamos la fila original en el DF de usuarios para obtener todos los datos
+                selected_user = df_users[df_users['id'] == new_selection_id].iloc[0]
+                user_id = new_selection_id
 
-            if selected_option != "-- Seleccione un usuario --":
-                user_id = user_options[selected_option]
-                selected_user = df_users[df_users['id'] == user_id].iloc[0]
+            # 4. Forzamos la recarga si la selección ha cambiado para actualizar el formulario
+            if new_selection_id != current_selected_id:
+                st.session_state['selected_user_id_gestion'] = new_selection_id
+                # Si hay cambio de selección (o de deselección), se debe forzar el re-renderizado
+                st.rerun() 
 
+
+            # --- MÓDULO DE EDICIÓN / ELIMINACIÓN ---
+            
+            if selected_user is not None:
                 st.markdown("---")
                 st.markdown(f"### Editando: **{selected_user['nombre']}** (ID: {user_id})")
 
@@ -1074,6 +1102,7 @@ elif choice == "Usuarios":
 
                     c1, c2 = st.columns(2)
 
+                    # Los valores se cargan directamente de la variable `selected_user`
                     edit_doc = c1.text_input(
                         "Documento/ID", 
                         value=selected_user['documento']
@@ -1096,6 +1125,8 @@ elif choice == "Usuarios":
                     update_submitted = st.form_submit_button("✅ ACTUALIZAR USUARIO", type="primary", use_container_width=True)
 
                     if update_submitted:
+                        
+                        # --- VALIDACIÓN DE ÓRDENES EN CAMBIO DE ROL ---
                         if new_rol != selected_user['rol']:
                             if check_open_orders(user_id):
                                 st.error(f"❌ ERROR: El usuario **{selected_user['nombre']}** tiene Órdenes de Trabajo pendientes. Debe cerrarlas antes de cambiar su rol.")
@@ -1122,23 +1153,25 @@ elif choice == "Usuarios":
                 has_open_orders = check_open_orders(user_id)
                 
                 if has_open_orders:
+                    # Mostrar detalles de las órdenes pendientes
+                    open_orders_details = get_open_orders_details(user_id)
                     st.markdown(f"""
-                        <div style='background: rgba(239, 68, 68, 0.15); 
-                                    border: 2px solid #EF4444; 
-                                    border-radius: 8px; 
-                                    padding: 20px; 
-                                    text-align: center;'>
+                        <div style='background: rgba(239, 68, 68, 0.15); border: 2px solid #EF4444; border-radius: 8px; padding: 20px; text-align: center;'>
                             <p style='color: #FCA5A5; margin: 0; font-size: 1.1rem;'>
                                 ⚠️ <strong>ELIMINACIÓN BLOQUEADA</strong>
                             </p>
                             <p style='color: #FEE2E2; margin-top: 10px; font-size: 0.95rem;'>
-                                El usuario <strong>{selected_user['nombre']}</strong> tiene Órdenes de Trabajo pendientes.<br>
-                                Debe cerrarlas o reasignarlas antes de eliminar este usuario.
+                                El usuario <strong>{selected_user['nombre']}</strong> tiene {len(open_orders_details)} Órdenes de Trabajo pendientes.<br>
+                                **Debe cerrarlas o reasignarlas** antes de eliminar este usuario.
                             </p>
                         </div>
                     """, unsafe_allow_html=True)
+                    
+                    st.markdown("#### Órdenes Pendientes")
+                    st.dataframe(pd.DataFrame(open_orders_details)[['id', 'descripcion', 'estado', 'criticidad']], hide_index=True)
+
                 else:
-                    st.warning(f"⚠️ Esta acción eliminará permanentemente al usuario **{selected_user['nombre']}**")
+                    st.warning(f"⚠️ Esta acción eliminará permanentemente al usuario **{selected_user['nombre']}** y todos sus registros.")
                     
                     if st.button(
                         "🗑️ ELIMINAR USUARIO PERMANENTEMENTE",
@@ -1149,9 +1182,13 @@ elif choice == "Usuarios":
                         try:
                             supabase.table("usuarios").delete().eq("id", user_id).execute()
                             st.session_state['notification'] = {'type':'delete', 'message':f'Usuario {selected_user["nombre"]} eliminado.'}
+                            st.session_state['selected_user_id_gestion'] = None # Limpiar selección
                             st.rerun()
                         except Exception as e:
                             st.error(f"Error al eliminar: {e}")
-
+            
+            else:
+                st.info("Haga clic en una fila de la tabla para seleccionar un usuario y editar sus datos o eliminarlo.")
+            
         else:
             st.info("No se encontraron usuarios en la base de datos. Use la pestaña 'CREAR USUARIO'.")
