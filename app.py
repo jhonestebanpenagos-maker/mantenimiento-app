@@ -813,10 +813,9 @@ elif choice == "Gestionar Órdenes":
     # FORZAR ACTUALIZACIÓN DEL CACHE AL ENTRAR A ESTA SECCIÓN
     st.cache_data.clear()
     
-
-        df_ordenes = run_query("ordenes")
-        df_activos = run_query("activos")
-        df_users = run_query("usuarios")
+    df_ordenes = run_query("ordenes")
+    df_activos = run_query("activos")
+    df_users = run_query("usuarios")
     
     if not df_ordenes.empty:
         
