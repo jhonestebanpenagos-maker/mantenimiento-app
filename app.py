@@ -1037,58 +1037,56 @@ elif choice == "Usuarios":
                 else:
                     st.warning("Por favor, complete todos los campos.")
 
-    # --- TAB 2: GESTIONAR USUARIOS (data_editor para selección) ---
+    # --- TAB 2: GESTIONAR USUARIOS (st.dataframe para selección) ---
     with tab_gestionar:
         df_users = run_query("usuarios")
         
         # --- Lógica de Sincronización de Selección ---
-        # 1. Obtenemos el ID seleccionado de la ejecución anterior (si existe)
-        current_selected_id = st.session_state.get('selected_user_id_gestion')
-
+        
         if not df_users.empty:
             st.subheader("Lista de Usuarios (Haga clic en una fila para editar)")
-            
-            # 2. Mostramos el data_editor con SELECCIÓN DE FILA (sin checkboxes)
-            # Nota: Usamos selection_mode="single-row" que funciona bien con st.data_editor
-            edited_df_state = st.data_editor(
+            st.markdown("💡 **Nota:** Haga clic en una fila de la tabla para cargar el usuario en el formulario de gestión.")
+
+            # 1. Mostrar el dataframe con SELECCIÓN DE FILA
+            selected_df = st.dataframe(
                 df_users[['id', 'documento', 'nombre', 'rol']],
                 column_config={
-                    "id": st.column_config.Column("ID", disabled=True),
-                    "documento": st.column_config.Column("Documento", disabled=True),
-                    "nombre": st.column_config.Column("Nombre Completo", disabled=True),
-                    "rol": st.column_config.Column("Rol", disabled=True),
+                    "id": "ID",
+                    "documento": "Documento",
+                    "nombre": "Nombre Completo",
+                    "rol": "Rol",
                 },
                 hide_index=True,
                 use_container_width=True,
-                num_rows="fixed",
-                key="user_selection_data_editor",
-                # Configuramos la selección para que sea de una sola fila.
-                # Esto manejará la deselección automáticamente cuando se haga clic en otra fila.
-                column_order=['id', 'documento', 'nombre', 'rol'] 
+                # ESTA ES LA CLAVE: Permite seleccionar la fila al hacer clic.
+                selection_mode="single-row",
+                key="user_selection_dataframe" 
             )
             
-            # 3. Extraer la fila seleccionada por Streamlit (índice interno)
-            selected_rows_indices = st.session_state.user_selection_data_editor.get("selection", {}).get("rows", [])
+            # 2. Extraer la selección del dataframe
+            selected_rows_data = selected_df.get('selection', {}).get('rows', [])
             
             selected_user = None
-            new_selection_id = None
+            user_id = None
             
-            if selected_rows_indices:
-                # El índice corresponde a la posición en el DataFrame mostrado/editado
-                selected_index = selected_rows_indices[0] 
+            if selected_rows_data:
+                # La lista de índices seleccionados contiene los índices del DataFrame original (0, 1, 2, ...)
+                selected_index = selected_rows_data[0] 
                 
-                # Obtenemos el ID de la fila seleccionada del estado del editor
-                new_selection_id = edited_df_state.loc[selected_index, 'id']
+                # Usamos el índice para obtener el ID de la fila seleccionada
+                # Usamos df_users.iloc para acceder al índice basado en la posición
+                user_id = df_users.iloc[selected_index]['id']
                 
-                # Buscamos la fila original en el DF de usuarios para obtener todos los datos
-                selected_user = df_users[df_users['id'] == new_selection_id].iloc[0]
-                user_id = new_selection_id
+                # Buscamos la fila original completa usando el ID
+                selected_user = df_users[df_users['id'] == user_id].iloc[0]
 
-            # 4. Forzamos la recarga si la selección ha cambiado para actualizar el formulario
-            if new_selection_id != current_selected_id:
-                st.session_state['selected_user_id_gestion'] = new_selection_id
-                # Si hay cambio de selección (o de deselección), se debe forzar el re-renderizado
-                st.rerun() 
+            # 3. Sincronizamos la variable de sesión para que el formulario sepa a quién mostrar
+            # Si el ID cambia, forzamos un rerun.
+            if user_id != st.session_state.get('selected_user_id_gestion'):
+                st.session_state['selected_user_id_gestion'] = user_id
+                # Solo forzamos rerun si realmente hubo un cambio de usuario seleccionado
+                if user_id is not None or st.session_state.get('selected_user_id_gestion') is not None:
+                    st.rerun()
 
 
             # --- MÓDULO DE EDICIÓN / ELIMINACIÓN ---
