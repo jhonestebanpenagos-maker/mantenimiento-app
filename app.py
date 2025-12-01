@@ -922,7 +922,6 @@ elif choice == "Inventario Activos":
             with c_foto:
                 st.markdown("##### 📸 Fotografía")
                 if info['foto_url']:
-                    # CORRECCIÓN AQUÍ: Se eliminó el parámetro 'style' que causaba el error
                     st.image(info['foto_url'], use_container_width=True)
             
             with c_datos:
@@ -954,6 +953,11 @@ elif choice == "Inventario Activos":
             # 1. FINALIZAR
             with b1:
                 if st.button("✅ FINALIZAR Y NUEVO", type="primary", use_container_width=True):
+                    # --- AQUÍ ESTÁ EL CAMBIO PARA EL MENSAJE FLOTANTE ---
+                    st.toast("✅ El activo se ha creado con éxito", icon="🎉")
+                    time.sleep(1) # Breve pausa para ver el mensaje antes de recargar
+                    
+                    # Limpieza
                     del st.session_state['activo_creado_info']
                     st.session_state.specs_data = pd.DataFrame(columns=["Componente/Dato", "Valor"])
                     st.session_state.draft_data = {}
@@ -989,7 +993,8 @@ elif choice == "Inventario Activos":
                         del st.session_state['activo_creado_info']
                         st.session_state.specs_data = pd.DataFrame(columns=["Componente/Dato", "Valor"])
                         st.session_state.draft_data = {}
-                        agregar_notificacion('warning', 'Registro deshecho. El activo no fue guardado.')
+                        st.toast("🗑️ Registro cancelado", icon="⚠️")
+                        time.sleep(1)
                         st.rerun()
                     except Exception as e:
                         st.error(f"Error al deshacer: {e}")
