@@ -728,7 +728,7 @@ with st.sidebar:
     if rol == "Admin":
         menu = [
             ("📊", "Tablero"),
-            ("📦", "Inventario"), 
+            ("📦", "Inventario De Activos"), 
             ("➕", "Nueva OT"),
             ("📋", "Gestionar"),
             ("✅", "Cerrar"),
@@ -828,7 +828,7 @@ if choice == "Tablero de Mando":
     else: 
         st.info("No hay datos para mostrar.")
 elif choice == "Inventario Activos":
-    st.title("INVENTARIO")
+    st.title("INVENTARIO DE ACTIVOS")  # <--- CAMBIO: Nombre complementado
     mostrar_notificaciones()
     
     df_act = run_query("activos")
@@ -836,7 +836,7 @@ elif choice == "Inventario Activos":
     tab1, tab2 = st.tabs(["NUEVO ACTIVO", "EDITAR / QR"])
 
     with tab1:
-        st.markdown("<div class='card-style'>", unsafe_allow_html=True)
+        # SE ELIMINÓ EL CUADRO 'card-style' QUE AGRUPABA EL FORMULARIO
         with st.form("new_asset"):
             c1, c2 = st.columns(2)
             nom = c1.text_input("Nombre Activo")
@@ -855,13 +855,13 @@ elif choice == "Inventario Activos":
                         st.rerun()
                 else:
                     agregar_notificacion('error', 'Nombre y ubicación son obligatorios.')
-        st.markdown("</div>", unsafe_allow_html=True)
 
     with tab2:
         if not df_act.empty:
             sel = st.selectbox("Buscar Activo", df_act['nombre'].values)
             dat = df_act[df_act['nombre']==sel].iloc[0]
-            st.markdown("<div class='card-style'>", unsafe_allow_html=True)
+            
+            # SE ELIMINÓ EL CUADRO 'card-style' QUE AGRUPABA LA INFORMACIÓN
             c1, c2 = st.columns([1,3])
             if dat['qr_url']:
                 c1.image(dat['qr_url'])
@@ -879,7 +879,6 @@ elif choice == "Inventario Activos":
                         st.rerun()
                     except Exception as e:
                         agregar_notificacion('error', f'Error al eliminar: {e}')
-            st.markdown("</div>", unsafe_allow_html=True)
 
 elif choice == "Crear Orden":
     st.title("GENERAR ORDEN")
