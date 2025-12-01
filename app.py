@@ -17,31 +17,40 @@ import plotly.graph_objects as go
 st.set_page_config(page_title="Orión | Mantenimiento", layout="wide", initial_sidebar_state="collapsed")
 
 # ==============================================================================
-# 🎨 TEMA: "ORIÓN HIGH CONTRAST"
+# 🎨 TEMA: "ORIÓN COMFORT UI" (Mejorado para la vista)
 # ==============================================================================
 
 PRO_ORANGE = "#F59E0B" 
 PRO_GREEN = "#10B981"  
-BG_DARK_CLEAN = "#111827" 
-BG_CARD = "rgba(31, 41, 55, 0.95)" 
-TEXT_WHITE = "#FFFFFF"
+BG_DARK_CLEAN = "#0e1117"  # Fondo principal más profundo (Gris casi negro)
+BG_SIDEBAR = "#161b22"     # Barra lateral: Gris azulado oscuro (tipo GitHub Dark)
+BG_CARD = "rgba(30, 41, 59, 0.7)" # Tarjetas semitransparentes
+TEXT_WHITE = "#E5E7EB"     # Blanco humo (menos agresivo que #FFFFFF)
 
 st.markdown(f"""
     <style>
     /* 1. FONDO GENERAL */
     .stApp {{
-        background: radial-gradient(circle at 50% 0%, #374151 0%, {BG_DARK_CLEAN} 80%);
-        background-attachment: fixed;
+        background-color: {BG_DARK_CLEAN};
         color: {TEXT_WHITE};
     }}
 
-    /* 2. BARRA LATERAL */
+    /* 2. BARRA LATERAL AJUSTADA */
     [data-testid="stSidebar"] {{
-        background-color: {BG_DARK_CLEAN};
-        border-right: 1px solid #374151;
+        background-color: {BG_SIDEBAR};
+        border-right: 1px solid #30363d;
     }}
-    [data-testid="stSidebar"] p, [data-testid="stSidebar"] span {{
-        color: #D1D5DB !important;
+    
+    /* Texto de navegación más legible */
+    [data-testid="stSidebarNav"] span {{
+        color: #9CA3AF !important;
+        font-weight: 500;
+    }}
+    
+    /* Elemento seleccionado en el menú */
+    [data-testid="stSidebarNav"] a[aria-current="page"] {{
+        background-color: rgba(245, 158, 11, 0.1);
+        border-left: 3px solid {PRO_ORANGE};
     }}
 
     /* 3. TÍTULOS */
@@ -57,11 +66,11 @@ st.markdown(f"""
     /* 4. TARJETAS */
     .card-style {{
         background: {BG_CARD};
-        backdrop-filter: blur(10px);
+        backdrop-filter: blur(12px);
         border-radius: 12px;
-        padding: 30px;
-        border: 1px solid rgba(245, 158, 11, 0.2); 
-        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+        padding: 25px;
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.2);
         margin-bottom: 20px;
     }}
     .login-container {{
@@ -76,176 +85,110 @@ st.markdown(f"""
         font-weight: 700;
         color: {PRO_ORANGE};
         margin-bottom: 15px;
-        border-bottom: 1px solid #374151;
+        border-bottom: 1px solid #30363d;
         padding-bottom: 8px;
         display: block;
     }}
 
-    /* 6. MENÚS DESPLEGABLES */
-    .stSelectbox > div > div {{
-        background-color: #1F2937 !important; 
-        color: white !important;
-        border: 1px solid #4B5563 !important;
+    /* 6. INPUTS Y MENÚS (Estilo unificado) */
+    .stTextInput input, .stTextArea textarea, .stSelectbox > div > div {{
+        background-color: #0d1117 !important; 
+        color: #e6edf3 !important;
+        border: 1px solid #30363d !important;
+        border-radius: 6px;
     }}
+    
+    /* Focus en inputs */
+    .stTextInput input:focus, .stTextArea textarea:focus {{
+        border-color: {PRO_ORANGE} !important;
+        box-shadow: 0 0 0 1px {PRO_ORANGE} !important;
+    }}
+
     div[data-baseweb="popover"], div[data-baseweb="menu"] {{
-        background-color: #111827 !important;
-        border: 1px solid {PRO_ORANGE};
-    }}
-    div[data-baseweb="menu"] li {{
-        color: white !important;
+        background-color: #161b22 !important;
+        border: 1px solid #30363d;
     }}
     div[data-baseweb="menu"] li:hover {{
         background-color: {PRO_ORANGE} !important;
         color: white !important;
     }}
     
-    /* 7. INPUTS TEXTO Y ETIQUETAS */
-    .stTextInput label {{
-        color: #FFFFFF !important;
-        font-size: 16px !important;
+    /* Etiquetas de inputs */
+    .stTextInput label, .stSelectbox label, .stTextArea label {{
+        color: #E5E7EB !important;
         font-weight: 600 !important;
     }}
-    .stTextInput input, .stTextArea textarea {{
-        background-color: #0F1115 !important; 
-        color: white !important;
-        border: 1px solid #4B5563 !important;
-        border-radius: 6px;
-    }}
     
-    /* 8. BOTONES */
+    /* 7. BOTONES */
     div.stButton > button:first-child {{
         background: linear-gradient(90deg, {PRO_ORANGE} 0%, {PRO_GREEN} 100%) !important;
         color: white !important;
         border: none;
-        font-weight: bold;
+        font-weight: 600;
         border-radius: 6px;
         padding: 0.6rem 1.2rem;
         transition: transform 0.2s;
     }}
     div.stButton > button:first-child:hover {{
         transform: translateY(-2px);
-        box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
+        opacity: 0.9;
     }}
 
-    /* 9. MÉTRICAS */
+    /* 8. MÉTRICAS */
     [data-testid="stMetric"] {{
-        background: #1F2937;
-        padding: 20px;
-        border-radius: 10px;
-        border-left: 5px solid {PRO_GREEN};
-        box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+        background: rgba(30, 41, 59, 0.5);
+        padding: 15px;
+        border-radius: 8px;
+        border-left: 4px solid {PRO_GREEN};
+        border-top: 1px solid rgba(255,255,255,0.05);
+        border-right: 1px solid rgba(255,255,255,0.05);
+        border-bottom: 1px solid rgba(255,255,255,0.05);
     }}
     [data-testid="stMetricLabel"] {{ color: #9CA3AF !important; }}
-    [data-testid="stMetricValue"] {{ color: white !important; }}
+    [data-testid="stMetricValue"] {{ color: #F3F4F6 !important; }}
 
-    /* 10. PESTAÑAS (TABS) */
+    /* 9. PESTAÑAS (TABS) */
     .stTabs [data-baseweb="tab"] {{ color: #9CA3AF; font-weight: 600; }}
-    .stTabs [aria-selected="true"] {{ color: {PRO_ORANGE} !important; background-color: transparent !important; }}
+    .stTabs [aria-selected="true"] {{ color: {PRO_ORANGE} !important; background-color: transparent !important; border-bottom-color: {PRO_ORANGE} !important; }}
     
-    /* 11. ZONA PELIGRO */
+    /* 10. ZONA PELIGRO */
     .danger-zone {{
         background: rgba(220, 38, 38, 0.1);
-        border: 1px solid #EF4444;
-        color: #EF4444;
+        border: 1px solid rgba(220, 38, 38, 0.3);
+        color: #f87171;
         padding: 15px;
         border-radius: 8px;
         text-align: center;
     }}
 
-    /* 12. BOTÓN DE ELIMINACIÓN CON ALTO CONTRASTE */
+    /* 11. BOTÓN SECUNDARIO (ROJO/BORRAR) */
     div.stButton > button[kind="secondary"] {{
-        background: linear-gradient(135deg, #DC2626 0%, #991B1B 100%) !important;
-        color: #FFFFFF !important;
-        border: 2px solid #FCA5A5 !important;
-        font-weight: 700 !important;
-        border-radius: 8px !important;
-        padding: 0.75rem 1.5rem !important;
-        transition: all 0.3s ease !important;
-        box-shadow: 0 4px 12px rgba(220, 38, 38, 0.4) !important;
-        text-transform: uppercase !important;
-        letter-spacing: 0.5px !important;
+        background: rgba(220, 38, 38, 0.15) !important;
+        color: #fca5a5 !important;
+        border: 1px solid #ef4444 !important;
+        font-weight: 600 !important;
     }}
-
     div.stButton > button[kind="secondary"]:hover {{
-        background: linear-gradient(135deg, #991B1B 0%, #7F1D1D 100%) !important;
-        border-color: #FEE2E2 !important;
-        transform: translateY(-2px) !important;
-        box-shadow: 0 6px 20px rgba(220, 38, 38, 0.6) !important;
+        background: rgba(220, 38, 38, 0.3) !important;
+        border-color: #f87171 !important;
     }}
 
-    div.stButton > button[kind="secondary"]:active {{
-        transform: translateY(0px) !important;
-        box-shadow: 0 2px 8px rgba(220, 38, 38, 0.5) !important;
-    }}
-    
-    /* --- HACK AVANZADO: OCULTAR CONTENEDORES VACÍOS --- */
-    div[data-testid="stVerticalBlock"] > div:empty,
-    div[data-testid="stVerticalBlock"] > div > div:empty {{
+    /* 12. HACK: OCULTAR CONTENEDORES VACÍOS */
+    div[data-testid="stVerticalBlock"] > div:empty {{
         height: 0 !important;
-        min-height: 0 !important;
-        padding: 0 !important;
         margin: 0 !important;
-        border: none !important;
-        box-shadow: none !important;
-        background: transparent !important;
-        overflow: hidden !important;
     }}
     
-    div.stVerticalBlock > div:first-child > div:nth-child(2) > div:first-child {{
-        padding-top: 0 !important;
-    }}
-
-    /* 13. MEJORAS PARA EL MENÚ DE NAVEGACIÓN COLAPSADO */
+    /* 13. MEJORAS NAVEGACIÓN COLAPSADA */
     [data-testid="stSidebarNav"] {{
-        padding-top: 0px !important;
+        padding-top: 10px !important;
     }}
     
-    /* Ocultar texto y mostrar solo iconos cuando la barra está colapsada */
+    /* Tooltip personalizado en CSS para menú colapsado */
     @media (max-width: 768px) {{
-        [data-testid="stSidebarNavItems"] .nav-link {{
-            position: relative;
-        }}
-        
-        [data-testid="stSidebarNavItems"] .nav-link span {{
-            display: none;
-        }}
-        
-        [data-testid="stSidebarNavItems"] .nav-link::after {{
-            content: attr(data-tooltip);
-            position: absolute;
-            left: 100%;
-            top: 50%;
-            transform: translateY(-50%);
-            background-color: #1F2937;
-            color: white;
-            padding: 8px 12px;
-            border-radius: 6px;
-            font-size: 12px;
-            white-space: nowrap;
-            opacity: 0;
-            visibility: hidden;
-            transition: all 0.3s ease;
-            z-index: 1000;
-            border: 1px solid #374151;
-            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
-        }}
-        
-        [data-testid="stSidebarNavItems"] .nav-link:hover::after {{
-            opacity: 1;
-            visibility: visible;
-            left: 110%;
-        }}
+        [data-testid="stSidebarNavItems"] .nav-link span {{ display: none; }}
     }}
     
-    /* Eliminar el cursor pointer del título del menú */
-    [data-testid="stSidebarNav"] .css-1d391kg {{
-        cursor: default !important;
-    }}
-    
-    /* 14. CURSOR DEFAULT PARA TODO EL MENÚ DE OPCIÓN */
-    div[data-testid="stSidebarNav"] * {{
-        cursor: default !important;
-    }}
     </style>
 """, unsafe_allow_html=True)
 
@@ -440,10 +383,10 @@ def mostrar_metricas_inteligentes(df_ordenes, df_users):
     pendientes = len(df_ordenes[df_ordenes['estado'] == 'Abierta'])
     concluidas = len(df_ordenes[df_ordenes['estado'] == 'Concluida'])
     
-    # Calcular porcentajes CORREGIDO
+    # Calcular porcentajes
     porcentaje_concluidas = (concluidas / total * 100) if total > 0 else 0
     
-    # Cálculo de eficiencia MEJORADO
+    # Cálculo de eficiencia
     if total == 0:
         eficiencia_valor = "Sin datos"
         eficiencia_color = "⚪"
@@ -477,8 +420,8 @@ def mostrar_metricas_inteligentes(df_ordenes, df_users):
             eficiencia_valor,
             help="Excelente: ≥90% | Buena: ≥70% | Regular: ≥50% | Crítica: <50%"
         )
+
 # --- GRÁFICOS (PLOTLY) ---
-# --- FUNCIÓN CORREGIDA PARA GRÁFICO DE TÉCNICOS ---
 def graficar_ordenes_por_tecnico(df_ordenes, df_users):
     """Muestra gráfico compacto de órdenes por técnico"""
     if df_ordenes.empty or df_users.empty:
@@ -517,46 +460,32 @@ def graficar_ordenes_por_tecnico(df_ordenes, df_users):
     
     df_final = pd.DataFrame(datos_final).sort_values('Total', ascending=True)
     
-    # Crear gráfico de barras apiladas CORREGIDO
+    # Crear gráfico de barras apiladas
     fig = go.Figure()
     
-    # Concluidas - Verde sólido
+    # Concluidas
     fig.add_trace(go.Bar(
-        name='Concluidas',  # Texto simple sin emoji
+        name='Concluidas',
         y=df_final['Técnico'],
         x=df_final['Concluidas'],
         orientation='h',
-        marker=dict(
-            color=PRO_GREEN,
-            line=dict(width=0)  # Sin borde para mejor contraste
-        ),
+        marker=dict(color=PRO_GREEN, line=dict(width=0)),
         text=df_final['Concluidas'],
         textposition='inside',
-        textfont=dict(
-            color='white',  # Texto blanco para mejor contraste
-            size=12,
-            weight='bold'
-        ),
+        textfont=dict(color='white', size=12, weight='bold'),
         hovertemplate='<b>%{y}</b><br>Concluidas: %{x}<extra></extra>'
     ))
     
-    # Abiertas - Naranja sólido (mejor contraste que amarillo)
+    # Abiertas
     fig.add_trace(go.Bar(
-        name='Abiertas',  # Texto simple sin emoji
+        name='Abiertas',
         y=df_final['Técnico'],
         x=df_final['Abiertas'],
         orientation='h',
-        marker=dict(
-            color=PRO_ORANGE,
-            line=dict(width=0)  # Sin borde para mejor contraste
-        ),
+        marker=dict(color=PRO_ORANGE, line=dict(width=0)),
         text=df_final['Abiertas'],
         textposition='inside',
-        textfont=dict(
-            color='white',  # Texto blanco para mejor contraste
-            size=12,
-            weight='bold'
-        ),
+        textfont=dict(color='white', size=12, weight='bold'),
         hovertemplate='<b>%{y}</b><br>Abiertas: %{x}<extra></extra>'
     ))
     
@@ -566,20 +495,16 @@ def graficar_ordenes_por_tecnico(df_ordenes, df_users):
         plot_bgcolor='rgba(0,0,0,0)',
         font=dict(color='white', size=12),
         height=250,
-        margin=dict(l=0, r=0, t=10, b=0),  # Margen superior pequeño
+        margin=dict(l=0, r=0, t=10, b=0),
         showlegend=True,
         legend=dict(
             orientation="h",
             yanchor="bottom",
-            y=-0.25,  # Leyenda más cerca
+            y=-0.25,
             xanchor="center",
             x=0.5,
-            font=dict(
-                color='white',  # Texto de leyenda en blanco
-                size=12
-            ),
-            bgcolor='rgba(0,0,0,0)',  # Fondo transparente
-            bordercolor='rgba(0,0,0,0)'  # Sin borde
+            font=dict(color='white', size=12),
+            bgcolor='rgba(0,0,0,0)'
         ),
         xaxis=dict(
             showgrid=True, 
@@ -587,24 +512,12 @@ def graficar_ordenes_por_tecnico(df_ordenes, df_users):
             title=None,
             showticklabels=True
         ),
-        yaxis=dict(
-            title=None,
-            tickfont=dict(size=11)
-        )
+        yaxis=dict(title=None, tickfont=dict(size=11))
     )
     
-    # Eliminar los botones de zoom y otros controles
-    fig.update_layout(
-        dragmode=False,
-        hovermode='y unified'
-    )
-    
-    config = {
-        'displayModeBar': False,  # Oculta completamente la barra de herramientas
-        'staticPlot': False
-    }
-    
-    st.plotly_chart(fig, use_container_width=True, config=config)
+    fig.update_layout(dragmode=False, hovermode='y unified')
+    st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
+
 def graficar_criticidad(df):
     if df.empty: return
     conteo = df['criticidad'].value_counts().reset_index()
@@ -754,7 +667,7 @@ if st.session_state['usuario'] is None:
         """, unsafe_allow_html=True)
 
         st.markdown(f"""
-            <div class='card-style' style='padding: 10px; margin-top: 0px; margin-bottom: 30px; text-align: center; font-size: 0.85em; color: {PRO_ORANGE}; border: none; box-shadow: none; background: #1F2937;'>
+            <div class='card-style' style='padding: 10px; margin-top: 0px; margin-bottom: 30px; text-align: center; font-size: 0.85em; color: {PRO_ORANGE}; border: none; box-shadow: none; background: transparent;'>
                 <p style='margin: 0;'>Desarrollado por: <b>Jhonestebanpenagos@gmail.com</b></p>
             </div>
             <hr style="border: none; height: 1px; background: linear-gradient(90deg, transparent, {PRO_ORANGE}, transparent); margin-bottom: 30px;">
