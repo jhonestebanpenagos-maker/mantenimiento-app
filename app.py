@@ -194,6 +194,53 @@ st.markdown(f"""
     div.stVerticalBlock > div:first-child > div:nth-child(2) > div:first-child {{
         padding-top: 0 !important;
     }}
+
+    /* 13. MEJORAS PARA EL MENÚ DE NAVEGACIÓN COLAPSADO */
+    [data-testid="stSidebarNav"] {{
+        padding-top: 0px !important;
+    }}
+    
+    /* Ocultar texto y mostrar solo iconos cuando la barra está colapsada */
+    @media (max-width: 768px) {{
+        [data-testid="stSidebarNavItems"] .nav-link {{
+            position: relative;
+        }}
+        
+        [data-testid="stSidebarNavItems"] .nav-link span {{
+            display: none;
+        }}
+        
+        [data-testid="stSidebarNavItems"] .nav-link::after {{
+            content: attr(data-tooltip);
+            position: absolute;
+            left: 100%;
+            top: 50%;
+            transform: translateY(-50%);
+            background-color: #1F2937;
+            color: white;
+            padding: 8px 12px;
+            border-radius: 6px;
+            font-size: 12px;
+            white-space: nowrap;
+            opacity: 0;
+            visibility: hidden;
+            transition: all 0.3s ease;
+            z-index: 1000;
+            border: 1px solid #374151;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+        }}
+        
+        [data-testid="stSidebarNavItems"] .nav-link:hover::after {{
+            opacity: 1;
+            visibility: visible;
+            left: 110%;
+        }}
+    }}
+    
+    /* Eliminar el cursor pointer del título del menú */
+    [data-testid="stSidebarNav"] .css-1d391kg {{
+        cursor: default !important;
+    }}
     </style>
 """, unsafe_allow_html=True)
 
@@ -764,23 +811,48 @@ with st.sidebar:
         opts = ["Cerrar Orden"]
         icons_list = ["check2-circle"]
 
+    # MENÚ MEJORADO CON TODAS LAS CARACTERÍSTICAS SOLICITADAS
     choice = option_menu(
-        menu_title="NAVEGACIÓN",
+        menu_title=None,  # ELIMINADO el título "NAVEGACIÓN" con icono
         options=opts,
         icons=icons_list,
         default_index=0,
+        menu_icon="",  # Sin icono en el título (ya que no hay título)
         styles={
-            "container": {"background-color": "transparent"},
-            "icon": {"color": PRO_ORANGE},
-            "nav-link": {"color": "#9CA3AF"},
+            "container": {
+                "background-color": "transparent",
+                "padding": "0px",
+                "margin": "0px"
+            },
+            "icon": {
+                "color": PRO_ORANGE, 
+                "font-size": "16px",
+                "margin-right": "10px"
+            },
+            "nav-link": {
+                "color": "#9CA3AF",
+                "font-size": "14px",
+                "font-weight": "500",
+                "padding": "12px 15px",
+                "margin": "2px 0px",
+                "border-radius": "8px",
+                "cursor": "default",  # Evita la manito del cursor
+                "transition": "all 0.3s ease"
+            },
+            "nav-link:hover": {
+                "background-color": "#374151",
+                "color": "white",
+                "cursor": "default"  # Evita la manito al hacer hover
+            },
             "nav-link-selected": {
                 "background-color": "#1F2937",
                 "color": "white",
-                "border-left": f"4px solid {PRO_ORANGE}"
+                "border-left": f"4px solid {PRO_ORANGE}",
+                "font-weight": "600",
+                "cursor": "default"  # Evita la manito en elemento seleccionado
             }
         }
     )
-
 # ==============================================================================
 # 📊 PANTALLAS
 # ==============================================================================
