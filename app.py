@@ -828,58 +828,126 @@ if choice == "Tablero de Mando":
     else: 
         st.info("No hay datos para mostrar.")
 elif choice == "Inventario Activos":
-    st.title("INVENTARIO DE ACTIVOS")  # <--- CAMBIO: Nombre complementado
+    st.title("INVENTARIO DE ACTIVOS")
     mostrar_notificaciones()
     
+    # --- 1. CONFIGURACIÓN DE DATOS (ÁREAS Y CATEGORÍAS) ---
+    # Diccionario con Áreas y sus Sub-áreas
+    areas_data = {
+        "Producción": [
+            "Agua Cristal", "B&B", "Calderas", "Cuarto de Lubricación", 
+            "Equipos Auxiliares", "Laboratorio Fisico Quimico", 
+            "Laboratorio Microbiológico", "Linea 1", "Linea 10", 
+            "Linea 8 Jugos", "Oficinas Técnicas", "Pasillo Técnico", 
+            "Ptap", "Ptar", "Sala de Jarabe Simple", 
+            "Sala de Jarabe Terminado", "Sala de Jarabes Jugos", 
+            "Sub Estación Eléctrica", "Taller de Mantenimiento"
+        ],
+        "Administración": [
+            "Administración", "Auditorio", "Casino", 
+            "Portería Vehicular", "Servicios Generales"
+        ],
+        "Ventas": [
+            "Bodega Carrera 8va", "Bodega Publicidad", 
+            "Dispensadores", "Ventas"
+        ],
+        "Logística": [
+            "Almacen Materia Prima", "Almacén Producto Terminado", 
+            "Lavadero de Vehiculos", "Punto de Canje", 
+            "Taller de Reparación de Estibas", "Taller Vehicular"
+        ]
+    }
+
+    # Lista de categorías actualizada y ordenada
+    categorias_list = sorted([
+        "CCTV", "Control de Acceso", "Eléctrico", "Estanterías", 
+        "Hidrosanitario", "Infraestructura", "Mecánico", 
+        "Muelles", "Red Contra Incendio"
+    ])
+
     df_act = run_query("activos")
 
     tab1, tab2 = st.tabs(["NUEVO ACTIVO", "EDITAR / QR"])
 
     with tab1:
-        # SE ELIMINÓ EL CUADRO 'card-style' QUE AGRUPABA EL FORMULARIO
+        # Formulario limpio sin recuadro extra
         with st.form("new_asset"):
             c1, c2 = st.columns(2)
-            nom = c1.text_input("Nombre Activo")
-            area = c2.selectbox("Área", ["Producción", "Logística", "Servicios Generales", "Calidad"])
-            ubic = c1.text_input("Ubicación Exacta")
-            cat = c2.selectbox("Categoría", ["Mecánico", "Eléctrico", "Hidráulico", "Infraestructura"])
-            if st.form_submit_button("GUARDAR"):
-                if nom and ubic:
-                    res = supabase.table("activos").insert({"nombre":nom, "area":area, "ubicacion":ubic, "categoria":cat}).execute()
-                    if res.data:
-                        nid = res.data[0]['id']
-                        url = generar_qr_activo(nid, nom)
-                        supabase.table("activos").update({"qr_url":url}).eq("id", nid).execute()
-                        st.cache_data.clear()
-                        agregar_notificacion('success', 'Activo creado exitosamente.')
-                        st.rerun()
+            
+            # --- SELECCIÓN DE ÁREA Y SUB-ÁREA ---
+            # 1. Seleccionar Área Principal (Ordenada alfabéticamente)
+            area_principal = c1.selectbox("Área Principal", sorted(areas_data.keys()))
+            
+            # 2. Seleccionar Sub-área (Basada en el Área Principal seleccionada)
+            sub_areas_disponibles = sorted(areas_data[area_principal])
+            sub_area = c2.selectbox("Sub-área", sub_areas_disponibles)
+            
+            nom = c1.text_input("Nombre del Activo")
+            
+            # 3. Ubicación específica (Detalle adicional)
+            ubic_detalle = c2.text_input("Ubicación Exacta / Detalle", placeholder="Ej: Lado norte, Motor 3...")
+            
+            # 4. Categoría Actualizada
+            cat = c1.selectbox("Categoría", categorias_list)
+            
+            if st.form_submit_button("GUARDAR ACTIVO"):
+                if nom and sub_area:
+                    # NOTA: Para no modificar la base de datos, guardamos la Sub-área 
+                    # combinada con la ubicación específica.
+                    ubicacion_final = f"[{sub_area}] {ubic_detalle}" if ubic_detalle else f"[{sub_area}]"
+                    
+                    try:
+                        res = supabase.table("activos").insert({
+                            "nombre": nom, 
+                            "area": area_principal,  # Guardamos el área macro (Ej: Producción)
+                            "ubicacion": ubicacion_final, # Guardamos la sub-área aquí
+                            "categoria": cat
+                        }).execute()
+                        
+                        if res.data:
+                            nid = res.data[0]['id']
+                            url = generar_qr_activo(nid, nom)
+                            supabase.table("activos").update({"qr_url":url}).eq("id", nid).execute()
+                            st.cache_data.clear()
+                            agregar_notificacion('success', f'Activo creado en {sub_area}.')
+                            st.rerun()
+                    except Exception as e:
+                        agregar_notificacion('error', f'Error al guardar: {e}')
                 else:
-                    agregar_notificacion('error', 'Nombre y ubicación son obligatorios.')
+                    agregar_notificacion('error', 'El nombre y la sub-área son obligatorios.')
 
     with tab2:
         if not df_act.empty:
-            sel = st.selectbox("Buscar Activo", df_act['nombre'].values)
+            # Filtro de búsqueda
+            all_assets = df_act['nombre'].values
+            sel = st.selectbox("Buscar Activo por Nombre", all_assets)
+            
             dat = df_act[df_act['nombre']==sel].iloc[0]
             
-            # SE ELIMINÓ EL CUADRO 'card-style' QUE AGRUPABA LA INFORMACIÓN
             c1, c2 = st.columns([1,3])
             if dat['qr_url']:
-                c1.image(dat['qr_url'])
-            c2.info(f"ID: {dat['id']} | {dat['area']}")
+                c1.image(dat['qr_url'], caption="Código QR")
+            
+            c2.markdown(f"### {dat['nombre']}")
+            c2.info(f"**ID:** {dat['id']}")
+            c2.write(f"**Área:** {dat['area']}")
+            c2.write(f"**Ubicación/Sub-área:** {dat['ubicacion']}")
+            c2.write(f"**Categoría:** {dat.get('categoria', 'N/A')}")
 
             st.markdown("<br>", unsafe_allow_html=True)
-            with st.expander("Eliminar Activo"):
-                st.markdown(f"<div class='danger-zone'><p>Esto borrará el historial completo.</p></div>", unsafe_allow_html=True)
+            with st.expander("🗑️ Zona de Peligro"):
+                st.warning("Eliminar este activo borrará también su historial de órdenes.")
                 if st.button("ELIMINAR DEFINITIVAMENTE"):
                     try:
                         supabase.table("ordenes").delete().eq("activo_id", dat['id']).execute()
                         supabase.table("activos").delete().eq("id", dat['id']).execute()
                         st.cache_data.clear()
-                        agregar_notificacion('delete', 'Activo eliminado permanentemente.')
+                        agregar_notificacion('delete', 'Activo eliminado correctamente.')
                         st.rerun()
                     except Exception as e:
                         agregar_notificacion('error', f'Error al eliminar: {e}')
-
+        else:
+            st.info("No hay activos registrados en el sistema.")
 elif choice == "Crear Orden":
     st.title("GENERAR ORDEN")
     mostrar_notificaciones()
