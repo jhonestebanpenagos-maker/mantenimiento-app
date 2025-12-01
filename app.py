@@ -195,38 +195,58 @@ st.markdown(f"""
         padding-top: 0 !important;
     }}
 
-    /* 13 MENÚ SIMPLIFICADO Y MEJORADO */
-        # MENÚ SIMPLIFICADO Y MEJORADO
-    choice = option_menu(
-        menu_title="",  # Título vacío
-        options=opts,
-        icons=icons_list,
-        default_index=0,
-        menu_icon="",  # Sin icono
-        styles={
-            "container": {
-                "background-color": "transparent",
-                "padding": "0px"
-            },
-            "icon": {
-                "color": PRO_ORANGE, 
-                "font-size": "16px"
-            },
-            "nav-link": {
-                "color": "#9CA3AF",
-                "font-size": "14px",
-                "padding": "12px 15px",
-                "margin": "2px 0px",
-                "border-radius": "8px",
-                "cursor": "default",  # Elimina la manito
-            },
-            "nav-link-selected": {
-                "background-color": "#1F2937",
-                "color": "white",
-                "border-left": f"4px solid {PRO_ORANGE}",
-            }
-        }
-    )
+    /* 13. MEJORAS PARA EL MENÚ DE NAVEGACIÓN COLAPSADO */
+    [data-testid="stSidebarNav"] {{
+        padding-top: 0px !important;
+    }}
+    
+    /* Ocultar texto y mostrar solo iconos cuando la barra está colapsada */
+    @media (max-width: 768px) {{
+        [data-testid="stSidebarNavItems"] .nav-link {{
+            position: relative;
+        }}
+        
+        [data-testid="stSidebarNavItems"] .nav-link span {{
+            display: none;
+        }}
+        
+        [data-testid="stSidebarNavItems"] .nav-link::after {{
+            content: attr(data-tooltip);
+            position: absolute;
+            left: 100%;
+            top: 50%;
+            transform: translateY(-50%);
+            background-color: #1F2937;
+            color: white;
+            padding: 8px 12px;
+            border-radius: 6px;
+            font-size: 12px;
+            white-space: nowrap;
+            opacity: 0;
+            visibility: hidden;
+            transition: all 0.3s ease;
+            z-index: 1000;
+            border: 1px solid #374151;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+        }}
+        
+        [data-testid="stSidebarNavItems"] .nav-link:hover::after {{
+            opacity: 1;
+            visibility: visible;
+            left: 110%;
+        }}
+    }}
+    
+    /* Eliminar el cursor pointer del título del menú */
+    [data-testid="stSidebarNav"] .css-1d391kg {{
+        cursor: default !important;
+    }}
+    
+    /* 14. CURSOR DEFAULT PARA TODO EL MENÚ DE OPCIÓN */
+    div[data-testid="stSidebarNav"] * {{
+        cursor: default !important;
+    }}
+    </style>
 """, unsafe_allow_html=True)
 
 # --- 2. CONEXIÓN A SUPABASE ---
@@ -795,8 +815,8 @@ with st.sidebar:
     elif rol == "Tecnico":
         opts = ["Cerrar Orden"]
         icons_list = ["check2-circle"]
-
-    # MENÚ CORREGIDO - SIN ERRORES DE SINTAXIS
+    
+    # MENÚ SIMPLIFICADO Y MEJORADO - ¡FUERA DEL CSS! ES CÓDIGO PYTHON
     choice = option_menu(
         menu_title=None,  # Sin título
         options=opts,
@@ -805,35 +825,24 @@ with st.sidebar:
         styles={
             "container": {
                 "background-color": "transparent",
-                "padding": "0px",
-                "margin": "0px"
+                "padding": "0px"
             },
             "icon": {
                 "color": PRO_ORANGE, 
-                "font-size": "16px",
-                "margin-right": "10px"
+                "font-size": "16px"
             },
             "nav-link": {
                 "color": "#9CA3AF",
                 "font-size": "14px",
-                "font-weight": "500",
                 "padding": "12px 15px",
                 "margin": "2px 0px",
                 "border-radius": "8px",
-                "cursor": "default",
-                "transition": "all 0.3s ease"
-            },
-            "nav-link:hover": {
-                "background-color": "#374151",
-                "color": "white",
-                "cursor": "default"
+                "cursor": "default",  # Elimina la manito
             },
             "nav-link-selected": {
                 "background-color": "#1F2937",
                 "color": "white",
                 "border-left": f"4px solid {PRO_ORANGE}",
-                "font-weight": "600",
-                "cursor": "default"
             }
         }
     )
