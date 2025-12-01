@@ -1162,7 +1162,7 @@ elif choice == "Usuarios":
 
     with tab_gestionar:
 
-            df_users = run_query("usuarios")
+        df_users = run_query("usuarios")
 
         if not df_users.empty:
             st.subheader("Seleccionar Usuario para Gestionar")
