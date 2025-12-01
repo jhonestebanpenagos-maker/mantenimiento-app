@@ -655,7 +655,8 @@ with st.sidebar:
 if choice == "Tablero de Mando":
     st.title("TABLERO DE MANDO")
     mostrar_notificaciones()
-        df = run_query("ordenes")
+    
+       df = run_query("ordenes")
     
     if not df.empty:
         # Métricas inteligentes
