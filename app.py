@@ -217,9 +217,9 @@ if not supabase:
 
 # --- 3. FUNCIONES AUXILIARES MEJORADAS ---
 
-@st.cache_data(ttl=300)  # Cache de 5 minutos
+@st.cache_data(ttl=1)  # Cache de 1 segundo para datos en tiempo real
 def run_query(table_name, filters=None, order_by="id"):
-    """Función optimizada para consultas con cache y filtros"""
+    """Función optimizada para consultas con cache de 1 segundo"""
     try:
         query = supabase.table(table_name).select("*")
         
@@ -234,10 +234,6 @@ def run_query(table_name, filters=None, order_by="id"):
     except Exception as e:
         st.error(f"Error en consulta {table_name}: {e}")
         return pd.DataFrame()
-
-def mostrar_estado_carga(mensaje):
-    """Muestra un estado de carga elegante"""
-    return st.status(f"⏳ {mensaje}", expanded=False)
 
 def subir_imagen(archivo, carpeta="evidencias"):
     if archivo:
@@ -284,6 +280,7 @@ def leer_qr_imagen(uploaded_image):
         return None
     except:
         return None
+
 def convertir_tipos_python(data_dict):
     """
     Convierte los valores de un diccionario a tipos nativos de Python
@@ -337,16 +334,6 @@ def agregar_notificacion(tipo, mensaje):
         'type': tipo,
         'message': mensaje
     })
-
-# --- COMPONENTE REUTILIZABLE PARA TARJETAS ---
-def tarjeta_estilo(titulo, contenido, color_borde=PRO_ORANGE):
-    """Componente reutilizable para tarjetas con estilo"""
-    return st.markdown(f"""
-        <div class='card-style' style='border-left: 4px solid {color_border}'>
-            <span class='chart-header'>{titulo}</span>
-            {contenido}
-        </div>
-    """, unsafe_allow_html=True)
 
 # --- VALIDACIONES MEJORADAS ---
 def validar_usuario_unico(documento, usuario_id=None):
@@ -707,6 +694,7 @@ elif choice == "Inventario Activos":
                         nid = res.data[0]['id']
                         url = generar_qr_activo(nid, nom)
                         supabase.table("activos").update({"qr_url":url}).eq("id", nid).execute()
+                        st.cache_data.clear()
                         agregar_notificacion('success', 'Activo creado exitosamente.')
                         st.rerun()
                 else:
@@ -730,11 +718,13 @@ elif choice == "Inventario Activos":
                     try:
                         supabase.table("ordenes").delete().eq("activo_id", dat['id']).execute()
                         supabase.table("activos").delete().eq("id", dat['id']).execute()
+                        st.cache_data.clear()
                         agregar_notificacion('delete', 'Activo eliminado permanentemente.')
                         st.rerun()
                     except Exception as e:
                         agregar_notificacion('error', f'Error al eliminar: {e}')
             st.markdown("</div>", unsafe_allow_html=True)
+
 elif choice == "Crear Orden":
     st.title("GENERAR ORDEN")
     mostrar_notificaciones()
@@ -795,6 +785,7 @@ elif choice == "Crear Orden":
                             "fecha_creacion": datetime.now().isoformat()
                         }).execute()
                         
+                        st.cache_data.clear()
                         agregar_notificacion('success', f'Orden creada y asignada a {selected_tech.split(" - ")[0]}.')
                         st.rerun()
                     except Exception as e:
@@ -809,9 +800,6 @@ elif choice == "Crear Orden":
 elif choice == "Gestionar Órdenes":
     st.title("GESTIONAR ÓRDENES DE TRABAJO")
     mostrar_notificaciones()
-    
-    # FORZAR ACTUALIZACIÓN DEL CACHE AL ENTRAR A ESTA SECCIÓN
-    st.cache_data.clear()
     
     df_ordenes = run_query("ordenes")
     df_activos = run_query("activos")
@@ -1054,16 +1042,9 @@ elif choice == "Gestionar Órdenes":
                                 # Ejecutar actualización
                                 supabase.table("ordenes").update(update_data).eq("id", int(orden_id)).execute()
                                 
-                                # LIMPIAR CACHE Y FORZAR ACTUALIZACIÓN
+                                # LIMPIAR CACHE Y ACTUALIZAR INMEDIATAMENTE
                                 st.cache_data.clear()
-                                
-                                # Mensaje personalizado
-                                if nuevo_tecnico_id != tecnico_actual_id:
-                                    agregar_notificacion('success', f'Orden OT-{orden_id} actualizada y reasignada a {nuevo_tecnico_option.split(" - ")[0]}.')
-                                else:
-                                    agregar_notificacion('success', f'Orden OT-{orden_id} actualizada correctamente.')
-                                
-                                # Forzar recarga completa de la página
+                                agregar_notificacion('success', f'Orden OT-{orden_id} actualizada correctamente.')
                                 st.rerun()
                                 
                         except Exception as e:
@@ -1081,7 +1062,6 @@ elif choice == "Gestionar Órdenes":
                                 
                                 # LIMPIAR CACHE Y FORZAR ACTUALIZACIÓN
                                 st.cache_data.clear()
-                                
                                 agregar_notificacion('delete', f'Orden OT-{orden_id} eliminada permanentemente.')
                                 st.rerun()
                                 
@@ -1093,6 +1073,7 @@ elif choice == "Gestionar Órdenes":
     
     else:
         st.info("📭 No hay órdenes de trabajo registradas en el sistema.")
+        
 elif choice == "Cerrar Orden":
     st.title("CERRAR ORDEN")
     mostrar_notificaciones()
@@ -1111,6 +1092,7 @@ elif choice == "Cerrar Orden":
                 if st.form_submit_button("FINALIZAR"):
                     url = subir_imagen(img)
                     supabase.table("ordenes").update({"estado":"Concluida", "comentarios_cierre":rep, "evidencia_url":url}).eq("id",sid).execute()
+                    st.cache_data.clear()
                     agregar_notificacion('success', 'Orden cerrada exitosamente.')
                     st.rerun()
             st.markdown("</div>", unsafe_allow_html=True)
@@ -1151,6 +1133,7 @@ elif choice == "Usuarios":
                             }).execute()
 
                             if res.data:
+                                st.cache_data.clear()
                                 agregar_notificacion('success', f'Usuario {nombre} registrado con éxito.')
                                 st.rerun()
                             else:
@@ -1161,7 +1144,6 @@ elif choice == "Usuarios":
                     agregar_notificacion('warning', 'Por favor, complete todos los campos.')
 
     with tab_gestionar:
-
         df_users = run_query("usuarios")
 
         if not df_users.empty:
@@ -1240,6 +1222,7 @@ elif choice == "Usuarios":
 
                             try:
                                 supabase.table("usuarios").update(update_data).eq("id", user_id).execute()
+                                st.cache_data.clear()
                                 agregar_notificacion('success', f'Usuario {edit_name} actualizado.')
                                 st.rerun()
                             except Exception as e:
@@ -1277,6 +1260,7 @@ elif choice == "Usuarios":
                     ):
                         try:
                             supabase.table("usuarios").delete().eq("id", user_id).execute()
+                            st.cache_data.clear()
                             agregar_notificacion('delete', f'Usuario {selected_user["nombre"]} eliminado.')
                             st.rerun()
                         except Exception as e:
