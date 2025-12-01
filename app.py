@@ -687,7 +687,8 @@ if choice == "Tablero de Mando":
 elif choice == "Inventario Activos":
     st.title("INVENTARIO")
     mostrar_notificaciones()
-        df_act = run_query("activos")
+    
+    df_act = run_query("activos")
 
     tab1, tab2 = st.tabs(["NUEVO ACTIVO", "EDITAR / QR"])
 
@@ -734,7 +735,6 @@ elif choice == "Inventario Activos":
                     except Exception as e:
                         agregar_notificacion('error', f'Error al eliminar: {e}')
             st.markdown("</div>", unsafe_allow_html=True)
-
 elif choice == "Crear Orden":
     st.title("GENERAR ORDEN")
     mostrar_notificaciones()
