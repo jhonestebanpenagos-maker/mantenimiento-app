@@ -739,9 +739,8 @@ elif choice == "Crear Orden":
     st.title("GENERAR ORDEN")
     mostrar_notificaciones()
     
-
-        df_act = run_query("activos")
-        df_users = run_query("usuarios")
+    df_act = run_query("activos")
+    df_users = run_query("usuarios")
     
     if not df_act.empty:
         act_dict = dict(zip(df_act['nombre'], df_act['id']))
