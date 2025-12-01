@@ -621,22 +621,73 @@ elif choice == "Inventario Activos":
 elif choice == "Crear Orden":
     st.title("GENERAR ORDEN")
     mostrar_notificaciones()
+    
     df_act = run_query("activos")
+    df_users = run_query("usuarios")
+    
     if not df_act.empty:
         act_dict = dict(zip(df_act['nombre'], df_act['id']))
+        
         st.markdown("<div class='card-style'>", unsafe_allow_html=True)
+        
+        # Selectbox para seleccionar el activo
         sel = st.selectbox("Equipo", list(act_dict.keys()))
+        
         c1, c2 = st.columns(2)
         tipo = c1.selectbox("Tipo", ["Correctivo", "Preventivo"])
         crit = c2.select_slider("Criticidad", ["Baja", "Media", "Alta", "Crítica"])
+        
         desc = st.text_area("Descripción")
-        tec = st.text_input("Asignar a (Opcional)")
-        if st.button("CREAR ORDEN", type="primary"):
-            supabase.table("ordenes").insert({"activo_id":act_dict[sel], "descripcion":desc, "criticidad":crit, "tipo_mantenimiento":tipo, "estado":"Abierta", "tecnico_asignado":tec, "fecha_creacion": datetime.now().isoformat()}).execute()
-            st.session_state['notification'] = {'type':'success', 'message':'Orden creada.'}
-            st.rerun()
+        
+        # Campo de asignación mejorado con selectbox
+        if not df_users.empty:
+            # Crear un diccionario con nombre + rol como clave y el ID como valor
+            user_options = {
+                f"{row['nombre']} - {row['rol']}": str(row['id']) 
+                for _, row in df_users.iterrows()
+            }
+            
+            # Añadir opción por defecto
+            user_options_list = ["-- Seleccione un técnico --"] + list(user_options.keys())
+            
+            selected_tech = st.selectbox(
+                "Asignar a (Obligatorio) *",
+                user_options_list,
+                help="Seleccione el técnico o usuario responsable de esta orden"
+            )
+            
+            # Validar que se haya seleccionado un técnico
+            if st.button("CREAR ORDEN", type="primary", use_container_width=True):
+                if selected_tech == "-- Seleccione un técnico --":
+                    st.error("⚠️ Debe seleccionar un técnico para asignar la orden.")
+                elif not desc.strip():
+                    st.error("⚠️ Debe ingresar una descripción para la orden.")
+                else:
+                    # Obtener el ID del técnico seleccionado
+                    tecnico_id = user_options[selected_tech]
+                    
+                    # Insertar la orden en la base de datos
+                    supabase.table("ordenes").insert({
+                        "activo_id": act_dict[sel], 
+                        "descripcion": desc, 
+                        "criticidad": crit, 
+                        "tipo_mantenimiento": tipo, 
+                        "estado": "Abierta", 
+                        "tecnico_asignado": tecnico_id, 
+                        "fecha_creacion": datetime.now().isoformat()
+                    }).execute()
+                    
+                    st.session_state['notification'] = {
+                        'type': 'success', 
+                        'message': f'Orden creada y asignada a {selected_tech.split(" - ")[0]}.'
+                    }
+                    st.rerun()
+        else:
+            st.warning("⚠️ No hay usuarios registrados. Debe crear usuarios antes de generar órdenes.")
+            
         st.markdown("</div>", unsafe_allow_html=True)
-
+    else:
+        st.warning("⚠️ No hay activos registrados. Debe crear activos antes de generar órdenes.")
 elif choice == "Cerrar Orden":
     st.title("CERRAR ORDEN")
     mostrar_notificaciones()
