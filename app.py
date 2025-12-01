@@ -800,52 +800,183 @@ with st.sidebar:
         </div>
     """, unsafe_allow_html=True)
 
-    if st.button("Cerrar Sesión", use_container_width=True): logout()
-    st.write("") 
-
-    opts = []
-    icons_list = []
+    if st.button("Cerrar Sesión", use_container_width=True): 
+        logout()
     
+    st.markdown("---")
+    
+    # Inicializar choice
+    if 'nav_choice' not in st.session_state:
+        st.session_state.nav_choice = "Tablero de Mando"
+    
+    # Definir páginas según rol con iconos modernos
     if rol == "Admin":
-        opts = ["Tablero de Mando", "Inventario Activos", "Crear Orden", "Gestionar Órdenes", "Cerrar Orden", "Usuarios"]
-        icons_list = ["speedometer2", "box-seam", "plus-circle", "list-task", "check2-circle", "people"]
+        menu_items = [
+            {"icon": "📊", "label": "Tablero de Mando", "key": "dashboard"},
+            {"icon": "📦", "label": "Inventario Activos", "key": "inventory"},
+            {"icon": "➕", "label": "Crear Orden", "key": "create_order"},
+            {"icon": "📋", "label": "Gestionar Órdenes", "key": "manage_orders"},
+            {"icon": "✅", "label": "Cerrar Orden", "key": "close_order"},
+            {"icon": "👥", "label": "Usuarios", "key": "users"}
+        ]
     elif rol == "Programador":
-        opts = ["Tablero de Mando", "Crear Orden", "Gestionar Órdenes", "Usuarios"]
-        icons_list = ["speedometer2", "plus-circle", "list-task", "people"]
+        menu_items = [
+            {"icon": "📊", "label": "Tablero de Mando", "key": "dashboard"},
+            {"icon": "➕", "label": "Crear Orden", "key": "create_order"},
+            {"icon": "📋", "label": "Gestionar Órdenes", "key": "manage_orders"},
+            {"icon": "👥", "label": "Usuarios", "key": "users"}
+        ]
     elif rol == "Tecnico":
-        opts = ["Cerrar Orden"]
-        icons_list = ["check2-circle"]
+        menu_items = [
+            {"icon": "✅", "label": "Cerrar Orden", "key": "close_order"}
+        ]
     
-    # MENÚ SIMPLIFICADO Y MEJORADO - ¡FUERA DEL CSS! ES CÓDIGO PYTHON
-    choice = option_menu(
-        menu_title=None,  # Sin título
-        options=opts,
-        icons=icons_list,
-        default_index=0,
-        styles={
-            "container": {
-                "background-color": "transparent",
-                "padding": "0px"
-            },
-            "icon": {
-                "color": PRO_ORANGE, 
-                "font-size": "16px"
-            },
-            "nav-link": {
-                "color": "#9CA3AF",
-                "font-size": "14px",
-                "padding": "12px 15px",
-                "margin": "2px 0px",
-                "border-radius": "8px",
-                "cursor": "default",  # Elimina la manito
-            },
-            "nav-link-selected": {
-                "background-color": "#1F2937",
-                "color": "white",
-                "border-left": f"4px solid {PRO_ORANGE}",
-            }
+    # CSS para menú elegante
+    st.markdown("""
+    <style>
+    .elegant-menu {
+        display: flex;
+        flex-direction: column;
+        gap: 3px;
+    }
+    
+    .menu-option {
+        display: flex;
+        align-items: center;
+        padding: 12px 16px;
+        border-radius: 10px;
+        margin: 2px 0;
+        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        background: rgba(31, 41, 55, 0.7);
+        border: 1px solid rgba(75, 85, 99, 0.3);
+        cursor: default;
+    }
+    
+    .menu-option:hover {
+        background: rgba(55, 65, 81, 0.9);
+        border-color: rgba(245, 158, 11, 0.4);
+        transform: translateX(5px);
+    }
+    
+    .menu-option.active {
+        background: linear-gradient(135deg, rgba(31, 41, 55, 0.95), rgba(17, 24, 39, 0.95));
+        border-left: 4px solid #F59E0B;
+        box-shadow: 0 4px 12px rgba(245, 158, 11, 0.2);
+    }
+    
+    .menu-icon {
+        font-size: 18px;
+        min-width: 30px;
+        text-align: center;
+        color: #F59E0B;
+    }
+    
+    .menu-text {
+        font-size: 14px;
+        font-weight: 500;
+        color: #E5E7EB;
+        white-space: nowrap;
+        transition: all 0.3s ease;
+    }
+    
+    /* Cuando la barra está colapsada (responsive) */
+    @media (max-width: 768px) {
+        .menu-text {
+            display: none;
         }
-    )
+        
+        .menu-option {
+            justify-content: center;
+            padding: 16px;
+            border-radius: 12px;
+        }
+        
+        .menu-icon {
+            font-size: 22px;
+            min-width: auto;
+        }
+        
+        .menu-option.active {
+            border-left: none;
+            border-bottom: 3px solid #F59E0B;
+            box-shadow: 0 4px 15px rgba(245, 158, 11, 0.3);
+        }
+        
+        .menu-option:hover {
+            transform: translateY(-2px);
+        }
+    }
+    
+    /* Tooltip para cuando está colapsado */
+    .menu-option {
+        position: relative;
+    }
+    
+    .menu-option::after {
+        content: attr(data-tooltip);
+        position: absolute;
+        left: 100%;
+        top: 50%;
+        transform: translateY(-50%);
+        background: #1F2937;
+        color: white;
+        padding: 8px 12px;
+        border-radius: 6px;
+        font-size: 12px;
+        white-space: nowrap;
+        opacity: 0;
+        visibility: hidden;
+        transition: all 0.3s ease;
+        z-index: 1000;
+        border: 1px solid #374151;
+        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+        pointer-events: none;
+    }
+    
+    @media (max-width: 768px) {
+        .menu-option:hover::after {
+            opacity: 1;
+            visibility: visible;
+            left: 110%;
+        }
+    }
+    </style>
+    """, unsafe_allow_html=True)
+    
+    # Crear el menú visual
+    st.markdown('<div class="elegant-menu">', unsafe_allow_html=True)
+    
+    for item in menu_items:
+        is_active = "active" if st.session_state.nav_choice == item["label"] else ""
+        
+        # Crear columnas para simular el diseño del menú
+        col1, col2 = st.columns([1, 5])
+        
+        with col1:
+            st.markdown(f'<div class="menu-icon">{item["icon"]}</div>', unsafe_allow_html=True)
+        
+        with col2:
+            # Botón invisible para la funcionalidad
+            if st.button(
+                "⠀" + item["label"],  # Carácter invisible + texto
+                key=f"nav_{item['key']}",
+                use_container_width=True,
+                type="primary" if is_active else "secondary"
+            ):
+                st.session_state.nav_choice = item["label"]
+                st.rerun()
+            
+            # Overlay visual (simulación del diseño CSS)
+            st.markdown(
+                f'<div class="menu-option {is_active}" data-tooltip="{item["label"]}">'
+                f'<span class="menu-text">{item["label"]}</span>'
+                f'</div>',
+                unsafe_allow_html=True
+            )
+    
+    st.markdown('</div>', unsafe_allow_html=True)
+    
+    choice = st.session_state.nav_choice
 # ==============================================================================
 # 📊 PANTALLAS
 # ==============================================================================
