@@ -688,7 +688,7 @@ elif choice == "Inventario Activos":
     st.title("INVENTARIO")
     mostrar_notificaciones()
 
-    df_act = run_query("activos")
+        df_act = run_query("activos")
 
     tab1, tab2 = st.tabs(["NUEVO ACTIVO", "EDITAR / QR"])
 
