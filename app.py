@@ -426,7 +426,7 @@ def mostrar_metricas_inteligentes(df_ordenes, df_users):
             help="Excelente: ≥90% | Buena: ≥70% | Regular: ≥50% | Crítica: <50%"
         )
 # --- GRÁFICOS (PLOTLY) ---
-# --- FUNCIÓN MEJORADA PARA GRÁFICO DE TÉCNICOS ---
+# --- FUNCIÓN CORREGIDA PARA GRÁFICO DE TÉCNICOS ---
 def graficar_ordenes_por_tecnico(df_ordenes, df_users):
     """Muestra gráfico compacto de órdenes por técnico"""
     if df_ordenes.empty or df_users.empty:
@@ -463,30 +463,48 @@ def graficar_ordenes_por_tecnico(df_ordenes, df_users):
             'Total': total_tecnico
         })
     
-    df_final = pd.DataFrame(datos_final).sort_values('Total', ascending=True)  # Orden ascendente para mejor visualización
+    df_final = pd.DataFrame(datos_final).sort_values('Total', ascending=True)
     
-    # Crear gráfico de barras apiladas COMPACTO
+    # Crear gráfico de barras apiladas CORREGIDO
     fig = go.Figure()
     
+    # Concluidas - Verde sólido
     fig.add_trace(go.Bar(
-        name='✅ Concluidas',
+        name='Concluidas',  # Texto simple sin emoji
         y=df_final['Técnico'],
         x=df_final['Concluidas'],
         orientation='h',
-        marker=dict(color=PRO_GREEN),
+        marker=dict(
+            color=PRO_GREEN,
+            line=dict(width=0)  # Sin borde para mejor contraste
+        ),
         text=df_final['Concluidas'],
         textposition='inside',
+        textfont=dict(
+            color='white',  # Texto blanco para mejor contraste
+            size=12,
+            weight='bold'
+        ),
         hovertemplate='<b>%{y}</b><br>Concluidas: %{x}<extra></extra>'
     ))
     
+    # Abiertas - Naranja sólido (mejor contraste que amarillo)
     fig.add_trace(go.Bar(
-        name='🔄 Abiertas',
+        name='Abiertas',  # Texto simple sin emoji
         y=df_final['Técnico'],
         x=df_final['Abiertas'],
         orientation='h',
-        marker=dict(color=PRO_ORANGE),
+        marker=dict(
+            color=PRO_ORANGE,
+            line=dict(width=0)  # Sin borde para mejor contraste
+        ),
         text=df_final['Abiertas'],
         textposition='inside',
+        textfont=dict(
+            color='white',  # Texto blanco para mejor contraste
+            size=12,
+            weight='bold'
+        ),
         hovertemplate='<b>%{y}</b><br>Abiertas: %{x}<extra></extra>'
     ))
     
@@ -495,28 +513,46 @@ def graficar_ordenes_por_tecnico(df_ordenes, df_users):
         paper_bgcolor='rgba(0,0,0,0)',
         plot_bgcolor='rgba(0,0,0,0)',
         font=dict(color='white', size=12),
-        height=250,  # Más compacto
-        margin=dict(l=0, r=0, t=0, b=0),  # Sin márgenes
+        height=250,
+        margin=dict(l=0, r=0, t=10, b=0),  # Margen superior pequeño
         showlegend=True,
         legend=dict(
             orientation="h",
             yanchor="bottom",
-            y=-0.3,  # Leyenda fuera del gráfico
+            y=-0.25,  # Leyenda más cerca
             xanchor="center",
-            x=0.5
+            x=0.5,
+            font=dict(
+                color='white',  # Texto de leyenda en blanco
+                size=12
+            ),
+            bgcolor='rgba(0,0,0,0)',  # Fondo transparente
+            bordercolor='rgba(0,0,0,0)'  # Sin borde
         ),
         xaxis=dict(
             showgrid=True, 
             gridcolor='rgba(255,255,255,0.1)',
-            title=None
+            title=None,
+            showticklabels=True
         ),
         yaxis=dict(
             title=None,
-            tickfont=dict(size=10)  # Texto más pequeño
+            tickfont=dict(size=11)
         )
     )
     
-    st.plotly_chart(fig, use_container_width=True)
+    # Eliminar los botones de zoom y otros controles
+    fig.update_layout(
+        dragmode=False,
+        hovermode='y unified'
+    )
+    
+    config = {
+        'displayModeBar': False,  # Oculta completamente la barra de herramientas
+        'staticPlot': False
+    }
+    
+    st.plotly_chart(fig, use_container_width=True, config=config)
 def graficar_criticidad(df):
     if df.empty: return
     conteo = df['criticidad'].value_counts().reset_index()
@@ -782,14 +818,13 @@ if choice == "Tablero de Mando":
             st.markdown("</div>", unsafe_allow_html=True)
 
         # SEGUNDA FILA: GRÁFICO DE TÉCNICOS (MÁS ANCHO)
-        st.markdown("### 👥 Distribución por Técnico")
-        st.markdown(f"<div class='card-style'><span class='chart-header'>Carga de Trabajo por Técnico</span>", unsafe_allow_html=True)
+        st.markdown("### 👥 Órdenes de Trabajo por Técnico")
+        st.markdown(f"<div class='card-style'>", unsafe_allow_html=True)
         graficar_ordenes_por_tecnico(df, df_users)
         st.markdown("</div>", unsafe_allow_html=True)
 
     else: 
         st.info("No hay datos para mostrar.")
-
 elif choice == "Inventario Activos":
     st.title("INVENTARIO")
     mostrar_notificaciones()
