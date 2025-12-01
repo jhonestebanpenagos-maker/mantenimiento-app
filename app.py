@@ -809,28 +809,90 @@ with st.sidebar:
     if 'nav_choice' not in st.session_state:
         st.session_state.nav_choice = "Tablero de Mando"
     
-    # Definir páginas
+    # Definir páginas según rol con iconos simples
     if rol == "Admin":
-        pages = ["📊 Tablero", "📦 Inventario", "➕ Crear OT", "📋 Gestionar", "✅ Cerrar OT", "👤 Usuarios"]
-        actual_pages = ["Tablero de Mando", "Inventario Activos", "Crear Orden", "Gestionar Órdenes", "Cerrar Orden", "Usuarios"]
+        menu_items = [
+            {"icon": "📊", "label": "Tablero de Mando", "key": "dashboard"},
+            {"icon": "📦", "label": "Inventario Activos", "key": "inventory"},
+            {"icon": "➕", "label": "Crear Orden", "key": "create_order"},
+            {"icon": "📋", "label": "Gestionar Órdenes", "key": "manage_orders"},
+            {"icon": "✅", "label": "Cerrar Orden", "key": "close_order"},
+            {"icon": "👤", "label": "Usuarios", "key": "users"}
+        ]
     elif rol == "Programador":
-        pages = ["📊 Tablero", "➕ Crear OT", "📋 Gestionar", "👤 Usuarios"]
-        actual_pages = ["Tablero de Mando", "Crear Orden", "Gestionar Órdenes", "Usuarios"]
+        menu_items = [
+            {"icon": "📊", "label": "Tablero de Mando", "key": "dashboard"},
+            {"icon": "➕", "label": "Crear Orden", "key": "create_order"},
+            {"icon": "📋", "label": "Gestionar Órdenes", "key": "manage_orders"},
+            {"icon": "👤", "label": "Usuarios", "key": "users"}
+        ]
     elif rol == "Tecnico":
-        pages = ["✅ Cerrar OT"]
-        actual_pages = ["Cerrar Orden"]
+        menu_items = [
+            {"icon": "✅", "label": "Cerrar Orden", "key": "close_order"}
+        ]
     
-    # Crear botones con texto corto e icono
-    for display_text, actual_page in zip(pages, actual_pages):
-        btn_type = "primary" if st.session_state.nav_choice == actual_page else "secondary"
+    # CSS mínimo y elegante
+    st.markdown("""
+    <style>
+    /* Asegurar que los iconos sean visibles cuando la sidebar está colapsada */
+    [data-testid="stSidebar"] button div p {
+        font-size: 18px !important;
+    }
+    
+    /* Cuando la barra está colapsada, mostrar solo el primer elemento (icono) */
+    @media (max-width: 900px) {
+        [data-testid="stSidebar"] button div p {
+            font-size: 22px !important;
+        }
         
+        /* Ocultar el texto pero mantener el icono */
+        [data-testid="stSidebar"] button span {
+            display: none !important;
+        }
+        
+        /* Mostrar solo el primer span (que contiene el icono) */
+        [data-testid="stSidebar"] button p {
+            display: block !important;
+            margin: 0 auto !important;
+        }
+    }
+    
+    /* Estilo para botones activos - más sutil */
+    [data-testid="stSidebar"] button[kind="primary"] {
+        background: rgba(31, 41, 55, 0.9) !important;
+        border-left: 3px solid #F59E0B !important;
+        color: white !important;
+    }
+    
+    [data-testid="stSidebar"] button[kind="secondary"] {
+        background: rgba(31, 41, 55, 0.6) !important;
+        color: #D1D5DB !important;
+        border: 1px solid rgba(75, 85, 99, 0.3) !important;
+    }
+    
+    [data-testid="stSidebar"] button:hover {
+        background: rgba(55, 65, 81, 0.8) !important;
+        border-color: rgba(245, 158, 11, 0.4) !important;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+    
+    # Crear los botones del menú - FORMATO SIMPLE
+    for item in menu_items:
+        # Formato: Icono + Espacio + Texto
+        btn_text = f"{item['icon']}  {item['label']}"
+        
+        # Determinar el tipo de botón
+        btn_type = "primary" if st.session_state.nav_choice == item["label"] else "secondary"
+        
+        # Crear el botón
         if st.button(
-            display_text,
-            key=f"nav_{actual_page.replace(' ', '_')}",
+            btn_text,
+            key=f"nav_{item['key']}",
             use_container_width=True,
             type=btn_type
         ):
-            st.session_state.nav_choice = actual_page
+            st.session_state.nav_choice = item["label"]
             st.rerun()
     
     choice = st.session_state.nav_choice
