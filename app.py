@@ -857,10 +857,21 @@ elif choice == "Inventario Activos":
         ]
     }
 
+    # Lista de categorías actualizada con los nuevos ítems
     categorias_list = sorted([
-        "CCTV", "Control de Acceso", "Eléctrico", "Estanterías", 
-        "Hidrosanitario", "Infraestructura", "Mecánico", 
-        "Muelles", "Red Contra Incendio"
+        "Aire Acondicionado", 
+        "CCTV", 
+        "Control de Acceso", 
+        "Eléctrico", 
+        "Estanterías", 
+        "Extraccion", 
+        "Hidrosanitario", 
+        "Infraestructura", 
+        "Mecánico", 
+        "Muelles", 
+        "Red Contra Incendio", 
+        "Refrigeración Industrial", 
+        "Ventilacion"
     ])
 
     df_act = run_query("activos")
