@@ -17,15 +17,15 @@ import plotly.graph_objects as go
 st.set_page_config(page_title="Orión | Mantenimiento", layout="wide", initial_sidebar_state="collapsed")
 
 # ==============================================================================
-# 🎨 TEMA: "ORIÓN COMFORT UI" (Mejorado para la vista)
+# 🎨 TEMA: "ORIÓN COMFORT UI" (Visualmente optimizado)
 # ==============================================================================
 
 PRO_ORANGE = "#F59E0B" 
 PRO_GREEN = "#10B981"  
-BG_DARK_CLEAN = "#0e1117"  # Fondo principal más profundo (Gris casi negro)
-BG_SIDEBAR = "#161b22"     # Barra lateral: Gris azulado oscuro (tipo GitHub Dark)
-BG_CARD = "rgba(30, 41, 59, 0.7)" # Tarjetas semitransparentes
-TEXT_WHITE = "#E5E7EB"     # Blanco humo (menos agresivo que #FFFFFF)
+BG_DARK_CLEAN = "#0e1117"  # Fondo principal más profundo
+BG_SIDEBAR = "#161b22"     # Barra lateral Gris Azulado Oscuro (Más cómodo)
+BG_CARD = "rgba(30, 41, 59, 0.7)" # Tarjetas semi-transparentes
+TEXT_WHITE = "#E5E7EB"     # Blanco humo (menos agresivo que el blanco puro)
 
 st.markdown(f"""
     <style>
@@ -35,25 +35,28 @@ st.markdown(f"""
         color: {TEXT_WHITE};
     }}
 
-    /* 2. BARRA LATERAL AJUSTADA */
+    /* 2. BARRA LATERAL OPTIMIZADA */
     [data-testid="stSidebar"] {{
         background-color: {BG_SIDEBAR};
         border-right: 1px solid #30363d;
     }}
     
-    /* Texto de navegación más legible */
+    /* Textos del menú lateral */
     [data-testid="stSidebarNav"] span {{
         color: #9CA3AF !important;
         font-weight: 500;
     }}
     
-    /* Elemento seleccionado en el menú */
+    /* Hover y selección en el menú */
+    [data-testid="stSidebarNav"] a:hover {{
+        background-color: rgba(255, 255, 255, 0.05);
+    }}
     [data-testid="stSidebarNav"] a[aria-current="page"] {{
         background-color: rgba(245, 158, 11, 0.1);
         border-left: 3px solid {PRO_ORANGE};
     }}
 
-    /* 3. TÍTULOS */
+    /* 3. TÍTULOS CON GRADIENTE */
     h1, h2, h3 {{
         background: linear-gradient(90deg, {PRO_ORANGE}, {PRO_GREEN});
         -webkit-background-clip: text;
@@ -63,7 +66,7 @@ st.markdown(f"""
         letter-spacing: 0.5px;
     }}
 
-    /* 4. TARJETAS */
+    /* 4. TARJETAS (Glassmorphism sutil) */
     .card-style {{
         background: {BG_CARD};
         backdrop-filter: blur(12px);
@@ -90,7 +93,7 @@ st.markdown(f"""
         display: block;
     }}
 
-    /* 6. INPUTS Y MENÚS (Estilo unificado) */
+    /* 6. INPUTS Y SELECTS (Estilo oscuro integrado) */
     .stTextInput input, .stTextArea textarea, .stSelectbox > div > div {{
         background-color: #0d1117 !important; 
         color: #e6edf3 !important;
@@ -103,20 +106,23 @@ st.markdown(f"""
         border-color: {PRO_ORANGE} !important;
         box-shadow: 0 0 0 1px {PRO_ORANGE} !important;
     }}
-
+    
+    .stTextInput label {{
+        color: {TEXT_WHITE} !important;
+        font-weight: 600 !important;
+    }}
+    
+    /* Menús desplegables */
     div[data-baseweb="popover"], div[data-baseweb="menu"] {{
         background-color: #161b22 !important;
         border: 1px solid #30363d;
     }}
+    div[data-baseweb="menu"] li {{
+        color: {TEXT_WHITE} !important;
+    }}
     div[data-baseweb="menu"] li:hover {{
         background-color: {PRO_ORANGE} !important;
         color: white !important;
-    }}
-    
-    /* Etiquetas de inputs */
-    .stTextInput label, .stSelectbox label, .stTextArea label {{
-        color: #E5E7EB !important;
-        font-weight: 600 !important;
     }}
     
     /* 7. BOTONES */
@@ -124,7 +130,7 @@ st.markdown(f"""
         background: linear-gradient(90deg, {PRO_ORANGE} 0%, {PRO_GREEN} 100%) !important;
         color: white !important;
         border: none;
-        font-weight: 600;
+        font-weight: bold;
         border-radius: 6px;
         padding: 0.6rem 1.2rem;
         transition: transform 0.2s;
@@ -132,20 +138,19 @@ st.markdown(f"""
     div.stButton > button:first-child:hover {{
         transform: translateY(-2px);
         opacity: 0.9;
+        box-shadow: 0 4px 12px rgba(16, 185, 129, 0.2);
     }}
 
     /* 8. MÉTRICAS */
     [data-testid="stMetric"] {{
         background: rgba(30, 41, 59, 0.5);
-        padding: 15px;
-        border-radius: 8px;
+        padding: 20px;
+        border-radius: 10px;
         border-left: 4px solid {PRO_GREEN};
-        border-top: 1px solid rgba(255,255,255,0.05);
-        border-right: 1px solid rgba(255,255,255,0.05);
-        border-bottom: 1px solid rgba(255,255,255,0.05);
+        box-shadow: 0 2px 5px rgba(0,0,0,0.2);
     }}
     [data-testid="stMetricLabel"] {{ color: #9CA3AF !important; }}
-    [data-testid="stMetricValue"] {{ color: #F3F4F6 !important; }}
+    [data-testid="stMetricValue"] {{ color: {TEXT_WHITE} !important; }}
 
     /* 9. PESTAÑAS (TABS) */
     .stTabs [data-baseweb="tab"] {{ color: #9CA3AF; font-weight: 600; }}
@@ -155,40 +160,29 @@ st.markdown(f"""
     .danger-zone {{
         background: rgba(220, 38, 38, 0.1);
         border: 1px solid rgba(220, 38, 38, 0.3);
-        color: #f87171;
+        color: #EF4444;
         padding: 15px;
         border-radius: 8px;
         text-align: center;
     }}
 
-    /* 11. BOTÓN SECUNDARIO (ROJO/BORRAR) */
+    /* 11. BOTÓN SECUNDARIO (ROJO/ELIMINAR) */
     div.stButton > button[kind="secondary"] {{
-        background: rgba(220, 38, 38, 0.15) !important;
-        color: #fca5a5 !important;
-        border: 1px solid #ef4444 !important;
-        font-weight: 600 !important;
+        background: transparent !important;
+        color: #F87171 !important;
+        border: 1px solid #F87171 !important;
+        transition: all 0.3s ease !important;
     }}
     div.stButton > button[kind="secondary"]:hover {{
-        background: rgba(220, 38, 38, 0.3) !important;
-        border-color: #f87171 !important;
+        background: rgba(220, 38, 38, 0.1) !important;
+        color: #FCA5A5 !important;
     }}
 
-    /* 12. HACK: OCULTAR CONTENEDORES VACÍOS */
-    div[data-testid="stVerticalBlock"] > div:empty {{
-        height: 0 !important;
-        margin: 0 !important;
-    }}
+    /* 12. AJUSTES DE ESPACIADO */
+    .block-container { padding-top: 2rem; }
     
-    /* 13. MEJORAS NAVEGACIÓN COLAPSADA */
-    [data-testid="stSidebarNav"] {{
-        padding-top: 10px !important;
-    }}
-    
-    /* Tooltip personalizado en CSS para menú colapsado */
-    @media (max-width: 768px) {{
-        [data-testid="stSidebarNavItems"] .nav-link span {{ display: none; }}
-    }}
-    
+    /* Ocultar contenedores vacíos */
+    div[data-testid="stVerticalBlock"] > div:empty { height: 0; margin: 0; }
     </style>
 """, unsafe_allow_html=True)
 
@@ -383,10 +377,10 @@ def mostrar_metricas_inteligentes(df_ordenes, df_users):
     pendientes = len(df_ordenes[df_ordenes['estado'] == 'Abierta'])
     concluidas = len(df_ordenes[df_ordenes['estado'] == 'Concluida'])
     
-    # Calcular porcentajes
+    # Calcular porcentajes CORREGIDO
     porcentaje_concluidas = (concluidas / total * 100) if total > 0 else 0
     
-    # Cálculo de eficiencia
+    # Cálculo de eficiencia MEJORADO
     if total == 0:
         eficiencia_valor = "Sin datos"
         eficiencia_color = "⚪"
@@ -506,17 +500,14 @@ def graficar_ordenes_por_tecnico(df_ordenes, df_users):
             font=dict(color='white', size=12),
             bgcolor='rgba(0,0,0,0)'
         ),
-        xaxis=dict(
-            showgrid=True, 
-            gridcolor='rgba(255,255,255,0.1)',
-            title=None,
-            showticklabels=True
-        ),
+        xaxis=dict(showgrid=True, gridcolor='rgba(255,255,255,0.1)', title=None, showticklabels=True),
         yaxis=dict(title=None, tickfont=dict(size=11))
     )
     
     fig.update_layout(dragmode=False, hovermode='y unified')
-    st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
+    
+    config = {'displayModeBar': False, 'staticPlot': False}
+    st.plotly_chart(fig, use_container_width=True, config=config)
 
 def graficar_criticidad(df):
     if df.empty: return
