@@ -377,9 +377,9 @@ def get_open_orders_details(user_id):
     except:
         return []
 
-# --- MÉTRICAS INTELIGENTES ---
-def mostrar_metricas_inteligentes(df_ordenes):
-    """Muestra métricas con análisis contextual"""
+# --- MÉTRICAS INTELIGENTES MEJORADAS ---
+def mostrar_metricas_inteligentes(df_ordenes, df_users):
+    """Muestra métricas con análisis contextual mejorado"""
     if df_ordenes.empty:
         st.info("No hay datos para mostrar métricas")
         return
@@ -388,9 +388,25 @@ def mostrar_metricas_inteligentes(df_ordenes):
     pendientes = len(df_ordenes[df_ordenes['estado'] == 'Abierta'])
     concluidas = len(df_ordenes[df_ordenes['estado'] == 'Concluida'])
     
-    # Calcular porcentajes
+    # Calcular porcentajes CORREGIDO
     porcentaje_concluidas = (concluidas / total * 100) if total > 0 else 0
-    eficiencia = "🟢 Excelente" if porcentaje_concluidas > 80 else "🟡 Regular" if porcentaje_concluidas > 50 else "🔴 Crítico"
+    
+    # Cálculo de eficiencia MEJORADO
+    if total == 0:
+        eficiencia_valor = "Sin datos"
+        eficiencia_color = "⚪"
+    elif porcentaje_concluidas >= 90:
+        eficiencia_valor = "Excelente"
+        eficiencia_color = "🟢"
+    elif porcentaje_concluidas >= 70:
+        eficiencia_valor = "Buena"
+        eficiencia_color = "🟡"
+    elif porcentaje_concluidas >= 50:
+        eficiencia_valor = "Regular"
+        eficiencia_color = "🟠"
+    else:
+        eficiencia_valor = "Crítica"
+        eficiencia_color = "🔴"
     
     col1, col2, col3, col4 = st.columns(4)
     
@@ -404,9 +420,95 @@ def mostrar_metricas_inteligentes(df_ordenes):
         st.metric("Finalizadas", concluidas, f"{porcentaje_concluidas:.1f}%")
     
     with col4:
-        st.metric("Eficiencia", eficiencia)
-
+        st.metric(
+            f"{eficiencia_color} Eficiencia", 
+            eficiencia_valor,
+            help="Excelente: ≥90% | Buena: ≥70% | Regular: ≥50% | Crítica: <50%"
+        )
 # --- GRÁFICOS (PLOTLY) ---
+# --- NUEVA FUNCIÓN PARA GRÁFICO DE TÉCNICOS ---
+def graficar_ordenes_por_tecnico(df_ordenes, df_users):
+    """Muestra gráfico de órdenes por técnico"""
+    if df_ordenes.empty or df_users.empty:
+        st.info("No hay datos suficientes para mostrar órdenes por técnico")
+        return
+    
+    # Crear mapeo de IDs a nombres de técnicos
+    user_map = dict(zip(df_users['id'].astype(str), df_users['nombre']))
+    
+    # Preparar datos
+    df_tecnicos = df_ordenes.copy()
+    df_tecnicos['tecnico_nombre'] = df_tecnicos['tecnico_asignado'].astype(str).map(user_map).fillna('Sin asignar')
+    
+    # Contar órdenes por técnico y estado
+    conteo_tecnicos = df_tecnicos.groupby(['tecnico_nombre', 'estado']).size().reset_index(name='cantidad')
+    
+    # Separar en abiertas y concluidas
+    abiertas = conteo_tecnicos[conteo_tecnicos['estado'] == 'Abierta']
+    concluidas = conteo_tecnicos[conteo_tecnicos['estado'] == 'Concluida']
+    
+    # Crear DataFrame unificado
+    tecnicos_unicos = df_tecnicos['tecnico_nombre'].unique()
+    datos_final = []
+    
+    for tecnico in tecnicos_unicos:
+        abierta_count = abiertas[abiertas['tecnico_nombre'] == tecnico]['cantidad'].sum()
+        concluida_count = concluidas[concluidas['tecnico_nombre'] == tecnico]['cantidad'].sum()
+        total_tecnico = abierta_count + concluida_count
+        
+        datos_final.append({
+            'Técnico': tecnico,
+            'Abiertas': abierta_count,
+            'Concluidas': concluida_count,
+            'Total': total_tecnico
+        })
+    
+    df_final = pd.DataFrame(datos_final).sort_values('Total', ascending=False)
+    
+    # Crear gráfico de barras apiladas
+    fig = go.Figure()
+    
+    fig.add_trace(go.Bar(
+        name='Concluidas',
+        y=df_final['Técnico'],
+        x=df_final['Concluidas'],
+        orientation='h',
+        marker=dict(color=PRO_GREEN),
+        text=df_final['Concluidas'],
+        textposition='inside'
+    ))
+    
+    fig.add_trace(go.Bar(
+        name='Abiertas',
+        y=df_final['Técnico'],
+        x=df_final['Abiertas'],
+        orientation='h',
+        marker=dict(color=PRO_ORANGE),
+        text=df_final['Abiertas'],
+        textposition='inside'
+    ))
+    
+    fig.update_layout(
+        title='Órdenes por Técnico',
+        barmode='stack',
+        paper_bgcolor='rgba(0,0,0,0)',
+        plot_bgcolor='rgba(0,0,0,0)',
+        font=dict(color='white'),
+        height=300,
+        margin=dict(l=0, r=0, t=40, b=0),
+        showlegend=True,
+        legend=dict(
+            orientation="h",
+            yanchor="bottom",
+            y=1.02,
+            xanchor="right",
+            x=1
+        ),
+        xaxis=dict(showgrid=True, gridcolor='rgba(255,255,255,0.1)'),
+        yaxis=dict(title=None)
+    )
+    
+    st.plotly_chart(fig, use_container_width=True)
 def graficar_criticidad(df):
     if df.empty: return
     conteo = df['criticidad'].value_counts().reset_index()
@@ -644,14 +746,16 @@ if choice == "Tablero de Mando":
     mostrar_notificaciones()
     
     df = run_query("ordenes")
+    df_users = run_query("usuarios")  # Nuevo: cargar usuarios para el gráfico
     
     if not df.empty:
-        # Métricas inteligentes
-        mostrar_metricas_inteligentes(df)
+        # Métricas inteligentes MEJORADAS
+        mostrar_metricas_inteligentes(df, df_users)
 
         st.write("") 
 
-        c_left, c_mid, c_right = st.columns(3)
+        # CAMBIAR DE 3 A 4 COLUMNAS
+        c_left, c_mid, c_right, c_far = st.columns([1, 1, 1, 1])
 
         with c_left:
             st.markdown(f"<div class='card-style'><span class='chart-header'>Progreso de Órdenes</span>", unsafe_allow_html=True)
@@ -667,6 +771,41 @@ if choice == "Tablero de Mando":
             st.markdown(f"<div class='card-style'><span class='chart-header'>Tipos de Mantenimiento</span>", unsafe_allow_html=True)
             graficar_torta_tipo(df) 
             st.markdown("</div>", unsafe_allow_html=True)
+        
+        with c_far:
+            st.markdown(f"<div class='card-style'><span class='chart-header'>Órdenes por Técnico</span>", unsafe_allow_html=True)
+            graficar_ordenes_por_tecnico(df, df_users)
+            st.markdown("</div>", unsafe_allow_html=True)
+
+        # TABLA DETALLADA DE TÉCNICOS (OPCIONAL)
+        st.markdown("---")
+        st.markdown("### 📊 Detalle por Técnico")
+        
+        # Crear tabla detallada
+        if not df_users.empty:
+            user_map = dict(zip(df_users['id'].astype(str), df_users['nombre']))
+            df_tecnicos_detalle = df.copy()
+            df_tecnicos_detalle['tecnico_nombre'] = df_tecnicos_detalle['tecnico_asignado'].astype(str).map(user_map).fillna('Sin asignar')
+            
+            # Agrupar y contar
+            resumen_tecnicos = df_tecnicos_detalle.groupby('tecnico_nombre').agg({
+                'id': 'count',
+                'estado': lambda x: (x == 'Concluida').sum()
+            }).reset_index()
+            
+            resumen_tecnicos.columns = ['Técnico', 'Total Órdenes', 'Concluidas']
+            resumen_tecnicos['Abiertas'] = resumen_tecnicos['Total Órdenes'] - resumen_tecnicos['Concluidas']
+            resumen_tecnicos['Eficiencia'] = (resumen_tecnicos['Concluidas'] / resumen_tecnicos['Total Órdenes'] * 100).round(1)
+            resumen_tecnicos['Eficiencia'] = resumen_tecnicos['Eficiencia'].apply(lambda x: f"{x}%" if pd.notnull(x) else "0%")
+            
+            # Ordenar por total de órdenes
+            resumen_tecnicos = resumen_tecnicos.sort_values('Total Órdenes', ascending=False)
+            
+            st.dataframe(
+                resumen_tecnicos,
+                hide_index=True,
+                use_container_width=True
+            )
 
     else: 
         st.info("No hay datos para mostrar.")
