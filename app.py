@@ -644,169 +644,126 @@ elif choice == "Cerrar Orden":
                     st.rerun()
             st.markdown("</div>", unsafe_allow_html=True)
         else: st.info("No hay pendientes.")
-
-elif choice == "Usuarios":
+            elif choice == "Usuarios":
     st.title("USUARIOS")
     mostrar_notificaciones()
-    
+
     # Estructura de pestañas para Crear y Gestionar usuarios
     tab_crear, tab_gestionar = st.tabs(["CREAR USUARIO", "GESTIONAR USUARIOS"])
-    
-    # Inicializamos la variable de sesión para el ID del usuario actualmente seleccionado
-    if 'selected_user_id' not in st.session_state:
-        st.session_state['selected_user_id'] = None
-    if 'editor_selection_state' not in st.session_state:
-        st.session_state['editor_selection_state'] = {} # Usaremos esto para el control fino
 
     # ----------------------------------------------------
-    # TAB 1: CREAR USUARIO (Sin card-style)
+    # TAB 1: CREAR USUARIO
     # ----------------------------------------------------
     with tab_crear:
         st.subheader("Registrar Nuevo Usuario")
-        
+
         with st.form("new_user_form"):
             c1, c2 = st.columns(2)
             documento = c1.text_input("Documento/ID", key="new_user_doc")
             nombre = c2.text_input("Nombre Completo", key="new_user_name")
             password = c1.text_input("Contraseña", type="password", key="new_user_pass")
             rol = c2.selectbox("Rol", ["Tecnico", "Programador", "Admin"], key="new_user_rol")
-            
+
             submitted = st.form_submit_button("REGISTRAR USUARIO", type="primary")
-            
+
             if submitted:
                 if documento and nombre and password and rol:
                     try:
-                        # Insertar el nuevo usuario en la tabla 'usuarios'
                         res = supabase.table("usuarios").insert({
                             "documento": documento, 
                             "nombre": nombre, 
                             "password": password, 
                             "rol": rol
                         }).execute()
-                        
+
                         if res.data:
                             st.session_state['notification'] = {'type':'success', 'message':f'Usuario {nombre} registrado con éxito.'}
                             st.rerun()
                         else:
                             st.error("Error al registrar el usuario en la base de datos.")
-                            
+
                     except Exception as e:
                         st.error(f"Error de base de datos: Asegúrese de que el Documento no exista ya. Detalles: {e}")
                 else:
                     st.warning("Por favor, complete todos los campos.")
 
     # ----------------------------------------------------
-    # TAB 2: GESTIONAR USUARIOS (Con Edición/Eliminación usando data_editor)
+    # TAB 2: GESTIONAR USUARIOS (VERSIÓN CORREGIDA)
     # ----------------------------------------------------
     with tab_gestionar:
         df_users = run_query("usuarios")
-        
+
         if not df_users.empty:
-            
-            st.subheader("Lista de Usuarios (Marque una casilla para gestionar)")
-            
-            # 1. Creamos la columna de selección inicializada a False
-            df_users['select'] = False
-            
-            # --- LÓGICA DE CONTROL DEL ESTADO DE SELECCIÓN (Checkbox Único) ---
-            
-            # Verificamos si hay una nueva edición en el data_editor
-            if 'user_data_editor' in st.session_state and st.session_state['user_data_editor'].get('edited_rows'):
-                
-                edited_rows = st.session_state['user_data_editor']['edited_rows']
-                
-                newly_selected_id = None
-                selection_changed = False
-                
-                # Buscamos si alguna fila fue marcada como True en esta ejecución
-                for index_key, changes in edited_rows.items():
-                    if 'select' in changes:
-                        selection_changed = True
-                        if changes['select'] is True:
-                            index = int(index_key)
-                            newly_selected_id = df_users.iloc[index]['id']
-                            break
-                            
-                # Sincronizamos el estado de la sesión
-                if newly_selected_id is not None:
-                    # Un usuario fue marcado: lo establecemos como el único seleccionado
-                    if st.session_state['selected_user_id'] != newly_selected_id:
-                        st.session_state['selected_user_id'] = newly_selected_id
-                        st.rerun() # Forzamos la recarga para limpiar los demás checkboxes
-                
-                elif selection_changed and st.session_state['selected_user_id'] is not None:
-                    # El usuario desmarcó el único checkbox activo
-                    st.session_state['selected_user_id'] = None
-                    st.rerun() # Forzamos la recarga para limpiar los formularios
+            st.subheader("Seleccionar Usuario para Gestionar")
 
-
-            # 2. Marcamos la casilla del ID guardado en la sesión (esto fuerza la selección única visualmente)
-            if st.session_state['selected_user_id'] is not None and st.session_state['selected_user_id'] in df_users['id'].values:
-                df_users.loc[df_users['id'] == st.session_state['selected_user_id'], 'select'] = True
+            # Crear un selectbox en lugar de checkboxes para evitar parpadeos
+            # Usamos un diccionario para mapear nombre + ID al ID real
+            user_options = {f"{row['nombre']} (ID: {row['id']})": row['id'] 
+                           for _, row in df_users.iterrows()}
             
-            # 3. Configuramos y mostramos el data_editor (sin callback directo para evitar el error no-op)
-            edited_df = st.data_editor(
-                df_users[['select', 'id', 'documento', 'nombre', 'rol']],
-                column_config={
-                    "select": st.column_config.CheckboxColumn(
-                        "Seleccionar",
-                        help="Marque para editar/eliminar este usuario.",
-                        default=False
-                    ),
-                    "id": st.column_config.Column("ID", disabled=True),
-                    "documento": st.column_config.Column("Documento", disabled=True),
-                    "nombre": st.column_config.Column("Nombre", disabled=True),
-                    "rol": st.column_config.Column("Rol", disabled=True),
-                },
-                hide_index=True,
-                use_container_width=True,
-                key="user_data_editor"
+            # Añadimos una opción por defecto
+            user_options_list = ["-- Seleccione un usuario --"] + list(user_options.keys())
+            
+            selected_option = st.selectbox(
+                "Usuario:",
+                user_options_list,
+                key="user_selector"
             )
 
-            # 4. Buscamos el ID seleccionado en el DataFrame editado
-            selected_user_row = edited_df[edited_df['select'] == True]
-            
-            if len(selected_user_row) == 1:
-                # --- GESTIÓN ACTIVA ---
-                selected_user = selected_user_row.iloc[0]
-                user_id = selected_user['id']
+            # Mostrar la tabla completa de usuarios (solo lectura)
+            st.markdown("### Lista Completa de Usuarios")
+            st.dataframe(
+                df_users[['id', 'documento', 'nombre', 'rol']],
+                hide_index=True,
+                use_container_width=True
+            )
+
+            # Si se seleccionó un usuario válido
+            if selected_option != "-- Seleccione un usuario --":
+                user_id = user_options[selected_option]
                 
-                # Sincronizamos la variable de sesión (Ya lo hicimos arriba, pero por seguridad)
-                st.session_state['selected_user_id'] = user_id
-                
+                # Obtener los datos actuales del usuario seleccionado
+                selected_user = df_users[df_users['id'] == user_id].iloc[0]
+
                 st.markdown("---")
-                st.markdown(f"**Usuario seleccionado:** **{selected_user['nombre']}** (ID: {user_id})")
-                
-                
-                # Formulario de Edición (usando los datos del usuario seleccionado)
-                with st.form(key="edit_user_form", clear_on_submit=False):
-                    st.subheader("Editar Información")
-                    
+                st.markdown(f"### Editando: **{selected_user['nombre']}** (ID: {user_id})")
+
+                # Formulario de Edición
+                with st.form(key=f"edit_user_form_{user_id}"):
+                    st.subheader("Información del Usuario")
+
                     c1, c2 = st.columns(2)
-                    
-                    # Usamos el valor del usuario seleccionado para inicializar los campos
-                    edit_doc = c1.text_input("Documento/ID", value=selected_user['documento'], key="edit_user_doc")
-                    edit_name = c2.text_input("Nombre Completo", value=selected_user['nombre'], key="edit_user_name")
-                    
+
+                    edit_doc = c1.text_input(
+                        "Documento/ID", 
+                        value=selected_user['documento']
+                    )
+                    edit_name = c2.text_input(
+                        "Nombre Completo", 
+                        value=selected_user['nombre']
+                    )
+
                     # Manejo de índice para el Selectbox
                     rol_options = ["Tecnico", "Programador", "Admin"]
                     current_rol_index = rol_options.index(selected_user['rol']) if selected_user['rol'] in rol_options else 0
-                    new_rol = st.selectbox("Rol", rol_options, index=current_rol_index, key="edit_user_rol")
-                    
-                    new_password = st.text_input("Nueva Contraseña (Dejar vacío para no cambiar)", type="password", key="edit_user_pass")
-                    
-                    col_edit, col_delete_btn = st.columns([1, 1])
-                    
-                    update_submitted = col_edit.form_submit_button("ACTUALIZAR USUARIO", type="primary")
-                    
+                    new_rol = st.selectbox("Rol", rol_options, index=current_rol_index)
+
+                    new_password = st.text_input(
+                        "Nueva Contraseña (Dejar vacío para no cambiar)", 
+                        type="password"
+                    )
+
+                    col1, col2 = st.columns(2)
+                    update_submitted = col1.form_submit_button("✅ ACTUALIZAR", type="primary")
+                    delete_submitted = col2.form_submit_button("🗑️ ELIMINAR", type="secondary")
+
                     if update_submitted:
-                        
-                        # Validación del cambio de rol si el rol es diferente
+                        # Validación del cambio de rol
                         if new_rol != selected_user['rol']:
                             if check_open_orders(user_id):
                                 st.error(f"❌ ERROR: El usuario **{selected_user['nombre']}** tiene Órdenes de Trabajo pendientes. Debe cerrarlas antes de cambiar su rol.")
                                 st.stop()
-                        
+
                         update_data = {
                             "documento": edit_doc,
                             "nombre": edit_name,
@@ -814,36 +771,27 @@ elif choice == "Usuarios":
                         }
                         if new_password:
                             update_data["password"] = new_password
-                            
+
                         try:
                             supabase.table("usuarios").update(update_data).eq("id", user_id).execute()
                             st.session_state['notification'] = {'type':'success', 'message':f'Usuario {edit_name} actualizado.'}
                             st.rerun()
                         except Exception as e:
                             st.error(f"Error al actualizar: {e}")
-                
-                # Botón de Eliminación 
-                if st.button("🔴 ELIMINAR USUARIO SELECCIONADO", type="secondary", use_container_width=True, help="Borrar el usuario seleccionado"):
-                    
-                    # Validación de eliminación
-                    if check_open_orders(user_id):
-                        st.error(f"❌ ERROR: El usuario **{selected_user['nombre']}** tiene Órdenes de Trabajo pendientes. No puede ser eliminado.")
-                    else:
-                        try:
-                            supabase.table("usuarios").delete().eq("id", user_id).execute()
-                            # Limpiar la selección después de la eliminación
-                            st.session_state['selected_user_id'] = None 
-                            st.session_state['notification'] = {'type':'delete', 'message':f'Usuario {selected_user["nombre"]} eliminado.'}
-                            st.rerun()
-                        except Exception as e:
-                            st.error(f"Error al eliminar: {e}")
-                            
-            else:
-                # Si no hay selección o hay selección múltiple
-                if len(selected_user_row) > 1:
-                    st.warning("⚠️ Se seleccionaron múltiples usuarios. Por favor, desmarque las casillas y seleccione solo un usuario a la vez para gestionar su información.")
-                else:
-                    st.info("Haga clic en la columna 'Seleccionar' para elegir un usuario y gestionar sus datos.")
-            
+
+                    if delete_submitted:
+                        # Validación de eliminación
+                        if check_open_orders(user_id):
+                            st.error(f"❌ ERROR: El usuario **{selected_user['nombre']}** tiene Órdenes de Trabajo pendientes. No puede ser eliminado.")
+                        else:
+                            try:
+                                supabase.table("usuarios").delete().eq("id", user_id).execute()
+                                st.session_state['notification'] = {'type':'delete', 'message':f'Usuario {selected_user["nombre"]} eliminado.'}
+                                st.rerun()
+                            except Exception as e:
+                                st.error(f"Error al eliminar: {e}")
+
         else:
             st.info("No se encontraron usuarios en la base de datos. Use la pestaña 'CREAR USUARIO'.")
+
+
