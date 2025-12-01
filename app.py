@@ -832,7 +832,6 @@ elif choice == "Inventario Activos":
     mostrar_notificaciones()
     
     # --- 1. CONFIGURACIÓN DE DATOS (ÁREAS Y CATEGORÍAS) ---
-    # Diccionario con Áreas y sus Sub-áreas
     areas_data = {
         "Producción": [
             "Agua Cristal", "B&B", "Calderas", "Cuarto de Lubricación", 
@@ -858,7 +857,6 @@ elif choice == "Inventario Activos":
         ]
     }
 
-    # Lista de categorías actualizada y ordenada
     categorias_list = sorted([
         "CCTV", "Control de Acceso", "Eléctrico", "Estanterías", 
         "Hidrosanitario", "Infraestructura", "Mecánico", 
@@ -870,55 +868,59 @@ elif choice == "Inventario Activos":
     tab1, tab2 = st.tabs(["NUEVO ACTIVO", "EDITAR / QR"])
 
     with tab1:
-        # Formulario limpio sin recuadro extra
-        with st.form("new_asset"):
-            c1, c2 = st.columns(2)
-            
-            # --- SELECCIÓN DE ÁREA Y SUB-ÁREA ---
-            # 1. Seleccionar Área Principal (Ordenada alfabéticamente)
-            area_principal = c1.selectbox("Área Principal", sorted(areas_data.keys()))
-            
-            # 2. Seleccionar Sub-área (Basada en el Área Principal seleccionada)
-            sub_areas_disponibles = sorted(areas_data[area_principal])
-            sub_area = c2.selectbox("Sub-área", sub_areas_disponibles)
-            
-            nom = c1.text_input("Nombre del Activo")
-            
-            # 3. Ubicación específica (Detalle adicional)
-            ubic_detalle = c2.text_input("Ubicación Exacta / Detalle", placeholder="Ej: Lado norte, Motor 3...")
-            
-            # 4. Categoría Actualizada
-            cat = c1.selectbox("Categoría", categorias_list)
-            
-            if st.form_submit_button("GUARDAR ACTIVO"):
-                if nom and sub_area:
-                    # NOTA: Para no modificar la base de datos, guardamos la Sub-área 
-                    # combinada con la ubicación específica.
-                    ubicacion_final = f"[{sub_area}] {ubic_detalle}" if ubic_detalle else f"[{sub_area}]"
+        # --- ELIMINAMOS st.form PARA PERMITIR INTERACTIVIDAD ---
+        st.markdown("### Registrar Nuevo Activo")
+        
+        c1, c2 = st.columns(2)
+        
+        # 1. Área Principal (Al cambiar esto, se recarga la página automáticamente)
+        area_principal = c1.selectbox("Área Principal", sorted(areas_data.keys()))
+        
+        # 2. Sub-área (Se actualiza dinámicamente según lo elegido arriba)
+        sub_areas_disponibles = sorted(areas_data[area_principal])
+        sub_area = c2.selectbox("Sub-área", sub_areas_disponibles)
+        
+        nom = c1.text_input("Nombre del Activo")
+        
+        # 3. Ubicación específica
+        ubic_detalle = c2.text_input("Ubicación Exacta / Detalle", placeholder="Ej: Lado norte, Motor 3...")
+        
+        # 4. Categoría
+        cat = c1.selectbox("Categoría", categorias_list)
+        
+        st.markdown("<br>", unsafe_allow_html=True)
+        
+        # Usamos un botón normal en lugar de form_submit_button
+        if st.button("💾 GUARDAR ACTIVO", type="primary", use_container_width=True):
+            if nom and sub_area:
+                # Construimos la ubicación final
+                ubicacion_final = f"[{sub_area}] {ubic_detalle}" if ubic_detalle else f"[{sub_area}]"
+                
+                try:
+                    res = supabase.table("activos").insert({
+                        "nombre": nom, 
+                        "area": area_principal,
+                        "ubicacion": ubicacion_final, 
+                        "categoria": cat
+                    }).execute()
                     
-                    try:
-                        res = supabase.table("activos").insert({
-                            "nombre": nom, 
-                            "area": area_principal,  # Guardamos el área macro (Ej: Producción)
-                            "ubicacion": ubicacion_final, # Guardamos la sub-área aquí
-                            "categoria": cat
-                        }).execute()
+                    if res.data:
+                        nid = res.data[0]['id']
+                        # Generar QR
+                        url = generar_qr_activo(nid, nom)
+                        supabase.table("activos").update({"qr_url":url}).eq("id", nid).execute()
                         
-                        if res.data:
-                            nid = res.data[0]['id']
-                            url = generar_qr_activo(nid, nom)
-                            supabase.table("activos").update({"qr_url":url}).eq("id", nid).execute()
-                            st.cache_data.clear()
-                            agregar_notificacion('success', f'Activo creado en {sub_area}.')
-                            st.rerun()
-                    except Exception as e:
-                        agregar_notificacion('error', f'Error al guardar: {e}')
-                else:
-                    agregar_notificacion('error', 'El nombre y la sub-área son obligatorios.')
+                        st.cache_data.clear()
+                        agregar_notificacion('success', f'Activo "{nom}" creado exitosamente en {sub_area}.')
+                        time.sleep(1) # Pequeña pausa para ver el mensaje
+                        st.rerun()
+                except Exception as e:
+                    agregar_notificacion('error', f'Error al guardar: {e}')
+            else:
+                agregar_notificacion('error', 'El nombre y la sub-área son obligatorios.')
 
     with tab2:
         if not df_act.empty:
-            # Filtro de búsqueda
             all_assets = df_act['nombre'].values
             sel = st.selectbox("Buscar Activo por Nombre", all_assets)
             
@@ -926,12 +928,12 @@ elif choice == "Inventario Activos":
             
             c1, c2 = st.columns([1,3])
             if dat['qr_url']:
-                c1.image(dat['qr_url'], caption="Código QR")
+                c1.image(dat['qr_url'], width=200)
             
             c2.markdown(f"### {dat['nombre']}")
             c2.info(f"**ID:** {dat['id']}")
             c2.write(f"**Área:** {dat['area']}")
-            c2.write(f"**Ubicación/Sub-área:** {dat['ubicacion']}")
+            c2.write(f"**Ubicación:** {dat['ubicacion']}")
             c2.write(f"**Categoría:** {dat.get('categoria', 'N/A')}")
 
             st.markdown("<br>", unsafe_allow_html=True)
