@@ -793,113 +793,45 @@ rol = st.session_state['rol']
 usuario = st.session_state['usuario']
 
 with st.sidebar:
-    # Saludo y rol
-    st.markdown(f"""
-        <div style="text-align: center; margin-bottom: 20px; margin-top: 10px; padding: 15px; background: rgba(31, 41, 55, 0.8); border-radius: 10px;">
-            <p style="margin:0; font-size: 1.1rem; color: white; font-weight: 600;">👋 {usuario}</p>
-            <span style="color: #10B981; font-size: 0.8rem; font-weight: bold;">{rol.upper()}</span>
-        </div>
-    """, unsafe_allow_html=True)
+    # Información del usuario
+    st.markdown(f"**👋 {usuario}**")
+    st.markdown(f"<small style='color: #10B981;'>{rol.upper()}</small>", unsafe_allow_html=True)
     
-    # Botón de cerrar sesión - NARANJA como tu tema
-    if st.button("🚪 Cerrar Sesión", use_container_width=True, type="primary"): 
-        logout()
+    # Botón de cerrar sesión
+    col1, col2 = st.columns([1, 3])
+    with col2:
+        if st.button("🔓 Salir", use_container_width=True):
+            logout()
     
-    st.markdown("<div style='height: 10px;'></div>", unsafe_allow_html=True)
+    st.divider()
     
-    # Inicializar choice
-    if 'nav_choice' not in st.session_state:
-        st.session_state.nav_choice = "Tablero de Mando"
+    # Inicializar navegación
+    if 'current_page' not in st.session_state:
+        st.session_state.current_page = "Tablero de Mando"
     
-    # Menú según rol - FORMATO SIMPLE
+    # Menú simple basado en el rol
     if rol == "Admin":
-        items = [
-            ("📊", "Dashboard", "Tablero de Mando"),
-            ("📦", "Inventario", "Inventario Activos"),
-            ("➕", "Nueva OT", "Crear Orden"),
-            ("📋", "Gestionar", "Gestionar Órdenes"),
-            ("✅", "Cerrar", "Cerrar Orden"),
-            ("👤", "Usuarios", "Usuarios")
-        ]
+        pages = ["📊 Dashboard", "📦 Inventario", "➕ Nueva OT", "📋 Gestionar", "✅ Cerrar OT", "👤 Usuarios"]
+        page_values = ["Tablero de Mando", "Inventario Activos", "Crear Orden", "Gestionar Órdenes", "Cerrar Orden", "Usuarios"]
     elif rol == "Programador":
-        items = [
-            ("📊", "Dashboard", "Tablero de Mando"),
-            ("➕", "Nueva OT", "Crear Orden"),
-            ("📋", "Gestionar", "Gestionar Órdenes"),
-            ("👤", "Usuarios", "Usuarios")
-        ]
+        pages = ["📊 Dashboard", "➕ Nueva OT", "📋 Gestionar", "👤 Usuarios"]
+        page_values = ["Tablero de Mando", "Crear Orden", "Gestionar Órdenes", "Usuarios"]
     elif rol == "Tecnico":
-        items = [
-            ("✅", "Cerrar OT", "Cerrar Orden")
-        ]
+        pages = ["✅ Cerrar OT"]
+        page_values = ["Cerrar Orden"]
     
-    # CSS mínimo para mejor visualización
-    st.markdown("""
-    <style>
-    /* Botones más compactos */
-    div[data-testid="stSidebar"] button {
-        margin: 4px 0 !important;
-        padding: 10px 15px !important;
-        border-radius: 8px !important;
-        font-size: 14px !important;
-    }
-    
-    /* Cuando está colapsado, centrar contenido */
-    @media (max-width: 900px) {
-        div[data-testid="stSidebar"] button {
-            padding: 12px !important;
-            justify-content: center !important;
-        }
-        
-        /* Asegurar que los emojis sean visibles */
-        div[data-testid="stSidebar"] button span {
-            display: inline-block !important;
-        }
-    }
-    </style>
-    """, unsafe_allow_html=True)
-    
-    # Crear botones del menú
-    for emoji, texto, valor in items:
-        is_active = st.session_state.nav_choice == valor
-        
-        # Configurar colores según estado
-        if is_active:
-            # Botón activo: fondo oscuro, borde naranja, texto blanco
-            st.markdown(f"""
-            <div style="
-                background: #1F2937; 
-                border-left: 4px solid #F59E0B; 
-                border-radius: 8px; 
-                margin: 5px 0;
-                padding: 0;
-            ">
-            """, unsafe_allow_html=True)
-        else:
-            # Botón inactivo: fondo semitransparente
-            st.markdown(f"""
-            <div style="
-                background: rgba(31, 41, 55, 0.6); 
-                border-radius: 8px; 
-                margin: 5px 0;
-                padding: 0;
-                border: 1px solid rgba(75, 85, 99, 0.3);
-            ">
-            """, unsafe_allow_html=True)
-        
-        # Botón dentro del contenedor
+    # Navegación simple
+    for page_display, page_value in zip(pages, page_values):
         if st.button(
-            f"{emoji} {texto}",
-            key=f"nav_{valor.replace(' ', '_')}",
+            page_display,
+            key=f"btn_{page_value}",
             use_container_width=True,
-            type="primary" if is_active else "secondary"
+            type="primary" if st.session_state.current_page == page_value else "secondary"
         ):
-            st.session_state.nav_choice = valor
+            st.session_state.current_page = page_value
             st.rerun()
-        
-        st.markdown("</div>", unsafe_allow_html=True)
     
-    choice = st.session_state.nav_choice
+    choice = st.session_state.current_page
 # ==============================================================================
 # 📊 PANTALLAS
 # ==============================================================================
