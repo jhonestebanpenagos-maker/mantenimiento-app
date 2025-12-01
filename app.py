@@ -1017,55 +1017,68 @@ elif choice == "Gestionar Órdenes":
                     st.markdown("<br>", unsafe_allow_html=True)
                     col_btn1, col_btn2 = st.columns(2)
                     
-                    actualizar_btn = col_btn1.form_submit_button(
-                        "✅ ACTUALIZAR ORDEN",
-                        type="primary",
-                        use_container_width=True
-                    )
+                    with col_btn1:
+                        actualizar_btn = st.form_submit_button(
+                            "✅ ACTUALIZAR ORDEN",
+                            type="primary",
+                            use_container_width=True
+                        )
                     
-                    cancelar_btn = col_btn2.form_submit_button(
-                        "🗑️ ELIMINAR ORDEN",
-                        type="secondary",
-                        use_container_width=True
-                    )
+                    with col_btn2:
+                        cancelar_btn = st.form_submit_button(
+                            "🗑️ ELIMINAR ORDEN",
+                            type="secondary",
+                            use_container_width=True
+                        )
                     
-# Busca esta sección en el código y reemplázala:
-if actualizar_btn:
-    # Obtener el ID del activo seleccionado
-    nuevo_activo_id = df_activos[df_activos['nombre'] == nuevo_activo].iloc[0]['id']
-    
-    # Preparar los datos actualizados - CONVERSIÓN A TIPOS NATIVOS
-    update_data = {
-        "activo_id": int(nuevo_activo_id),  # Convertir a int nativo
-        "tipo_mantenimiento": str(nuevo_tipo),  # Asegurar string
-        "criticidad": str(nueva_crit),  # Asegurar string
-        "estado": str(nuevo_estado),  # Asegurar string
-        "descripcion": str(nueva_desc),  # Asegurar string
-        "tecnico_asignado": str(nuevo_tecnico_id),  # Convertir a string
-        "comentarios_cierre": str(comentarios) if comentarios else None
-    }
-    
-    try:
-        supabase.table("ordenes").update(update_data).eq("id", int(orden_id)).execute()  # Convertir orden_id
-        
-        # Mensaje personalizado si cambió el técnico
-        if nuevo_tecnico_id != tecnico_actual_id:
-            agregar_notificacion('success', f'Orden OT-{orden_id} actualizada y reasignada a {nuevo_tecnico_option.split(" - ")[0]}.')
-        else:
-            agregar_notificacion('success', f'Orden OT-{orden_id} actualizada correctamente.')
-        st.rerun()
-        
-    except Exception as e:
-        agregar_notificacion('error', f'Error al actualizar la orden: {e}')
-                    
-                    if cancelar_btn:
-                        # Verificar que realmente quiera eliminar
+                    # PROCESAR ACTUALIZACIÓN
+                    if actualizar_btn:
                         try:
-                            supabase.table("ordenes").delete().eq("id", orden_id).execute()
-                            agregar_notificacion('delete', f'Orden OT-{orden_id} eliminada permanentemente.')
-                            st.rerun()
+                            # Obtener el ID del activo seleccionado
+                            nuevo_activo_id = int(df_activos[df_activos['nombre'] == nuevo_activo].iloc[0]['id'])
+                            
+                            # Preparar los datos actualizados con conversión explícita
+                            update_data = {
+                                "activo_id": nuevo_activo_id,
+                                "tipo_mantenimiento": str(nuevo_tipo),
+                                "criticidad": str(nueva_crit),
+                                "estado": str(nuevo_estado),
+                                "descripcion": str(nueva_desc),
+                                "tecnico_asignado": str(nuevo_tecnico_id),
+                                "comentarios_cierre": str(comentarios) if comentarios else None
+                            }
+                            
+                            # Validar datos requeridos
+                            if not update_data["descripcion"].strip():
+                                agregar_notificacion('error', 'La descripción no puede estar vacía.')
+                            else:
+                                # Ejecutar actualización
+                                supabase.table("ordenes").update(update_data).eq("id", int(orden_id)).execute()
+                                
+                                # Mensaje personalizado
+                                if nuevo_tecnico_id != tecnico_actual_id:
+                                    agregar_notificacion('success', f'Orden OT-{orden_id} actualizada y reasignada a {nuevo_tecnico_option.split(" - ")[0]}.')
+                                else:
+                                    agregar_notificacion('success', f'Orden OT-{orden_id} actualizada correctamente.')
+                                st.rerun()
+                                
                         except Exception as e:
-                            agregar_notificacion('error', f'Error al eliminar la orden: {e}')
+                            agregar_notificacion('error', f'Error al actualizar la orden: {str(e)}')
+                    
+                    # PROCESAR ELIMINACIÓN
+                    if cancelar_btn:
+                        try:
+                            # Confirmación adicional para eliminar
+                            st.warning(f"⚠️ Está a punto de eliminar permanentemente la orden OT-{orden_id}")
+                            confirmar = st.checkbox("Confirmar eliminación")
+                            
+                            if confirmar:
+                                supabase.table("ordenes").delete().eq("id", int(orden_id)).execute()
+                                agregar_notificacion('delete', f'Orden OT-{orden_id} eliminada permanentemente.')
+                                st.rerun()
+                                
+                        except Exception as e:
+                            agregar_notificacion('error', f'Error al eliminar la orden: {str(e)}')
         
         else:
             st.info("No se encontraron órdenes con los filtros seleccionados.")
