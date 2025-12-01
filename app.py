@@ -271,7 +271,7 @@ def leer_qr_imagen(uploaded_image):
     except:
         return None
 
-# --- FUNCIÓN DE VALIDACIÓN DE ÓRDENES ABIERTAS ---
+# --- FUNCIÓN DE VALIDACIÓN DE ÓRDENES ABIERTAS (MEJORADA) ---
 def check_open_orders(user_id):
     """
     Verifica si el usuario tiene órdenes de trabajo activas (no concluidas).
@@ -1000,7 +1000,7 @@ elif choice == "Usuarios":
     mostrar_notificaciones()
 
     tab_crear, tab_gestionar = st.tabs(["CREAR USUARIO", "GESTIONAR USUARIOS"])
-
+    
     # Inicializamos la variable de sesión para el ID del usuario actualmente seleccionado
     if 'selected_user_id_gestion' not in st.session_state:
         st.session_state['selected_user_id_gestion'] = None
@@ -1041,13 +1041,14 @@ elif choice == "Usuarios":
     with tab_gestionar:
         df_users = run_query("usuarios")
         
-        # --- Lógica de Sincronización de Selección ---
-        
+        # 1. Obtenemos el ID seleccionado de la ejecución anterior (si existe)
+        current_selected_id = st.session_state.get('selected_user_id_gestion')
+
         if not df_users.empty:
             st.subheader("Lista de Usuarios (Haga clic en una fila para editar)")
             st.markdown("💡 **Nota:** Haga clic en una fila de la tabla para cargar el usuario en el formulario de gestión.")
 
-            # 1. Mostrar el dataframe con SELECCIÓN DE FILA
+            # 2. Mostrar el dataframe con SELECCIÓN DE FILA
             selected_df = st.dataframe(
                 df_users[['id', 'documento', 'nombre', 'rol']],
                 column_config={
@@ -1059,39 +1060,49 @@ elif choice == "Usuarios":
                 hide_index=True,
                 use_container_width=True,
                 # ESTA ES LA CLAVE: Permite seleccionar la fila al hacer clic.
+                # La clave del state es user_selection_dataframe
                 selection_mode="single-row",
                 key="user_selection_dataframe" 
             )
             
-            # 2. Extraer la selección del dataframe
-            selected_rows_data = selected_df.get('selection', {}).get('rows', [])
+            # 3. Extraer la selección del dataframe
+            # El estado de selección se guarda en st.session_state.user_selection_dataframe
+            selected_rows_data = st.session_state.user_selection_dataframe.get('selection', {}).get('rows', [])
             
             selected_user = None
-            user_id = None
+            new_selection_id = None
             
             if selected_rows_data:
-                # La lista de índices seleccionados contiene los índices del DataFrame original (0, 1, 2, ...)
+                # La lista de índices seleccionados contiene los índices del DataFrame (0, 1, 2, ...)
                 selected_index = selected_rows_data[0] 
                 
-                # Usamos el índice para obtener el ID de la fila seleccionada
+                # Usamos el índice para obtener el ID de la fila seleccionada del DataFrame
                 # Usamos df_users.iloc para acceder al índice basado en la posición
-                user_id = df_users.iloc[selected_index]['id']
+                new_selection_id = df_users.iloc[selected_index]['id']
                 
-                # Buscamos la fila original completa usando el ID
-                selected_user = df_users[df_users['id'] == user_id].iloc[0]
-
-            # 3. Sincronizamos la variable de sesión para que el formulario sepa a quién mostrar
-            # Si el ID cambia, forzamos un rerun.
-            if user_id != st.session_state.get('selected_user_id_gestion'):
-                st.session_state['selected_user_id_gestion'] = user_id
-                # Solo forzamos rerun si realmente hubo un cambio de usuario seleccionado
-                if user_id is not None or st.session_state.get('selected_user_id_gestion') is not None:
-                    st.rerun()
-
+                # Buscamos la fila original completa usando el ID para el formulario
+                selected_user = df_users[df_users['id'] == new_selection_id].iloc[0]
+                user_id = new_selection_id
+                
+            # 4. Sincronizamos la variable de sesión y forzamos la recarga si hay un cambio
+            if new_selection_id != current_selected_id:
+                # Si se deselecciona (new_selection_id es None) o se selecciona uno nuevo
+                st.session_state['selected_user_id_gestion'] = new_selection_id
+                st.rerun()
 
             # --- MÓDULO DE EDICIÓN / ELIMINACIÓN ---
             
-            if selected_user is not None:
+            if st.session_state.get('selected_user_id_gestion') is not None:
+                
+                # Volvemos a cargar el usuario usando el ID de la sesión (asegurando la persistencia)
+                user_id = st.session_state['selected_user_id_gestion']
+                try:
+                    selected_user = df_users[df_users['id'] == user_id].iloc[0]
+                except IndexError:
+                    # El usuario puede haber sido borrado en otra sesión. Limpiamos.
+                    st.session_state['selected_user_id_gestion'] = None
+                    st.rerun()
+                    
                 st.markdown("---")
                 st.markdown(f"### Editando: **{selected_user['nombre']}** (ID: {user_id})")
 
