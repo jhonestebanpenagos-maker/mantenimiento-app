@@ -656,7 +656,7 @@ if choice == "Tablero de Mando":
     st.title("TABLERO DE MANDO")
     mostrar_notificaciones()
 
-    with mostrar_estado_carga("Cargando datos del dashboard..."):
+
         df = run_query("ordenes")
     
     if not df.empty:
@@ -689,7 +689,7 @@ elif choice == "Inventario Activos":
     st.title("INVENTARIO")
     mostrar_notificaciones()
     
-    with mostrar_estado_carga("Cargando inventario..."):
+
         df_act = run_query("activos")
 
     tab1, tab2 = st.tabs(["NUEVO ACTIVO", "EDITAR / QR"])
@@ -742,7 +742,7 @@ elif choice == "Crear Orden":
     st.title("GENERAR ORDEN")
     mostrar_notificaciones()
     
-    with mostrar_estado_carga("Cargando datos..."):
+
         df_act = run_query("activos")
         df_users = run_query("usuarios")
     
@@ -817,7 +817,7 @@ elif choice == "Gestionar Órdenes":
     # FORZAR ACTUALIZACIÓN DEL CACHE AL ENTRAR A ESTA SECCIÓN
     st.cache_data.clear()
     
-    with mostrar_estado_carga("Cargando órdenes..."):
+
         df_ordenes = run_query("ordenes")
         df_activos = run_query("activos")
         df_users = run_query("usuarios")
@@ -1102,7 +1102,7 @@ elif choice == "Cerrar Orden":
     st.title("CERRAR ORDEN")
     mostrar_notificaciones()
     
-    with mostrar_estado_carga("Cargando órdenes pendientes..."):
+
         df_ot = run_query("ordenes")
         
     if not df_ot.empty:
@@ -1167,7 +1167,7 @@ elif choice == "Usuarios":
                     agregar_notificacion('warning', 'Por favor, complete todos los campos.')
 
     with tab_gestionar:
-        with mostrar_estado_carga("Cargando usuarios..."):
+
             df_users = run_query("usuarios")
 
         if not df_users.empty:
