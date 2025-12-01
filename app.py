@@ -793,130 +793,79 @@ rol = st.session_state['rol']
 usuario = st.session_state['usuario']
 
 with st.sidebar:
-    # Información del usuario - diseño limpio
+    # Encabezado limpio
     st.markdown(f"""
-        <div style="
-            background: rgba(30, 41, 59, 0.7);
-            border-radius: 10px;
-            padding: 15px;
-            margin-bottom: 20px;
-            border: 1px solid rgba(245, 158, 11, 0.2);
-        ">
-            <p style="margin:0; color: white; font-size: 1rem; font-weight: 600;">👤 {usuario}</p>
-            <p style="margin:5px 0 0 0; color: #F59E0B; font-size: 0.85rem; font-weight: 500;">{rol.upper()}</p>
+        <div style="margin-bottom: 20px;">
+            <p style="color: white; margin: 0; font-size: 1.1rem; font-weight: 600;">👋 {usuario}</p>
+            <p style="color: #F59E0B; margin: 5px 0 0 0; font-size: 0.9rem;">{rol.upper()}</p>
         </div>
     """, unsafe_allow_html=True)
     
-    # Botón de cerrar sesión - sutil con borde amarillo
-    if st.button(
-        "🚪 Cerrar Sesión", 
-        use_container_width=True,
-        type="secondary"
-    ): 
+    # Botón de cerrar sesión
+    if st.button("🔓 Salir", use_container_width=True, type="secondary"):
         logout()
     
-    st.markdown("<div style='height: 15px;'></div>", unsafe_allow_html=True)
+    st.divider()
     
     # Inicializar navegación
     if 'current_page' not in st.session_state:
         st.session_state.current_page = "Tablero de Mando"
     
-    # Definir menú según rol
+    # Menú simple
     if rol == "Admin":
-        menu_items = [
-            ("📊", "Dashboard", "Tablero de Mando"),
-            ("📦", "Inventario", "Inventario Activos"),
-            ("➕", "Nueva Orden", "Crear Orden"),
-            ("📋", "Gestionar", "Gestionar Órdenes"),
-            ("✅", "Cerrar", "Cerrar Orden"),
-            ("👤", "Usuarios", "Usuarios")
+        menu = [
+            ("📊", "Tablero"),
+            ("📦", "Inventario"), 
+            ("➕", "Nueva OT"),
+            ("📋", "Gestionar"),
+            ("✅", "Cerrar"),
+            ("👤", "Usuarios")
+        ]
+        valores = [
+            "Tablero de Mando",
+            "Inventario Activos", 
+            "Crear Orden",
+            "Gestionar Órdenes",
+            "Cerrar Orden",
+            "Usuarios"
         ]
     elif rol == "Programador":
-        menu_items = [
-            ("📊", "Dashboard", "Tablero de Mando"),
-            ("➕", "Nueva Orden", "Crear Orden"),
-            ("📋", "Gestionar", "Gestionar Órdenes"),
-            ("👤", "Usuarios", "Usuarios")
+        menu = [
+            ("📊", "Tablero"),
+            ("➕", "Nueva OT"),
+            ("📋", "Gestionar"),
+            ("👤", "Usuarios")
+        ]
+        valores = [
+            "Tablero de Mando",
+            "Crear Orden",
+            "Gestionar Órdenes",
+            "Usuarios"
         ]
     elif rol == "Tecnico":
-        menu_items = [
-            ("✅", "Cerrar Orden", "Cerrar Orden")
-        ]
+        menu = [("✅", "Cerrar OT")]
+        valores = ["Cerrar Orden"]
     
-    # CSS para botones sutiles
-    st.markdown("""
-    <style>
-    /* Estilos generales para botones del sidebar */
-    div[data-testid="stSidebar"] button {
-        background: rgba(30, 41, 59, 0.8) !important;
-        color: white !important;
-        border: 1px solid rgba(245, 158, 11, 0.3) !important;
-        border-radius: 8px !important;
-        margin: 6px 0 !important;
-        padding: 12px 16px !important;
-        font-size: 14px !important;
-        font-weight: 500 !important;
-        transition: all 0.2s ease !important;
-    }
-    
-    /* Botón activo - borde amarillo más visible */
-    div[data-testid="stSidebar"] button[kind="primary"] {
-        background: rgba(30, 41, 59, 0.9) !important;
-        border: 2px solid #F59E0B !important;
-        box-shadow: 0 0 10px rgba(245, 158, 11, 0.2) !important;
-    }
-    
-    /* Botón inactivo - hover sutil */
-    div[data-testid="stSidebar"] button[kind="secondary"]:hover {
-        background: rgba(40, 51, 69, 0.9) !important;
-        border-color: rgba(245, 158, 11, 0.5) !important;
-        transform: translateX(3px);
-    }
-    
-    /* Cuando el sidebar está colapsado */
-    @media (max-width: 900px) {
-        div[data-testid="stSidebar"] button {
-            padding: 14px 8px !important;
-            justify-content: center !important;
-            margin: 8px 0 !important;
-        }
+    # Navegación
+    for (icono, texto), valor in zip(menu, valores):
+        activo = st.session_state.current_page == valor
+        tipo = "primary" if activo else "secondary"
         
-        /* Ocultar texto, mostrar solo emojis cuando colapsado */
-        div[data-testid="stSidebar"] button span {
-            display: none !important;
-        }
+        # CSS inline simple para botón activo
+        if activo:
+            st.markdown("""
+            <style>
+            .boton-activo {
+                border: 2px solid #F59E0B !important;
+            }
+            </style>
+            """, unsafe_allow_html=True)
         
-        /* Asegurar que los emojis se muestren */
-        div[data-testid="stSidebar"] button p {
-            font-size: 20px !important;
-            margin: 0 !important;
-        }
-        
-        /* Botón activo en modo colapsado */
-        div[data-testid="stSidebar"] button[kind="primary"] {
-            border: 2px solid #F59E0B !important;
-            box-shadow: 0 0 15px rgba(245, 158, 11, 0.3) !important;
-        }
-    }
-    </style>
-    """, unsafe_allow_html=True)
-    
-    # Crear botones de navegación
-    for emoji, texto, valor in menu_items:
-        is_active = st.session_state.current_page == valor
-        
-        # Determinar tipo de botón
-        btn_type = "primary" if is_active else "secondary"
-        
-        # Texto del botón (emoji + texto)
-        btn_text = f"{emoji} {texto}"
-        
-        # Crear botón
         if st.button(
-            btn_text,
-            key=f"nav_{valor.replace(' ', '_')}",
+            f"{icono} {texto}",
+            key=f"menu_{valor}",
             use_container_width=True,
-            type=btn_type
+            type=tipo
         ):
             st.session_state.current_page = valor
             st.rerun()
