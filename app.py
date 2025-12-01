@@ -233,19 +233,41 @@ def run_query(table_name, filters=None, order_by="id"):
 def subir_imagen(archivo, carpeta="evidencias"):
     if archivo:
         try:
+            # 1. Caso: Imagen generada por código (bytes / QR)
             if isinstance(archivo, bytes):
                 file_bytes = archivo
                 file_name = f"qr_{datetime.now().strftime('%Y%m%d%H%M%S')}.png"
                 mime_type = "image/png"
+            
+            # 2. Caso: Archivo subido por el usuario (UploadedFile)
             else:
-                file_name = f"{datetime.now().strftime('%Y%m%d%H%M%S')}_{archivo.name}"
                 file_bytes = archivo.getvalue()
                 mime_type = archivo.type
+                
+                # --- CORRECCIÓN AQUÍ ---
+                # Ignoramos el nombre original 'archivo.name' porque puede tener espacios o ser muy largo.
+                # Generamos un nombre seguro usando solo la fecha y hora.
+                extension = ".png" # Por defecto
+                if archivo.name:
+                    # Intentamos obtener la extensión original si existe (ej: .jpg)
+                    if "." in archivo.name:
+                        extension = f".{archivo.name.split('.')[-1]}"
+                
+                # Nombre final limpio: 202512012350_evidencia.jpg
+                file_name = f"{datetime.now().strftime('%Y%m%d%H%M%S')}_evidencia{extension}"
 
-            supabase.storage.from_(carpeta).upload(path=file_name, file=file_bytes, file_options={"content-type": mime_type})
+            # 3. Subida a Supabase
+            supabase.storage.from_(carpeta).upload(
+                path=file_name, 
+                file=file_bytes, 
+                file_options={"content-type": mime_type}
+            )
             return supabase.storage.from_(carpeta).get_public_url(file_name)
+            
         except Exception as e:
-            st.error(f"Error al subir imagen: {e}")
+            # Imprimimos el error en consola para depuración, pero no rompemos la app
+            print(f"Error subida: {e}")
+            st.error(f"Error al subir imagen: Verifique que el archivo no esté corrupto.")
             return None
     return None
 
