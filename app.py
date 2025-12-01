@@ -426,11 +426,11 @@ def mostrar_metricas_inteligentes(df_ordenes, df_users):
             help="Excelente: ≥90% | Buena: ≥70% | Regular: ≥50% | Crítica: <50%"
         )
 # --- GRÁFICOS (PLOTLY) ---
-# --- NUEVA FUNCIÓN PARA GRÁFICO DE TÉCNICOS ---
+# --- FUNCIÓN MEJORADA PARA GRÁFICO DE TÉCNICOS ---
 def graficar_ordenes_por_tecnico(df_ordenes, df_users):
-    """Muestra gráfico de órdenes por técnico"""
+    """Muestra gráfico compacto de órdenes por técnico"""
     if df_ordenes.empty or df_users.empty:
-        st.info("No hay datos suficientes para mostrar órdenes por técnico")
+        st.info("No hay datos de técnicos")
         return
     
     # Crear mapeo de IDs a nombres de técnicos
@@ -463,49 +463,57 @@ def graficar_ordenes_por_tecnico(df_ordenes, df_users):
             'Total': total_tecnico
         })
     
-    df_final = pd.DataFrame(datos_final).sort_values('Total', ascending=False)
+    df_final = pd.DataFrame(datos_final).sort_values('Total', ascending=True)  # Orden ascendente para mejor visualización
     
-    # Crear gráfico de barras apiladas
+    # Crear gráfico de barras apiladas COMPACTO
     fig = go.Figure()
     
     fig.add_trace(go.Bar(
-        name='Concluidas',
+        name='✅ Concluidas',
         y=df_final['Técnico'],
         x=df_final['Concluidas'],
         orientation='h',
         marker=dict(color=PRO_GREEN),
         text=df_final['Concluidas'],
-        textposition='inside'
+        textposition='inside',
+        hovertemplate='<b>%{y}</b><br>Concluidas: %{x}<extra></extra>'
     ))
     
     fig.add_trace(go.Bar(
-        name='Abiertas',
+        name='🔄 Abiertas',
         y=df_final['Técnico'],
         x=df_final['Abiertas'],
         orientation='h',
         marker=dict(color=PRO_ORANGE),
         text=df_final['Abiertas'],
-        textposition='inside'
+        textposition='inside',
+        hovertemplate='<b>%{y}</b><br>Abiertas: %{x}<extra></extra>'
     ))
     
     fig.update_layout(
-        title='Órdenes por Técnico',
         barmode='stack',
         paper_bgcolor='rgba(0,0,0,0)',
         plot_bgcolor='rgba(0,0,0,0)',
-        font=dict(color='white'),
-        height=300,
-        margin=dict(l=0, r=0, t=40, b=0),
+        font=dict(color='white', size=12),
+        height=250,  # Más compacto
+        margin=dict(l=0, r=0, t=0, b=0),  # Sin márgenes
         showlegend=True,
         legend=dict(
             orientation="h",
             yanchor="bottom",
-            y=1.02,
-            xanchor="right",
-            x=1
+            y=-0.3,  # Leyenda fuera del gráfico
+            xanchor="center",
+            x=0.5
         ),
-        xaxis=dict(showgrid=True, gridcolor='rgba(255,255,255,0.1)'),
-        yaxis=dict(title=None)
+        xaxis=dict(
+            showgrid=True, 
+            gridcolor='rgba(255,255,255,0.1)',
+            title=None
+        ),
+        yaxis=dict(
+            title=None,
+            tickfont=dict(size=10)  # Texto más pequeño
+        )
     )
     
     st.plotly_chart(fig, use_container_width=True)
@@ -746,7 +754,7 @@ if choice == "Tablero de Mando":
     mostrar_notificaciones()
     
     df = run_query("ordenes")
-    df_users = run_query("usuarios")  # Nuevo: cargar usuarios para el gráfico
+    df_users = run_query("usuarios")
     
     if not df.empty:
         # Métricas inteligentes MEJORADAS
@@ -754,8 +762,9 @@ if choice == "Tablero de Mando":
 
         st.write("") 
 
-        # CAMBIAR DE 3 A 4 COLUMNAS
-        c_left, c_mid, c_right, c_far = st.columns([1, 1, 1, 1])
+        # PRIMERA FILA: 3 GRÁFICOS PRINCIPALES
+        st.markdown("### 📈 Métricas Visuales")
+        c_left, c_mid, c_right = st.columns(3)
 
         with c_left:
             st.markdown(f"<div class='card-style'><span class='chart-header'>Progreso de Órdenes</span>", unsafe_allow_html=True)
@@ -771,41 +780,12 @@ if choice == "Tablero de Mando":
             st.markdown(f"<div class='card-style'><span class='chart-header'>Tipos de Mantenimiento</span>", unsafe_allow_html=True)
             graficar_torta_tipo(df) 
             st.markdown("</div>", unsafe_allow_html=True)
-        
-        with c_far:
-            st.markdown(f"<div class='card-style'><span class='chart-header'>Órdenes por Técnico</span>", unsafe_allow_html=True)
-            graficar_ordenes_por_tecnico(df, df_users)
-            st.markdown("</div>", unsafe_allow_html=True)
 
-        # TABLA DETALLADA DE TÉCNICOS (OPCIONAL)
-        st.markdown("---")
-        st.markdown("### 📊 Detalle por Técnico")
-        
-        # Crear tabla detallada
-        if not df_users.empty:
-            user_map = dict(zip(df_users['id'].astype(str), df_users['nombre']))
-            df_tecnicos_detalle = df.copy()
-            df_tecnicos_detalle['tecnico_nombre'] = df_tecnicos_detalle['tecnico_asignado'].astype(str).map(user_map).fillna('Sin asignar')
-            
-            # Agrupar y contar
-            resumen_tecnicos = df_tecnicos_detalle.groupby('tecnico_nombre').agg({
-                'id': 'count',
-                'estado': lambda x: (x == 'Concluida').sum()
-            }).reset_index()
-            
-            resumen_tecnicos.columns = ['Técnico', 'Total Órdenes', 'Concluidas']
-            resumen_tecnicos['Abiertas'] = resumen_tecnicos['Total Órdenes'] - resumen_tecnicos['Concluidas']
-            resumen_tecnicos['Eficiencia'] = (resumen_tecnicos['Concluidas'] / resumen_tecnicos['Total Órdenes'] * 100).round(1)
-            resumen_tecnicos['Eficiencia'] = resumen_tecnicos['Eficiencia'].apply(lambda x: f"{x}%" if pd.notnull(x) else "0%")
-            
-            # Ordenar por total de órdenes
-            resumen_tecnicos = resumen_tecnicos.sort_values('Total Órdenes', ascending=False)
-            
-            st.dataframe(
-                resumen_tecnicos,
-                hide_index=True,
-                use_container_width=True
-            )
+        # SEGUNDA FILA: GRÁFICO DE TÉCNICOS (MÁS ANCHO)
+        st.markdown("### 👥 Distribución por Técnico")
+        st.markdown(f"<div class='card-style'><span class='chart-header'>Carga de Trabajo por Técnico</span>", unsafe_allow_html=True)
+        graficar_ordenes_por_tecnico(df, df_users)
+        st.markdown("</div>", unsafe_allow_html=True)
 
     else: 
         st.info("No hay datos para mostrar.")
