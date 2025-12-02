@@ -1,0 +1,16 @@
+# --- SECRETO MÁXIMO (La llave de la casa) ---
+.streamlit/secrets.toml
+.env
+
+# --- Basura de Python (Archivos temporales) ---
+__pycache__/
+*.pyc
+
+# --- Entornos Virtuales (Si usas venv) ---
+venv/
+env/
+.venv/
+
+# --- Archivos del Sistema Operativo ---
+.DS_Store
+Thumbs.db
