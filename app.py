@@ -898,14 +898,13 @@ elif choice == "Inventario Activos":
     # --- DEFINICIÓN DE PESTAÑAS (AHORA SON 3) ---
     tab_lista, tab_nuevo, tab_edit = st.tabs(["📋 LISTA DE ACTIVOS", "➕ NUEVO ACTIVO", "✏️ EDITAR / QR"])
 
-  # ==============================================================================
-    # 📋 PESTAÑA 1: LISTA MAESTRA (SIN PARPADEO / ULTRA FLUIDO)
+ # ==============================================================================
+    # 📋 PESTAÑA 1: LISTA MAESTRA (ESTABLE - SIN CIERRE AUTOMÁTICO)
     # ==============================================================================
     with tab_lista:
         if not df_act.empty:
             
-            # --- 1. DEFINICIÓN DEL DIÁLOGO (VENTANA FLOTANTE) ---
-            # Lo definimos afuera para usarlo cuando queramos
+            # --- 1. DEFINICIÓN DEL VISOR (VENTANA FLOTANTE) ---
             @st.dialog("📸 Detalle Visual del Activo")
             def mostrar_visor(nombre, foto, qr):
                 st.subheader(nombre)
@@ -921,7 +920,7 @@ elif choice == "Inventario Activos":
                     else: st.warning("Sin QR")
                 st.caption("Presione 'Esc' o la 'X' para cerrar.")
 
-            # --- 2. MÉTRICAS (ESTÁTICAS - NO PARPADEAN) ---
+            # --- 2. MÉTRICAS (ESTÁTICAS) ---
             col_kpi1, col_kpi2, col_kpi3, col_kpi4 = st.columns(4)
             col_kpi1.metric("Total Activos", len(df_act))
             col_kpi2.metric("Áreas Activas", df_act['area'].nunique())
@@ -931,7 +930,7 @@ elif choice == "Inventario Activos":
             
             st.markdown("---")
             
-            # --- 3. FILTROS (ESTÁTICOS - NO PARPADEAN) ---
+            # --- 3. FILTROS ---
             st.markdown("#### 🔍 Explorador de Activos")
             c_fil1, c_fil2, c_fil3, c_fil4 = st.columns([2, 1, 1, 1])
             
@@ -947,7 +946,7 @@ elif choice == "Inventario Activos":
             cat_opts = ["Todas"] + categorias_list
             filtro_cat = c_fil4.selectbox("Filtrar Categoría", cat_opts)
             
-            # --- PROCESO DE FILTRADO (Se hace fuera del fragmento) ---
+            # --- 4. PREPARAR DATOS (FUERA DEL FRAGMENTO) ---
             df_filtered = df_act.copy()
             if search_term:
                 df_filtered = df_filtered[df_filtered['nombre'].str.contains(search_term, case=False, na=False)]
@@ -958,18 +957,17 @@ elif choice == "Inventario Activos":
             if filtro_cat != "Todas":
                 df_filtered = df_filtered[df_filtered['categoria'] == filtro_cat]
 
-            # --- 4. FRAGMENTO AISLADO (AQUÍ OCURRE LA MAGIA) ---
-            # @st.fragment hace que solo esta función se recargue al interactuar,
-            # dejando el resto de la página quieta.
+            # --- 5. FRAGMENTO DE TABLA (LÓGICA CORREGIDA) ---
             @st.fragment
-            def mostrar_tabla_interactiva(dataframe_filtrado):
+            def fragmento_tabla_estable(dataframe_filtrado):
                 if not dataframe_filtrado.empty:
                     st.markdown(f"###### 🧬 Resultados: {len(dataframe_filtrado)}")
                     st.info("👆 **Haga clic en una fila** para ver Foto y QR.")
-                    
-                    # Gestión de key para limpiar selección
-                    if 'tabla_key' not in st.session_state:
-                        st.session_state.tabla_key = 0
+
+                    # Inicializar variable para controlar qué activo ya vimos
+                    # Esto evita que la ventana se abra sola repetidamente
+                    if 'last_viewed_id' not in st.session_state:
+                        st.session_state.last_viewed_id = None
 
                     altura_tabla = (len(dataframe_filtrado) * 35) + 38
                     altura_final = min(max(altura_tabla, 100), 600)
@@ -990,29 +988,32 @@ elif choice == "Inventario Activos":
                         hide_index=True,
                         height=altura_final,
                         selection_mode="single-row",
-                        on_select="rerun", # Esto recarga solo el fragmento
-                        key=f"tabla_activos_v{st.session_state.tabla_key}"
+                        on_select="rerun", # Recarga el fragmento suavemente
+                        key="tabla_maestra_activos" # Key fija para estabilidad
                     )
 
-                    # Lógica de Selección
+                    # LÓGICA DE APERTURA SEGURA
                     if len(event.selection.rows) > 0:
                         idx = event.selection.rows[0]
                         sel_data = dataframe_filtrado.iloc[idx]
+                        sel_id = sel_data['id']
                         
-                        # 1. Abrimos el diálogo (Modal)
-                        mostrar_visor(sel_data['nombre'], sel_data['foto_url'], sel_data['qr_url'])
-                        
-                        # 2. Actualizamos la key para limpiar la selección
-                        st.session_state.tabla_key += 1
-                        
-                        # 3. Forzamos recarga SOLO DEL FRAGMENTO para limpiar la tabla visualmente
-                        st.rerun()
+                        # SOLO abrimos la ventana si el ID seleccionado es DIFERENTE al último que vimos.
+                        # Esto permite cerrar la ventana y que no se vuelva a abrir sola aunque la fila siga seleccionada.
+                        if st.session_state.last_viewed_id != sel_id:
+                            st.session_state.last_viewed_id = sel_id # Actualizamos el "visto"
+                            mostrar_visor(sel_data['nombre'], sel_data['foto_url'], sel_data['qr_url'])
+                    
+                    # Si el usuario deselecciona (clic afuera), reseteamos el control para permitir re-seleccionar el mismo.
+                    elif len(event.selection.rows) == 0:
+                         st.session_state.last_viewed_id = None
+
                 else:
                     if search_term or filtro_area != "Todas" or filtro_cat != "Todas":
                         st.warning(f"⚠️ No se encontraron activos con estos filtros.")
 
-            # --- 5. LLAMADO AL FRAGMENTO ---
-            mostrar_tabla_interactiva(df_filtered)
+            # --- 6. EJECUTAR FRAGMENTO ---
+            fragmento_tabla_estable(df_filtered)
                 
         else:
             st.info("Aún no hay activos registrados para mostrar en la lista.")
