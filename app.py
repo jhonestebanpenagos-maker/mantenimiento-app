@@ -899,40 +899,46 @@ elif choice == "Inventario Activos":
     tab_lista, tab_nuevo, tab_edit = st.tabs(["📋 LISTA DE ACTIVOS", "➕ NUEVO ACTIVO", "✏️ EDITAR / QR"])
 
   # ==============================================================================
-    # 📋 PESTAÑA 1: LISTA MAESTRA (CON CORRECCIÓN DE SELECCIÓN PEGADA)
+    # 📋 PESTAÑA 1: LISTA MAESTRA (SOLUCIÓN DEFINITIVA FLOTANTE)
     # ==============================================================================
     with tab_lista:
         if not df_act.empty:
             
-            # --- 1. CONTROL DE REINICIO DE TABLA ---
-            # Inicializamos una clave única para la tabla. 
-            # Cambiar esta clave forzará a la tabla a "olvidar" la selección.
+            # --- 1. GESTIÓN DE ESTADO ---
             if 'tabla_key' not in st.session_state:
                 st.session_state.tabla_key = 0
+            
+            # Variable para saber si debemos abrir el modal en esta recarga
+            if 'activo_en_visor' not in st.session_state:
+                st.session_state.activo_en_visor = None
 
-            # --- 2. DEFINICIÓN DEL MODAL ---
+            # --- 2. DEFINICIÓN DEL DIÁLOGO (VENTANA) ---
             @st.dialog("📸 Detalle Visual del Activo")
             def mostrar_visor(nombre, foto, qr):
                 st.subheader(nombre)
                 st.markdown("---")
                 c_zoom1, c_zoom2 = st.columns(2)
-                
                 with c_zoom1:
                     st.markdown("**Fotografía Real**")
-                    if foto:
-                        st.image(foto, use_container_width=True)
-                    else:
-                        st.warning("Sin foto")
-
+                    if foto: st.image(foto, use_container_width=True)
+                    else: st.warning("Sin foto")
                 with c_zoom2:
                     st.markdown("**Código QR**")
-                    if qr:
-                        st.image(qr, width=250)
-                    else:
-                        st.warning("Sin QR")
-                st.caption("Presione la 'X' arriba a la derecha o 'Esc' para cerrar.")
+                    if qr: st.image(qr, width=250)
+                    else: st.warning("Sin QR")
+                st.caption("Presione 'Esc' o la 'X' para cerrar.")
 
-            # --- 3. MÉTRICAS ---
+            # --- 3. LÓGICA DE APERTURA (SE EJECUTA AL INICIO) ---
+            # Si hay un activo pendiente de mostrar (guardado en el paso anterior), abrimos el modal ahora.
+            if st.session_state.activo_en_visor:
+                # Recuperamos los datos guardados
+                act = st.session_state.activo_en_visor
+                mostrar_visor(act['nombre'], act['foto'], act['qr'])
+                # IMPORTANTE: Limpiamos la variable inmediatamente después de invocar el diálogo.
+                # Así, cuando se cierre la ventana, no se volverá a abrir sola.
+                st.session_state.activo_en_visor = None
+
+            # --- 4. MÉTRICAS ---
             col_kpi1, col_kpi2, col_kpi3, col_kpi4 = st.columns(4)
             col_kpi1.metric("Total Activos", len(df_act))
             col_kpi2.metric("Áreas Activas", df_act['area'].nunique())
@@ -942,11 +948,11 @@ elif choice == "Inventario Activos":
             
             st.markdown("---")
             
-            # --- 4. FILTROS ---
+            # --- 5. FILTROS ---
             st.markdown("#### 🔍 Explorador de Activos")
             c_fil1, c_fil2, c_fil3, c_fil4 = st.columns([2, 1, 1, 1])
             
-            search_term = c_fil1.text_input("Buscar por nombre", placeholder="Escribe y presiona Enter...", help="Busca coincidencias de letras en el nombre del activo.")
+            search_term = c_fil1.text_input("Buscar por nombre", placeholder="Escribe y presiona Enter...", help="Busca coincidencias de letras.")
             area_opts = ["Todas"] + sorted(areas_data.keys())
             filtro_area = c_fil2.selectbox("Filtrar Área", area_opts)
             
@@ -969,15 +975,14 @@ elif choice == "Inventario Activos":
             if filtro_cat != "Todas":
                 df_filtered = df_filtered[df_filtered['categoria'] == filtro_cat]
             
-            # --- 5. TABLA INTERACTIVA ---
+            # --- 6. TABLA INTERACTIVA ---
             if not df_filtered.empty:
                 st.markdown(f"###### 🧬 Resultados: {len(df_filtered)}")
-                st.info("👆 **Haga clic en una fila** para ver la Foto y el QR en grande.")
+                st.info("👆 **Haga clic en una fila** para ver Foto y QR.")
                 
                 altura_tabla = (len(df_filtered) * 35) + 38
                 altura_final = min(max(altura_tabla, 100), 600)
 
-                # Usamos la key dinámica aquí
                 event = st.dataframe(
                     df_filtered[['id', 'foto_url', 'nombre', 'categoria', 'area', 'ubicacion', 'qr_url']],
                     column_config={
@@ -994,25 +999,26 @@ elif choice == "Inventario Activos":
                     height=altura_final,
                     selection_mode="single-row",
                     on_select="rerun",
-                    key=f"tabla_activos_v{st.session_state.tabla_key}" # <--- ESTO ES LA MAGIA
+                    key=f"tabla_activos_v{st.session_state.tabla_key}"
                 )
 
-                # --- 6. DETECTAR CLIC Y ABRIR MODAL ---
+                # --- 7. DETECTAR CLIC Y PROCESAR ---
                 if len(event.selection.rows) > 0:
-                    selected_index = event.selection.rows[0]
-                    selected_data = df_filtered.iloc[selected_index]
+                    idx = event.selection.rows[0]
+                    sel_data = df_filtered.iloc[idx]
                     
-                    # Llamamos al diálogo
-                    mostrar_visor(
-                        selected_data['nombre'], 
-                        selected_data['foto_url'], 
-                        selected_data['qr_url']
-                    )
+                    # A) Guardamos los datos en sesión para mostrarlos en la PRÓXIMA recarga
+                    st.session_state.activo_en_visor = {
+                        "nombre": sel_data['nombre'],
+                        "foto": sel_data['foto_url'],
+                        "qr": sel_data['qr_url']
+                    }
                     
-                    # --- TRUCO PARA EVITAR QUE SE QUEDE PEGADO ---
-                    # Incrementamos la key. La próxima vez que la app se recargue (al cerrar el modal
-                    # o cambiar de pestaña), la tabla se regenerará con una ID nueva y sin selección.
+                    # B) Cambiamos la clave de la tabla (esto la limpiará visualmente)
                     st.session_state.tabla_key += 1
+                    
+                    # C) Recargamos inmediatamente
+                    st.rerun()
 
             else:
                 if search_term or filtro_area != "Todas" or filtro_cat != "Todas":
