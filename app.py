@@ -898,10 +898,9 @@ elif choice == "Inventario Activos":
     tab1, tab2 = st.tabs(["NUEVO ACTIVO", "EDITAR / QR"])
 
     # ==============================================================================
-    # 🆕 PESTAÑA 1: CREAR NUEVO (Código anterior optimizado)
+    # 🆕 PESTAÑA 1: CREAR NUEVO
     # ==============================================================================
     with tab1:
-        # VISTA DE ÉXITO (Resumen tras guardar)
         if 'activo_creado_info' in st.session_state and st.session_state.activo_creado_info is not None:
             info = st.session_state.activo_creado_info
             
@@ -956,13 +955,11 @@ elif choice == "Inventario Activos":
                     time.sleep(1)
                     st.rerun()
 
-        # VISTA DE FORMULARIO DE CREACIÓN
         else:
             st.markdown("### Registrar Nuevo Activo")
             draft = st.session_state.get('draft_data', {})
             c1, c2 = st.columns(2)
             
-            # Helpers para pre-llenado
             def get_idx(opts, val): 
                 try: return list(opts).index(val) 
                 except: return 0
@@ -971,7 +968,6 @@ elif choice == "Inventario Activos":
             area_principal = c1.selectbox("Área Principal", keys_areas, index=get_idx(keys_areas, draft.get('area')))
             sub_areas = sorted(areas_data[area_principal])
             
-            # Parsear ubicación guardada [Sub] Detalle
             d_sub, d_det = "", ""
             if draft.get('ubicacion'):
                 parts = draft['ubicacion'].split('] ', 1)
@@ -995,7 +991,6 @@ elif choice == "Inventario Activos":
 
             st.markdown("<br>", unsafe_allow_html=True)
             if st.button("💾 GUARDAR ACTIVO", type="primary", use_container_width=True):
-                # Lógica de foto (Nueva o Reusada)
                 final_url = None
                 if foto_archivo:
                     with st.spinner("Subiendo foto..."):
@@ -1030,7 +1025,7 @@ elif choice == "Inventario Activos":
                         agregar_notificacion('error', f'Error: {e}')
 
     # ==============================================================================
-    # ✏️ PESTAÑA 2: EDITAR / QR (¡AHORA CON EDICIÓN REAL!)
+    # ✏️ PESTAÑA 2: EDITAR / QR (CORREGIDO PARA NO MEZCLAR DATOS)
     # ==============================================================================
     with tab2:
         if not df_act.empty:
@@ -1041,17 +1036,20 @@ elif choice == "Inventario Activos":
             # Obtener datos del activo seleccionado
             dat = df_act[df_act['nombre']==sel_asset].iloc[0]
             
+            # Usamos el ID como sufijo para las 'keys'. 
+            # Esto obliga a Streamlit a crear inputs nuevos cada vez que cambias de activo.
+            id_suffix = dat['id'] 
+            
             st.markdown("---")
             st.subheader(f"Editando: {dat['nombre']}")
             
-            # --- FORMULARIO DE EDICIÓN ---
             c1, c2 = st.columns(2)
             
-            # AREA Y SUB-AREA (Logica de parseo)
+            # AREA Y SUB-AREA
             current_area_idx = list(sorted(areas_data.keys())).index(dat['area']) if dat['area'] in areas_data else 0
-            edit_area = c1.selectbox("Área", sorted(areas_data.keys()), index=current_area_idx, key="edit_area")
+            # KEY DINÁMICA AQUI 👇
+            edit_area = c1.selectbox("Área", sorted(areas_data.keys()), index=current_area_idx, key=f"edit_area_{id_suffix}")
             
-            # Parsear ubicación actual
             curr_sub, curr_det = "", ""
             if dat['ubicacion']:
                 parts = dat['ubicacion'].split('] ', 1)
@@ -1061,16 +1059,16 @@ elif choice == "Inventario Activos":
             sub_areas_edit = sorted(areas_data[edit_area])
             curr_sub_idx = sub_areas_edit.index(curr_sub) if curr_sub in sub_areas_edit else 0
             
-            edit_sub = c2.selectbox("Sub-área", sub_areas_edit, index=curr_sub_idx, key="edit_sub")
+            # KEY DINÁMICA AQUI 👇
+            edit_sub = c2.selectbox("Sub-área", sub_areas_edit, index=curr_sub_idx, key=f"edit_sub_{id_suffix}")
             
-            # CAMPOS DE TEXTO
-            edit_nom = c1.text_input("Nombre", value=dat['nombre'], key="edit_nom")
-            edit_det = c2.text_input("Ubicación Detalle", value=curr_det, key="edit_det")
+            # KEY DINÁMICA AQUI 👇
+            edit_nom = c1.text_input("Nombre", value=dat['nombre'], key=f"edit_nom_{id_suffix}")
+            edit_det = c2.text_input("Ubicación Detalle", value=curr_det, key=f"edit_det_{id_suffix}")
             
             curr_cat_idx = categorias_list.index(dat['categoria']) if dat['categoria'] in categorias_list else 0
-            edit_cat = c1.selectbox("Categoría", categorias_list, index=curr_cat_idx, key="edit_cat")
+            edit_cat = c1.selectbox("Categoría", categorias_list, index=curr_cat_idx, key=f"edit_cat_{id_suffix}")
             
-            # --- FOTO (OBLIGATORIA PERO CAMBIABLE) ---
             st.markdown("---")
             col_f1, col_f2 = st.columns([1, 2])
             with col_f1:
@@ -1083,17 +1081,16 @@ elif choice == "Inventario Activos":
             with col_f2:
                 st.markdown("#### 🔄 Cambiar Foto (Opcional)")
                 st.info("Si no subes nada, se mantiene la foto actual.")
-                edit_foto_file = st.file_uploader("Subir nueva foto", type=["jpg", "png"], key="edit_uploader")
+                edit_foto_file = st.file_uploader("Subir nueva foto", type=["jpg", "png"], key=f"edit_uploader_{id_suffix}")
             
-            # --- TABLA DE COMPONENTES EDITABLE ---
             st.markdown("---")
             st.markdown("#### ⚙️ Editar Especificaciones")
             
-            # Convertir JSON actual a DataFrame para el editor
             current_specs_df = pd.DataFrame(columns=["Componente/Dato", "Valor"])
             if dat.get('detalles') and isinstance(dat['detalles'], dict):
                 current_specs_df = pd.DataFrame(list(dat['detalles'].items()), columns=["Componente/Dato", "Valor"])
             
+            # KEY DINÁMICA YA ESTABA, LA MANTENEMOS
             edited_specs = st.data_editor(
                 current_specs_df,
                 num_rows="dynamic",
@@ -1102,34 +1099,27 @@ elif choice == "Inventario Activos":
                     "Componente/Dato": st.column_config.TextColumn("Característica"),
                     "Valor": st.column_config.TextColumn("Valor")
                 },
-                key=f"editor_edit_{dat['id']}" # Key única para evitar conflictos al cambiar de activo
+                key=f"editor_edit_{id_suffix}"
             )
             
             st.markdown("<br>", unsafe_allow_html=True)
             
-            # --- BOTONES DE ACCIÓN ---
             bc1, bc2 = st.columns([2, 1])
             
-            # BOTÓN ACTUALIZAR
             with bc1:
-                if st.button("💾 GUARDAR CAMBIOS", type="primary", use_container_width=True):
+                if st.button("💾 GUARDAR CAMBIOS", type="primary", use_container_width=True, key=f"btn_save_{id_suffix}"):
                     if not edit_nom:
                         st.toast("❌ El nombre no puede estar vacío", icon="Error")
                     else:
                         try:
                             with st.spinner("Actualizando activo..."):
-                                # 1. Gestionar Foto
-                                final_edit_url = dat['foto_url'] # Por defecto la vieja
+                                final_edit_url = dat['foto_url']
                                 if edit_foto_file:
-                                    final_edit_url = subir_imagen(edit_foto_file) # Si hay nueva, subimos la nueva
+                                    final_edit_url = subir_imagen(edit_foto_file)
                                 
-                                # 2. Gestionar Ubicacion
                                 final_edit_ubic = f"[{edit_sub}] {edit_det}" if edit_det else f"[{edit_sub}]"
-                                
-                                # 3. Gestionar JSON Specs
                                 final_specs_json = {row["Componente/Dato"]: row["Valor"] for i, row in edited_specs.iterrows() if row["Componente/Dato"] and row["Valor"]}
                                 
-                                # 4. Update en DB
                                 supabase.table("activos").update({
                                     "nombre": edit_nom,
                                     "area": edit_area,
@@ -1147,17 +1137,13 @@ elif choice == "Inventario Activos":
                         except Exception as e:
                             st.error(f"Error al actualizar: {e}")
 
-            # BOTÓN ELIMINAR
             with bc2:
                 with st.expander("🗑️ Borrar Activo"):
                     st.warning("Acción irreversible.")
-                    if st.button("CONFIRMAR BORRADO", type="secondary", use_container_width=True):
+                    if st.button("CONFIRMAR BORRADO", type="secondary", use_container_width=True, key=f"btn_del_{id_suffix}"):
                         try:
-                            # Borrar historial de órdenes primero (Integridad referencial)
                             supabase.table("ordenes").delete().eq("activo_id", dat['id']).execute()
-                            # Borrar activo
                             supabase.table("activos").delete().eq("id", dat['id']).execute()
-                            
                             st.cache_data.clear()
                             st.toast("🗑️ Activo eliminado permanentemente", icon="👋")
                             time.sleep(1.5)
@@ -1165,10 +1151,9 @@ elif choice == "Inventario Activos":
                         except Exception as e:
                             st.error(f"Error al borrar: {e}")
             
-            # --- QR (SOLO VISUALIZACIÓN) ---
             st.markdown("---")
             if dat.get('qr_url'):
-                st.caption("Código QR del Activo (Generado automáticamente)")
+                st.caption("Código QR del Activo")
                 st.image(dat['qr_url'], width=150)
             
         else:
