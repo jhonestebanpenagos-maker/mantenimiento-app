@@ -899,7 +899,7 @@ elif choice == "Inventario Activos":
     tab_lista, tab_nuevo, tab_edit = st.tabs(["📋 LISTA DE ACTIVOS", "➕ NUEVO ACTIVO", "✏️ EDITAR / QR"])
 
    # ==============================================================================
-    # 📋 PESTAÑA 1: LISTA MAESTRA (BÚSQUEDA FLEXIBLE)
+    # 📋 PESTAÑA 1: LISTA MAESTRA (TABLA AUTO-AJUSTABLE)
     # ==============================================================================
     with tab_lista:
         if not df_act.empty:
@@ -916,13 +916,12 @@ elif choice == "Inventario Activos":
             # --- BARRA DE FILTROS ---
             st.markdown("#### 🔍 Explorador de Activos")
             
-            # Layout de filtros
             c_fil1, c_fil2, c_fil3, c_fil4 = st.columns([2, 1, 1, 1])
             
-            # 1. Búsqueda por Texto (Flexible)
+            # 1. Búsqueda por Texto
             search_term = c_fil1.text_input(
                 "Buscar por nombre", 
-                placeholder="Escribe y presiona Enter (ej: bomba, aire...)",
+                placeholder="Escribe y presiona Enter...",
                 help="Busca coincidencias de letras en el nombre del activo."
             )
             
@@ -943,12 +942,9 @@ elif choice == "Inventario Activos":
             # --- LÓGICA DE FILTRADO ---
             df_filtered = df_act.copy()
             
-            # A. Filtro de Texto (Coincidencia parcial / letras similares)
             if search_term:
-                # Busca cualquier coincidencia sin importar mayúsculas/minúsculas
                 df_filtered = df_filtered[df_filtered['nombre'].str.contains(search_term, case=False, na=False)]
             
-            # B. Filtros de Selección
             if filtro_area != "Todas":
                 df_filtered = df_filtered[df_filtered['area'] == filtro_area]
             
@@ -958,30 +954,34 @@ elif choice == "Inventario Activos":
             if filtro_cat != "Todas":
                 df_filtered = df_filtered[df_filtered['categoria'] == filtro_cat]
             
-            # --- TABLA DE RESULTADOS ---
-            # Solo mostramos la tabla si hay resultados. Si está vacía, no mostramos nada (o un aviso sutil).
+            # --- TABLA DE RESULTADOS AJUSTADA ---
             if not df_filtered.empty:
-                st.markdown(f"###### 🧬 Resultados: {len(df_filtered)} activos encontrados")
+                st.markdown(f"###### 🧬 Resultados: {len(df_filtered)}")
                 
+                # CÁLCULO DE ALTURA DINÁMICA
+                # 35px por fila + 38px de cabecera. 
+                # Mínimo 100px para que no se vea rota, Máximo 600px para que active scroll si hay muchos.
+                altura_tabla = (len(df_filtered) * 35) + 38
+                altura_final = min(max(altura_tabla, 100), 600)
+
                 st.dataframe(
                     df_filtered[['id', 'foto_url', 'nombre', 'categoria', 'area', 'ubicacion', 'qr_url']],
                     column_config={
                         "foto_url": st.column_config.ImageColumn("Foto", width="small"),
                         "qr_url": st.column_config.ImageColumn("QR", width="small"),
                         "id": st.column_config.NumberColumn("ID", format="%d", width="small"),
-                        "nombre": st.column_config.TextColumn("Nombre del Activo", width="large"),
-                        "categoria": st.column_config.TextColumn("Categoría", width="medium"),
-                        "area": st.column_config.TextColumn("Área", width="medium"),
-                        "ubicacion": st.column_config.TextColumn("Ubicación Detallada", width="large"),
+                        "nombre": st.column_config.TextColumn("Nombre", width="medium"), # Ajustado el ancho
+                        "categoria": st.column_config.TextColumn("Categoría", width="small"),
+                        "area": st.column_config.TextColumn("Área", width="small"),
+                        "ubicacion": st.column_config.TextColumn("Ubicación", width="medium"), # Ajustado el ancho
                     },
-                    use_container_width=True,
+                    use_container_width=True, # Ocupa todo el ancho disponible
                     hide_index=True,
-                    height=500
+                    height=altura_final # ¡Altura exacta sin espacios vacíos!
                 )
             else:
-                # Mensaje opcional cuando no hay datos, o simplemente dejar vacío como pediste
                 if search_term or filtro_area != "Todas" or filtro_cat != "Todas":
-                    st.warning(f"⚠️ No se encontraron activos que coincidan con la búsqueda.")
+                    st.warning(f"⚠️ No se encontraron activos con estos filtros.")
                 
         else:
             st.info("Aún no hay activos registrados para mostrar en la lista.")
