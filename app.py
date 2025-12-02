@@ -895,12 +895,95 @@ elif choice == "Inventario Activos":
     if 'draft_data' not in st.session_state:
         st.session_state.draft_data = {}
 
-    tab1, tab2 = st.tabs(["NUEVO ACTIVO", "EDITAR / QR"])
+    # --- DEFINICIÓN DE PESTAÑAS (AHORA SON 3) ---
+    tab_lista, tab_nuevo, tab_edit = st.tabs(["📋 LISTA DE ACTIVOS", "➕ NUEVO ACTIVO", "✏️ EDITAR / QR"])
 
     # ==============================================================================
-    # 🆕 PESTAÑA 1: CREAR NUEVO
+    # 📋 PESTAÑA 1: LISTA MAESTRA (NUEVA)
     # ==============================================================================
-    with tab1:
+    with tab_lista:
+        if not df_act.empty:
+            # --- MÉTRICAS RÁPIDAS ---
+            col_kpi1, col_kpi2, col_kpi3, col_kpi4 = st.columns(4)
+            col_kpi1.metric("Total Activos", len(df_act))
+            col_kpi2.metric("Áreas Activas", df_act['area'].nunique())
+            col_kpi3.metric("Categorías", df_act['categoria'].nunique())
+            # Contar cuántos tienen foto
+            con_foto = df_act['foto_url'].notnull().sum()
+            col_kpi4.metric("Con Fotografía", f"{con_foto}/{len(df_act)}")
+            
+            st.markdown("---")
+            
+            # --- BARRA DE FILTROS ---
+            st.markdown("#### 🔍 Filtros de Búsqueda")
+            
+            c_fil1, c_fil2, c_fil3, c_fil4 = st.columns(4)
+            
+            # 1. Búsqueda por Texto
+            search_term = c_fil1.text_input("Buscar por nombre...", placeholder="Ej: Motor, Bomba...")
+            
+            # 2. Filtro Área
+            area_opts = ["Todas"] + sorted(areas_data.keys())
+            filtro_area = c_fil2.selectbox("Filtrar Área", area_opts)
+            
+            # 3. Filtro Sub-área (Dinámico)
+            sub_opts = ["Todas"]
+            if filtro_area != "Todas":
+                sub_opts += sorted(areas_data[filtro_area])
+            filtro_sub = c_fil3.selectbox("Filtrar Sub-área", sub_opts)
+            
+            # 4. Filtro Categoría
+            cat_opts = ["Todas"] + categorias_list
+            filtro_cat = c_fil4.selectbox("Filtrar Categoría", cat_opts)
+            
+            # --- APLICAR FILTROS ---
+            df_filtered = df_act.copy()
+            
+            if search_term:
+                df_filtered = df_filtered[df_filtered['nombre'].str.contains(search_term, case=False, na=False)]
+            
+            if filtro_area != "Todas":
+                df_filtered = df_filtered[df_filtered['area'] == filtro_area]
+            
+            if filtro_sub != "Todas":
+                # La sub-área está guardada como "[Subarea] Detalle" en la columna ubicacion
+                # Filtramos buscando el string "[Subarea]"
+                df_filtered = df_filtered[df_filtered['ubicacion'].str.contains(f"\[{filtro_sub}\]", regex=True, na=False)]
+            
+            if filtro_cat != "Todas":
+                df_filtered = df_filtered[df_filtered['categoria'] == filtro_cat]
+            
+            # --- TABLA INTERACTIVA (NO PLANA) ---
+            st.markdown(f"###### Encontrados: {len(df_filtered)} activos")
+            
+            # Configuramos las columnas para que se vean bonitas
+            st.dataframe(
+                df_filtered[['id', 'foto_url', 'nombre', 'categoria', 'area', 'ubicacion', 'qr_url']],
+                column_config={
+                    "foto_url": st.column_config.ImageColumn(
+                        "Foto", help="Vista previa", width="small"
+                    ),
+                    "qr_url": st.column_config.ImageColumn(
+                        "QR", width="small"
+                    ),
+                    "id": st.column_config.NumberColumn("ID", format="%d", width="small"),
+                    "nombre": st.column_config.TextColumn("Nombre del Activo", width="medium"),
+                    "categoria": st.column_config.TextColumn("Categoría", width="small"),
+                    "area": st.column_config.TextColumn("Área", width="small"),
+                    "ubicacion": st.column_config.TextColumn("Ubicación Detallada", width="medium"),
+                },
+                use_container_width=True,
+                hide_index=True,
+                height=500
+            )
+        else:
+            st.info("Aún no hay activos registrados para mostrar en la lista.")
+
+
+    # ==============================================================================
+    # 🆕 PESTAÑA 2: CREAR NUEVO (Código anterior)
+    # ==============================================================================
+    with tab_nuevo:
         if 'activo_creado_info' in st.session_state and st.session_state.activo_creado_info is not None:
             info = st.session_state.activo_creado_info
             
@@ -1025,29 +1108,21 @@ elif choice == "Inventario Activos":
                         agregar_notificacion('error', f'Error: {e}')
 
     # ==============================================================================
-    # ✏️ PESTAÑA 2: EDITAR / QR (CORREGIDO PARA NO MEZCLAR DATOS)
+    # ✏️ PESTAÑA 3: EDITAR / QR (Código anterior)
     # ==============================================================================
-    with tab2:
+    with tab_edit:
         if not df_act.empty:
-            # 1. SELECCIONAR ACTIVO
             all_assets = df_act['nombre'].values
             sel_asset = st.selectbox("🔍 Buscar Activo para Ver o Editar", all_assets)
             
-            # Obtener datos del activo seleccionado
             dat = df_act[df_act['nombre']==sel_asset].iloc[0]
-            
-            # Usamos el ID como sufijo para las 'keys'. 
-            # Esto obliga a Streamlit a crear inputs nuevos cada vez que cambias de activo.
             id_suffix = dat['id'] 
             
             st.markdown("---")
             st.subheader(f"Editando: {dat['nombre']}")
             
             c1, c2 = st.columns(2)
-            
-            # AREA Y SUB-AREA
             current_area_idx = list(sorted(areas_data.keys())).index(dat['area']) if dat['area'] in areas_data else 0
-            # KEY DINÁMICA AQUI 👇
             edit_area = c1.selectbox("Área", sorted(areas_data.keys()), index=current_area_idx, key=f"edit_area_{id_suffix}")
             
             curr_sub, curr_det = "", ""
@@ -1058,14 +1133,10 @@ elif choice == "Inventario Activos":
             
             sub_areas_edit = sorted(areas_data[edit_area])
             curr_sub_idx = sub_areas_edit.index(curr_sub) if curr_sub in sub_areas_edit else 0
-            
-            # KEY DINÁMICA AQUI 👇
             edit_sub = c2.selectbox("Sub-área", sub_areas_edit, index=curr_sub_idx, key=f"edit_sub_{id_suffix}")
             
-            # KEY DINÁMICA AQUI 👇
             edit_nom = c1.text_input("Nombre", value=dat['nombre'], key=f"edit_nom_{id_suffix}")
             edit_det = c2.text_input("Ubicación Detalle", value=curr_det, key=f"edit_det_{id_suffix}")
-            
             curr_cat_idx = categorias_list.index(dat['categoria']) if dat['categoria'] in categorias_list else 0
             edit_cat = c1.selectbox("Categoría", categorias_list, index=curr_cat_idx, key=f"edit_cat_{id_suffix}")
             
@@ -1090,7 +1161,6 @@ elif choice == "Inventario Activos":
             if dat.get('detalles') and isinstance(dat['detalles'], dict):
                 current_specs_df = pd.DataFrame(list(dat['detalles'].items()), columns=["Componente/Dato", "Valor"])
             
-            # KEY DINÁMICA YA ESTABA, LA MANTENEMOS
             edited_specs = st.data_editor(
                 current_specs_df,
                 num_rows="dynamic",
@@ -1103,9 +1173,7 @@ elif choice == "Inventario Activos":
             )
             
             st.markdown("<br>", unsafe_allow_html=True)
-            
             bc1, bc2 = st.columns([2, 1])
-            
             with bc1:
                 if st.button("💾 GUARDAR CAMBIOS", type="primary", use_container_width=True, key=f"btn_save_{id_suffix}"):
                     if not edit_nom:
@@ -1121,22 +1189,16 @@ elif choice == "Inventario Activos":
                                 final_specs_json = {row["Componente/Dato"]: row["Valor"] for i, row in edited_specs.iterrows() if row["Componente/Dato"] and row["Valor"]}
                                 
                                 supabase.table("activos").update({
-                                    "nombre": edit_nom,
-                                    "area": edit_area,
-                                    "ubicacion": final_edit_ubic,
-                                    "categoria": edit_cat,
-                                    "foto_url": final_edit_url,
-                                    "detalles": final_specs_json
+                                    "nombre": edit_nom, "area": edit_area, "ubicacion": final_edit_ubic,
+                                    "categoria": edit_cat, "foto_url": final_edit_url, "detalles": final_specs_json
                                 }).eq("id", dat['id']).execute()
                                 
                                 st.cache_data.clear()
                                 st.toast(f"✅ Activo '{edit_nom}' actualizado correctamente", icon="💾")
                                 time.sleep(1.5)
                                 st.rerun()
-                                
                         except Exception as e:
                             st.error(f"Error al actualizar: {e}")
-
             with bc2:
                 with st.expander("🗑️ Borrar Activo"):
                     st.warning("Acción irreversible.")
@@ -1150,12 +1212,10 @@ elif choice == "Inventario Activos":
                             st.rerun()
                         except Exception as e:
                             st.error(f"Error al borrar: {e}")
-            
             st.markdown("---")
             if dat.get('qr_url'):
                 st.caption("Código QR del Activo")
                 st.image(dat['qr_url'], width=150)
-            
         else:
             st.info("No hay activos registrados para editar.")
 elif choice == "Crear Orden":
