@@ -899,20 +899,13 @@ elif choice == "Inventario Activos":
     tab_lista, tab_nuevo, tab_edit = st.tabs(["📋 LISTA DE ACTIVOS", "➕ NUEVO ACTIVO", "✏️ EDITAR / QR"])
 
   # ==============================================================================
-    # 📋 PESTAÑA 1: LISTA MAESTRA (SOLUCIÓN DEFINITIVA FLOTANTE)
+    # 📋 PESTAÑA 1: LISTA MAESTRA (SIN PARPADEO / ULTRA FLUIDO)
     # ==============================================================================
     with tab_lista:
         if not df_act.empty:
             
-            # --- 1. GESTIÓN DE ESTADO ---
-            if 'tabla_key' not in st.session_state:
-                st.session_state.tabla_key = 0
-            
-            # Variable para saber si debemos abrir el modal en esta recarga
-            if 'activo_en_visor' not in st.session_state:
-                st.session_state.activo_en_visor = None
-
-            # --- 2. DEFINICIÓN DEL DIÁLOGO (VENTANA) ---
+            # --- 1. DEFINICIÓN DEL DIÁLOGO (VENTANA FLOTANTE) ---
+            # Lo definimos afuera para usarlo cuando queramos
             @st.dialog("📸 Detalle Visual del Activo")
             def mostrar_visor(nombre, foto, qr):
                 st.subheader(nombre)
@@ -928,17 +921,7 @@ elif choice == "Inventario Activos":
                     else: st.warning("Sin QR")
                 st.caption("Presione 'Esc' o la 'X' para cerrar.")
 
-            # --- 3. LÓGICA DE APERTURA (SE EJECUTA AL INICIO) ---
-            # Si hay un activo pendiente de mostrar (guardado en el paso anterior), abrimos el modal ahora.
-            if st.session_state.activo_en_visor:
-                # Recuperamos los datos guardados
-                act = st.session_state.activo_en_visor
-                mostrar_visor(act['nombre'], act['foto'], act['qr'])
-                # IMPORTANTE: Limpiamos la variable inmediatamente después de invocar el diálogo.
-                # Así, cuando se cierre la ventana, no se volverá a abrir sola.
-                st.session_state.activo_en_visor = None
-
-            # --- 4. MÉTRICAS ---
+            # --- 2. MÉTRICAS (ESTÁTICAS - NO PARPADEAN) ---
             col_kpi1, col_kpi2, col_kpi3, col_kpi4 = st.columns(4)
             col_kpi1.metric("Total Activos", len(df_act))
             col_kpi2.metric("Áreas Activas", df_act['area'].nunique())
@@ -948,11 +931,11 @@ elif choice == "Inventario Activos":
             
             st.markdown("---")
             
-            # --- 5. FILTROS ---
+            # --- 3. FILTROS (ESTÁTICOS - NO PARPADEAN) ---
             st.markdown("#### 🔍 Explorador de Activos")
             c_fil1, c_fil2, c_fil3, c_fil4 = st.columns([2, 1, 1, 1])
             
-            search_term = c_fil1.text_input("Buscar por nombre", placeholder="Escribe y presiona Enter...", help="Busca coincidencias de letras.")
+            search_term = c_fil1.text_input("Buscar por nombre", placeholder="Escribe y presiona Enter...", help="Busca coincidencias.")
             area_opts = ["Todas"] + sorted(areas_data.keys())
             filtro_area = c_fil2.selectbox("Filtrar Área", area_opts)
             
@@ -964,7 +947,7 @@ elif choice == "Inventario Activos":
             cat_opts = ["Todas"] + categorias_list
             filtro_cat = c_fil4.selectbox("Filtrar Categoría", cat_opts)
             
-            # --- LÓGICA FILTRADO ---
+            # --- PROCESO DE FILTRADO (Se hace fuera del fragmento) ---
             df_filtered = df_act.copy()
             if search_term:
                 df_filtered = df_filtered[df_filtered['nombre'].str.contains(search_term, case=False, na=False)]
@@ -974,55 +957,62 @@ elif choice == "Inventario Activos":
                 df_filtered = df_filtered[df_filtered['ubicacion'].str.contains(f"\[{filtro_sub}\]", regex=True, na=False)]
             if filtro_cat != "Todas":
                 df_filtered = df_filtered[df_filtered['categoria'] == filtro_cat]
-            
-            # --- 6. TABLA INTERACTIVA ---
-            if not df_filtered.empty:
-                st.markdown(f"###### 🧬 Resultados: {len(df_filtered)}")
-                st.info("👆 **Haga clic en una fila** para ver Foto y QR.")
-                
-                altura_tabla = (len(df_filtered) * 35) + 38
-                altura_final = min(max(altura_tabla, 100), 600)
 
-                event = st.dataframe(
-                    df_filtered[['id', 'foto_url', 'nombre', 'categoria', 'area', 'ubicacion', 'qr_url']],
-                    column_config={
-                        "foto_url": st.column_config.ImageColumn("Foto", width="small"),
-                        "qr_url": st.column_config.ImageColumn("QR", width="small"),
-                        "id": st.column_config.NumberColumn("ID", format="%d", width="small"),
-                        "nombre": st.column_config.TextColumn("Nombre", width="medium"),
-                        "categoria": st.column_config.TextColumn("Categoría", width="small"),
-                        "area": st.column_config.TextColumn("Área", width="small"),
-                        "ubicacion": st.column_config.TextColumn("Ubicación", width="medium"),
-                    },
-                    use_container_width=True,
-                    hide_index=True,
-                    height=altura_final,
-                    selection_mode="single-row",
-                    on_select="rerun",
-                    key=f"tabla_activos_v{st.session_state.tabla_key}"
-                )
+            # --- 4. FRAGMENTO AISLADO (AQUÍ OCURRE LA MAGIA) ---
+            # @st.fragment hace que solo esta función se recargue al interactuar,
+            # dejando el resto de la página quieta.
+            @st.fragment
+            def mostrar_tabla_interactiva(dataframe_filtrado):
+                if not dataframe_filtrado.empty:
+                    st.markdown(f"###### 🧬 Resultados: {len(dataframe_filtrado)}")
+                    st.info("👆 **Haga clic en una fila** para ver Foto y QR.")
+                    
+                    # Gestión de key para limpiar selección
+                    if 'tabla_key' not in st.session_state:
+                        st.session_state.tabla_key = 0
 
-                # --- 7. DETECTAR CLIC Y PROCESAR ---
-                if len(event.selection.rows) > 0:
-                    idx = event.selection.rows[0]
-                    sel_data = df_filtered.iloc[idx]
-                    
-                    # A) Guardamos los datos en sesión para mostrarlos en la PRÓXIMA recarga
-                    st.session_state.activo_en_visor = {
-                        "nombre": sel_data['nombre'],
-                        "foto": sel_data['foto_url'],
-                        "qr": sel_data['qr_url']
-                    }
-                    
-                    # B) Cambiamos la clave de la tabla (esto la limpiará visualmente)
-                    st.session_state.tabla_key += 1
-                    
-                    # C) Recargamos inmediatamente
-                    st.rerun()
+                    altura_tabla = (len(dataframe_filtrado) * 35) + 38
+                    altura_final = min(max(altura_tabla, 100), 600)
 
-            else:
-                if search_term or filtro_area != "Todas" or filtro_cat != "Todas":
-                    st.warning(f"⚠️ No se encontraron activos con estos filtros.")
+                    # Tabla
+                    event = st.dataframe(
+                        dataframe_filtrado[['id', 'foto_url', 'nombre', 'categoria', 'area', 'ubicacion', 'qr_url']],
+                        column_config={
+                            "foto_url": st.column_config.ImageColumn("Foto", width="small"),
+                            "qr_url": st.column_config.ImageColumn("QR", width="small"),
+                            "id": st.column_config.NumberColumn("ID", format="%d", width="small"),
+                            "nombre": st.column_config.TextColumn("Nombre", width="medium"),
+                            "categoria": st.column_config.TextColumn("Categoría", width="small"),
+                            "area": st.column_config.TextColumn("Área", width="small"),
+                            "ubicacion": st.column_config.TextColumn("Ubicación", width="medium"),
+                        },
+                        use_container_width=True,
+                        hide_index=True,
+                        height=altura_final,
+                        selection_mode="single-row",
+                        on_select="rerun", # Esto recarga solo el fragmento
+                        key=f"tabla_activos_v{st.session_state.tabla_key}"
+                    )
+
+                    # Lógica de Selección
+                    if len(event.selection.rows) > 0:
+                        idx = event.selection.rows[0]
+                        sel_data = dataframe_filtrado.iloc[idx]
+                        
+                        # 1. Abrimos el diálogo (Modal)
+                        mostrar_visor(sel_data['nombre'], sel_data['foto_url'], sel_data['qr_url'])
+                        
+                        # 2. Actualizamos la key para limpiar la selección
+                        st.session_state.tabla_key += 1
+                        
+                        # 3. Forzamos recarga SOLO DEL FRAGMENTO para limpiar la tabla visualmente
+                        st.rerun()
+                else:
+                    if search_term or filtro_area != "Todas" or filtro_cat != "Todas":
+                        st.warning(f"⚠️ No se encontraron activos con estos filtros.")
+
+            # --- 5. LLAMADO AL FRAGMENTO ---
+            mostrar_tabla_interactiva(df_filtered)
                 
         else:
             st.info("Aún no hay activos registrados para mostrar en la lista.")
