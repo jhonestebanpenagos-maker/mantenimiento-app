@@ -898,8 +898,8 @@ elif choice == "Inventario Activos":
     # --- DEFINICIÓN DE PESTAÑAS (AHORA SON 3) ---
     tab_lista, tab_nuevo, tab_edit = st.tabs(["📋 LISTA DE ACTIVOS", "➕ NUEVO ACTIVO", "✏️ EDITAR / QR"])
 
-    # ==============================================================================
-    # 📋 PESTAÑA 1: LISTA MAESTRA (NUEVA)
+   # ==============================================================================
+    # 📋 PESTAÑA 1: LISTA MAESTRA (BUSCADOR PREDICTIVO)
     # ==============================================================================
     with tab_lista:
         if not df_act.empty:
@@ -908,19 +908,25 @@ elif choice == "Inventario Activos":
             col_kpi1.metric("Total Activos", len(df_act))
             col_kpi2.metric("Áreas Activas", df_act['area'].nunique())
             col_kpi3.metric("Categorías", df_act['categoria'].nunique())
-            # Contar cuántos tienen foto
             con_foto = df_act['foto_url'].notnull().sum()
             col_kpi4.metric("Con Fotografía", f"{con_foto}/{len(df_act)}")
             
             st.markdown("---")
             
             # --- BARRA DE FILTROS ---
-            st.markdown("#### 🔍 Filtros de Búsqueda")
+            st.markdown("#### 🔍 Explorador de Activos")
             
-            c_fil1, c_fil2, c_fil3, c_fil4 = st.columns(4)
+            c_fil1, c_fil2, c_fil3, c_fil4 = st.columns([2, 1, 1, 1])
             
-            # 1. Búsqueda por Texto
-            search_term = c_fil1.text_input("Buscar por nombre...", placeholder="Ej: Motor, Bomba...")
+            # 1. BUSCADOR PREDICTIVO (Multiselect en lugar de Text Input)
+            # Esto permite escribir y ver resultados al instante en el desplegable
+            nombres_disponibles = df_act['nombre'].unique()
+            filtro_nombres = c_fil1.multiselect(
+                "Buscar por nombre (Predictivo)", 
+                options=nombres_disponibles,
+                placeholder="Escribe aquí para buscar activos...",
+                help="Escribe para ver sugerencias inmediatas. Selecciona uno o varios."
+            )
             
             # 2. Filtro Área
             area_opts = ["Todas"] + sorted(areas_data.keys())
@@ -936,27 +942,27 @@ elif choice == "Inventario Activos":
             cat_opts = ["Todas"] + categorias_list
             filtro_cat = c_fil4.selectbox("Filtrar Categoría", cat_opts)
             
-            # --- APLICAR FILTROS ---
+            # --- LÓGICA DE FILTRADO ---
             df_filtered = df_act.copy()
             
-            if search_term:
-                df_filtered = df_filtered[df_filtered['nombre'].str.contains(search_term, case=False, na=False)]
+            # A. Filtro por Buscador (Si hay algo seleccionado, manda esto sobre los demás)
+            if filtro_nombres:
+                df_filtered = df_filtered[df_filtered['nombre'].isin(filtro_nombres)]
             
+            # B. Filtros de Categoría/Área (Se aplican siempre)
             if filtro_area != "Todas":
                 df_filtered = df_filtered[df_filtered['area'] == filtro_area]
             
             if filtro_sub != "Todas":
-                # La sub-área está guardada como "[Subarea] Detalle" en la columna ubicacion
-                # Filtramos buscando el string "[Subarea]"
+                # Buscamos el string "[Subarea]" en la columna ubicacion
                 df_filtered = df_filtered[df_filtered['ubicacion'].str.contains(f"\[{filtro_sub}\]", regex=True, na=False)]
             
             if filtro_cat != "Todas":
                 df_filtered = df_filtered[df_filtered['categoria'] == filtro_cat]
             
-            # --- TABLA INTERACTIVA (NO PLANA) ---
-            st.markdown(f"###### Encontrados: {len(df_filtered)} activos")
+            # --- TABLA INTERACTIVA ---
+            st.markdown(f"###### 🧬 Resultados: {len(df_filtered)} activos")
             
-            # Configuramos las columnas para que se vean bonitas
             st.dataframe(
                 df_filtered[['id', 'foto_url', 'nombre', 'categoria', 'area', 'ubicacion', 'qr_url']],
                 column_config={
@@ -967,19 +973,21 @@ elif choice == "Inventario Activos":
                         "QR", width="small"
                     ),
                     "id": st.column_config.NumberColumn("ID", format="%d", width="small"),
-                    "nombre": st.column_config.TextColumn("Nombre del Activo", width="medium"),
-                    "categoria": st.column_config.TextColumn("Categoría", width="small"),
-                    "area": st.column_config.TextColumn("Área", width="small"),
-                    "ubicacion": st.column_config.TextColumn("Ubicación Detallada", width="medium"),
+                    "nombre": st.column_config.TextColumn("Nombre del Activo", width="large"),
+                    "categoria": st.column_config.TextColumn("Categoría", width="medium"),
+                    "area": st.column_config.TextColumn("Área", width="medium"),
+                    "ubicacion": st.column_config.TextColumn("Ubicación Detallada", width="large"),
                 },
                 use_container_width=True,
                 hide_index=True,
                 height=500
             )
+            
+            if len(df_filtered) == 0:
+                st.warning("No se encontraron activos con estos filtros.")
+                
         else:
             st.info("Aún no hay activos registrados para mostrar en la lista.")
-
-
     # ==============================================================================
     # 🆕 PESTAÑA 2: CREAR NUEVO (Código anterior)
     # ==============================================================================
