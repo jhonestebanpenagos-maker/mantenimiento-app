@@ -1262,76 +1262,123 @@ elif choice == "Inventario Activos":
         else:
             st.info("No hay activos registrados para editar.")
 elif choice == "Crear Orden":
-    st.title("GENERAR ORDEN")
+    st.title("GENERAR ORDEN DE TRABAJO")
     mostrar_notificaciones()
     
+    # Cargar datos frescos
     df_act = run_query("activos")
     df_users = run_query("usuarios")
+    df_ordenes_activas = run_query("ordenes", filters={"estado": "Abierta"})
     
     if not df_act.empty:
+        # Crear diccionario para búsqueda rápida: "Nombre Activo" -> ID
         act_dict = dict(zip(df_act['nombre'], df_act['id']))
+        lista_nombres = sorted(list(act_dict.keys()))
         
         st.markdown("<div class='card-style'>", unsafe_allow_html=True)
+        st.subheader("1. Seleccionar Equipo")
         
-        # Selectbox para seleccionar el activo
-        sel = st.selectbox("Equipo", list(act_dict.keys()))
+        # Selector del activo con búsqueda
+        sel_activo_nombre = st.selectbox("Buscar Activo", lista_nombres, help="Escriba para buscar...")
+        id_activo_seleccionado = act_dict[sel_activo_nombre]
         
-        c1, c2 = st.columns(2)
-        tipo = c1.selectbox("Tipo", ["Correctivo", "Preventivo"])
-        crit = c2.select_slider("Criticidad", ["Baja", "Media", "Alta", "Crítica"])
+        # Recuperar datos completos del activo seleccionado
+        activo_info = df_act[df_act['id'] == id_activo_seleccionado].iloc[0]
         
-        desc = st.text_area("Descripción")
+        # --- VISUALIZACIÓN INTELIGENTE DEL ACTIVO ---
+        st.markdown("---")
+        c_visual, c_datos = st.columns([1, 2])
         
-        # Campo de asignación mejorado con selectbox
-        if not df_users.empty:
-            # Crear un diccionario con nombre + rol como clave y el ID como valor
-            user_options = {
-                f"{row['nombre']} - {row['rol']}": str(row['id']) 
-                for _, row in df_users.iterrows()
-            }
+        with c_visual:
+            if activo_info.get('foto_url'):
+                st.image(activo_info['foto_url'], caption="Referencia Visual", use_container_width=True)
+            else:
+                st.info("🖼️ Sin fotografía disponible")
+                
+        with c_datos:
+            st.markdown(f"### {activo_info['nombre']}")
+            st.caption(f"ID: {activo_info['id']} | Ubicación: {activo_info['ubicacion']}")
             
-            # Añadir opción por defecto
-            user_options_list = ["-- Seleccione un técnico --"] + list(user_options.keys())
+            # Mostrar alerta si ya tiene órdenes abiertas
+            ordenes_pendientes = df_ordenes_activas[df_ordenes_activas['activo_id'] == id_activo_seleccionado]
+            cantidad_pendientes = len(ordenes_pendientes)
             
-            selected_tech = st.selectbox(
-                "Asignar a (Obligatorio) *",
-                user_options_list,
-                help="Seleccione el técnico o usuario responsable de esta orden"
-            )
+            if cantidad_pendientes > 0:
+                st.warning(f"⚠️ ¡ATENCIÓN! Este activo ya tiene {cantidad_pendientes} orden(es) abierta(s).")
+                with st.expander("Ver órdenes pendientes"):
+                    st.dataframe(ordenes_pendientes[['id', 'descripcion', 'tecnico_asignado', 'fecha_creacion']], hide_index=True)
+            else:
+                st.success("✅ El equipo está disponible (Sin órdenes pendientes).")
+
+            # Mostrar especificaciones técnicas (JSON)
+            detalles = activo_info.get('detalles')
+            if detalles and isinstance(detalles, dict) and len(detalles) > 0:
+                with st.expander("Ver Ficha Técnica"):
+                    # Convertimos el JSON a tabla para que se vea bonito
+                    df_detalles = pd.DataFrame(list(detalles.items()), columns=["Dato", "Valor"])
+                    st.table(df_detalles)
+
+        # --- FORMULARIO DE LA ORDEN ---
+        st.markdown("---")
+        st.subheader("2. Detalles del Mantenimiento")
+        
+        with st.form("crear_orden_form"):
+            c1, c2 = st.columns(2)
             
-            # Validar que se haya seleccionado un técnico
-            if st.button("CREAR ORDEN", type="primary", use_container_width=True):
-                if selected_tech == "-- Seleccione un técnico --":
-                    agregar_notificacion('error', 'Debe seleccionar un técnico para asignar la orden.')
+            tipo = c1.selectbox("Tipo de Mantenimiento", ["Correctivo", "Preventivo", "Mejora", "Instalación"])
+            crit = c2.select_slider("Criticidad / Urgencia", ["Baja", "Media", "Alta", "Crítica"], value="Media")
+            
+            desc = st.text_area("Descripción de la Falla o Trabajo a realizar", height=100, placeholder="Describa el problema detalladamente...")
+            
+            # Selector de Técnicos
+            if not df_users.empty:
+                # Muestra Nombre y Rol en la lista
+                tech_options = {f"{u['nombre']} ({u['rol']})": u['id'] for _, u in df_users.iterrows()}
+                tech_list = ["-- Seleccionar Técnico --"] + list(tech_options.keys())
+                
+                sel_tech = st.selectbox("Asignar a:", tech_list)
+            else:
+                st.error("No hay usuarios registrados para asignar.")
+                sel_tech = "-- Seleccionar Técnico --"
+
+            st.markdown("<br>", unsafe_allow_html=True)
+            btn_crear = st.form_submit_button("🚀 GENERAR ORDEN DE TRABAJO", type="primary", use_container_width=True)
+            
+            if btn_crear:
+                # Validaciones
+                if sel_tech == "-- Seleccionar Técnico --":
+                    agregar_notificacion('error', 'Debe asignar un técnico responsable.')
                 elif not desc.strip():
-                    agregar_notificacion('error', 'Debe ingresar una descripción para la orden.')
+                    agregar_notificacion('error', 'La descripción es obligatoria.')
                 else:
-                    # Obtener el ID del técnico seleccionado
-                    tecnico_id = user_options[selected_tech]
-                    
-                    # Insertar la orden en la base de datos
                     try:
-                        supabase.table("ordenes").insert({
-                            "activo_id": act_dict[sel], 
-                            "descripcion": desc, 
-                            "criticidad": crit, 
-                            "tipo_mantenimiento": tipo, 
-                            "estado": "Abierta", 
-                            "tecnico_asignado": tecnico_id, 
-                            "fecha_creacion": datetime.now().isoformat()
-                        }).execute()
+                        tecnico_id = tech_options[sel_tech]
                         
-                        st.cache_data.clear()
-                        agregar_notificacion('success', f'Orden creada y asignada a {selected_tech.split(" - ")[0]}.')
-                        st.rerun()
+                        # Insertar orden
+                        new_ot = {
+                            "activo_id": int(id_activo_seleccionado),
+                            "descripcion": desc,
+                            "criticidad": crit,
+                            "tipo_mantenimiento": tipo,
+                            "estado": "Abierta",
+                            "tecnico_asignado": str(tecnico_id),
+                            "fecha_creacion": datetime.now().isoformat()
+                        }
+                        
+                        res = supabase.table("ordenes").insert(new_ot).execute()
+                        
+                        if res.data:
+                            new_id = res.data[0]['id']
+                            st.cache_data.clear()
+                            agregar_notificacion('success', f'Orden OT-{new_id} creada exitosamente para {sel_activo_nombre}.')
+                            time.sleep(1)
+                            st.rerun()
                     except Exception as e:
-                        agregar_notificacion('error', f'Error al crear orden: {e}')
-        else:
-            st.warning("⚠️ No hay usuarios registrados. Debe crear usuarios antes de generar órdenes.")
-            
+                        agregar_notificacion('error', f'Error al crear la orden: {e}')
+
         st.markdown("</div>", unsafe_allow_html=True)
     else:
-        st.warning("⚠️ No hay activos registrados. Debe crear activos antes de generar órdenes.")
+        st.warning("⚠️ No hay activos registrados. Vaya a 'Inventario' para crear uno primero.")
 
 elif choice == "Gestionar Órdenes":
     st.title("GESTIONAR ÓRDENES DE TRABAJO")
