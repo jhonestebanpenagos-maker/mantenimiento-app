@@ -1,3 +1,9 @@
+# ==============================================================================
+# PROYECTO: ORIÓN - Mantenimiento Inteligente
+# AUTOR: [JHON ESTEBAN PENAGOS Jhonestebanpenagos@gmail.com +57 3184705862]
+# FECHA DE CREACIÓN: Noviembre 2025
+# DERECHOS: Todos los derechos reservados. Prohibida su copia o distribución.
+# ==============================================================================
 import streamlit as st
 import pandas as pd
 from supabase import create_client, Client
