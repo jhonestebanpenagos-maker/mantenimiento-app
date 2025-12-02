@@ -8,7 +8,6 @@ import streamlit as st
 import pandas as pd
 from supabase import create_client, Client
 from datetime import datetime
-from streamlit_option_menu import option_menu
 import io
 import urllib.parse
 import json
@@ -343,6 +342,8 @@ def mostrar_notificaciones():
             st.error(f"❌ {mensaje}")
         elif tipo == 'warning':
             st.warning(f"⚠️ {mensaje}")
+        elif tipo == 'delete':
+            st.error(f"🗑️ {mensaje}")
         elif tipo == 'info':
             st.info(f"ℹ️ {mensaje}")
         
@@ -734,7 +735,6 @@ rol = st.session_state['rol']
 usuario = st.session_state['usuario']
 
 with st.sidebar:
-    # Encabezado limpio
     st.markdown(f"""
         <div style="margin-bottom: 20px;">
             <p style="color: white; margin: 0; font-size: 1.1rem; font-weight: 600;">👋 {usuario}</p>
@@ -742,76 +742,60 @@ with st.sidebar:
         </div>
     """, unsafe_allow_html=True)
     
-    # Botón de cerrar sesión
     if st.button("🔓 Salir", use_container_width=True, type="secondary"):
         logout()
     
     st.divider()
     
-    # Inicializar navegación
     if 'current_page' not in st.session_state:
         st.session_state.current_page = "Tablero de Mando"
     
-    # Menú simple
+    # --- MENÚ UNIFICADO ---
     if rol == "Admin":
         menu = [
             ("📊", "Tablero"),
-            ("📦", "Inventario De Activos"), 
-            ("➕", "Nueva OT"),
-            ("📋", "Gestionar"),
-            ("✅", "Cerrar"),
+            ("📦", "Inventario Activos"), 
+            ("🛠️", "Órdenes de Trabajo"), 
             ("👤", "Usuarios")
         ]
         valores = [
             "Tablero de Mando",
             "Inventario Activos", 
-            "Crear Orden",
-            "Gestionar Órdenes",
-            "Cerrar Orden",
+            "Ordenes de Trabajo", 
             "Usuarios"
         ]
     elif rol == "Programador":
         menu = [
             ("📊", "Tablero"),
-            ("➕", "Nueva OT"),
-            ("📋", "Gestionar"),
+            ("🛠️", "Órdenes de Trabajo"),
             ("👤", "Usuarios")
         ]
         valores = [
             "Tablero de Mando",
-            "Crear Orden",
-            "Gestionar Órdenes",
+            "Ordenes de Trabajo",
             "Usuarios"
         ]
     elif rol == "Tecnico":
-        menu = [("✅", "Cerrar OT")]
-        valores = ["Cerrar Orden"]
+        menu = [("🛠️", "Órdenes de Trabajo")]
+        valores = ["Ordenes de Trabajo"]
     
-    # Navegación
     for (icono, texto), valor in zip(menu, valores):
         activo = st.session_state.current_page == valor
         tipo = "primary" if activo else "secondary"
         
-        # CSS inline simple para botón activo
         if activo:
             st.markdown("""
             <style>
-            .boton-activo {
-                border: 2px solid #F59E0B !important;
-            }
+            .boton-activo { border: 2px solid #F59E0B !important; }
             </style>
             """, unsafe_allow_html=True)
         
-        if st.button(
-            f"{icono} {texto}",
-            key=f"menu_{valor}",
-            use_container_width=True,
-            type=tipo
-        ):
+        if st.button(f"{icono} {texto}", key=f"menu_{valor}", use_container_width=True, type=tipo):
             st.session_state.current_page = valor
             st.rerun()
     
     choice = st.session_state.current_page
+
 # ==============================================================================
 # 📊 PANTALLAS
 # ==============================================================================
@@ -824,12 +808,9 @@ if choice == "Tablero de Mando":
     df_users = run_query("usuarios")
     
     if not df.empty:
-        # Métricas inteligentes MEJORADAS
         mostrar_metricas_inteligentes(df, df_users)
-
         st.write("") 
 
-        # PRIMERA FILA: 3 GRÁFICOS PRINCIPALES
         st.markdown("### 📈 Métricas Visuales")
         c_left, c_mid, c_right = st.columns(3)
 
@@ -848,18 +829,16 @@ if choice == "Tablero de Mando":
             graficar_torta_tipo(df) 
             st.markdown("</div>", unsafe_allow_html=True)
 
-        # SEGUNDA FILA: GRÁFICO DE TÉCNICOS (MÁS ANCHO)
         st.markdown("### 👥 Órdenes de Trabajo por Técnico")
         with st.container():
             graficar_ordenes_por_tecnico(df, df_users)
-
     else: 
         st.info("No hay datos para mostrar.")
+
 elif choice == "Inventario Activos":
     st.title("INVENTARIO DE ACTIVOS")
     mostrar_notificaciones()
     
-    # --- 1. DATOS MAESTROS ---
     areas_data = {
         "Producción": [
             "Agua Cristal", "B&B", "Calderas", "Cuarto de Lubricación", 
@@ -894,23 +873,15 @@ elif choice == "Inventario Activos":
 
     df_act = run_query("activos")
     
-    # --- ESTADOS DE SESIÓN ---
     if 'specs_data' not in st.session_state:
         st.session_state.specs_data = pd.DataFrame(columns=["Componente/Dato", "Valor"])
-    
     if 'draft_data' not in st.session_state:
         st.session_state.draft_data = {}
 
-    # --- DEFINICIÓN DE PESTAÑAS (AHORA SON 3) ---
     tab_lista, tab_nuevo, tab_edit = st.tabs(["📋 LISTA DE ACTIVOS", "➕ NUEVO ACTIVO", "✏️ EDITAR / QR"])
 
- # ==============================================================================
-    # 📋 PESTAÑA 1: LISTA MAESTRA (ESTABLE - SIN CIERRE AUTOMÁTICO)
-    # ==============================================================================
     with tab_lista:
         if not df_act.empty:
-            
-            # --- 1. DEFINICIÓN DEL VISOR (VENTANA FLOTANTE) ---
             @st.dialog("📸 Detalle Visual del Activo")
             def mostrar_visor(nombre, foto, qr):
                 st.subheader(nombre)
@@ -926,7 +897,6 @@ elif choice == "Inventario Activos":
                     else: st.warning("Sin QR")
                 st.caption("Presione 'Esc' o la 'X' para cerrar.")
 
-            # --- 2. MÉTRICAS (ESTÁTICAS) ---
             col_kpi1, col_kpi2, col_kpi3, col_kpi4 = st.columns(4)
             col_kpi1.metric("Total Activos", len(df_act))
             col_kpi2.metric("Áreas Activas", df_act['area'].nunique())
@@ -935,8 +905,6 @@ elif choice == "Inventario Activos":
             col_kpi4.metric("Con Fotografía", f"{con_foto}/{len(df_act)}")
             
             st.markdown("---")
-            
-            # --- 3. FILTROS ---
             st.markdown("#### 🔍 Explorador de Activos")
             c_fil1, c_fil2, c_fil3, c_fil4 = st.columns([2, 1, 1, 1])
             
@@ -952,7 +920,6 @@ elif choice == "Inventario Activos":
             cat_opts = ["Todas"] + categorias_list
             filtro_cat = c_fil4.selectbox("Filtrar Categoría", cat_opts)
             
-            # --- 4. PREPARAR DATOS (FUERA DEL FRAGMENTO) ---
             df_filtered = df_act.copy()
             if search_term:
                 df_filtered = df_filtered[df_filtered['nombre'].str.contains(search_term, case=False, na=False)]
@@ -963,22 +930,18 @@ elif choice == "Inventario Activos":
             if filtro_cat != "Todas":
                 df_filtered = df_filtered[df_filtered['categoria'] == filtro_cat]
 
-            # --- 5. FRAGMENTO DE TABLA (LÓGICA CORREGIDA) ---
             @st.fragment
             def fragmento_tabla_estable(dataframe_filtrado):
                 if not dataframe_filtrado.empty:
                     st.markdown(f"###### 🧬 Resultados: {len(dataframe_filtrado)}")
                     st.info("👆 **Haga clic en una fila** para ver Foto y QR.")
 
-                    # Inicializar variable para controlar qué activo ya vimos
-                    # Esto evita que la ventana se abra sola repetidamente
                     if 'last_viewed_id' not in st.session_state:
                         st.session_state.last_viewed_id = None
 
                     altura_tabla = (len(dataframe_filtrado) * 35) + 38
                     altura_final = min(max(altura_tabla, 100), 600)
 
-                    # Tabla
                     event = st.dataframe(
                         dataframe_filtrado[['id', 'foto_url', 'nombre', 'categoria', 'area', 'ubicacion', 'qr_url']],
                         column_config={
@@ -994,38 +957,27 @@ elif choice == "Inventario Activos":
                         hide_index=True,
                         height=altura_final,
                         selection_mode="single-row",
-                        on_select="rerun", # Recarga el fragmento suavemente
-                        key="tabla_maestra_activos" # Key fija para estabilidad
+                        on_select="rerun",
+                        key="tabla_maestra_activos"
                     )
 
-                    # LÓGICA DE APERTURA SEGURA
                     if len(event.selection.rows) > 0:
                         idx = event.selection.rows[0]
                         sel_data = dataframe_filtrado.iloc[idx]
                         sel_id = sel_data['id']
-                        
-                        # SOLO abrimos la ventana si el ID seleccionado es DIFERENTE al último que vimos.
-                        # Esto permite cerrar la ventana y que no se vuelva a abrir sola aunque la fila siga seleccionada.
                         if st.session_state.last_viewed_id != sel_id:
-                            st.session_state.last_viewed_id = sel_id # Actualizamos el "visto"
+                            st.session_state.last_viewed_id = sel_id
                             mostrar_visor(sel_data['nombre'], sel_data['foto_url'], sel_data['qr_url'])
-                    
-                    # Si el usuario deselecciona (clic afuera), reseteamos el control para permitir re-seleccionar el mismo.
                     elif len(event.selection.rows) == 0:
                          st.session_state.last_viewed_id = None
-
                 else:
                     if search_term or filtro_area != "Todas" or filtro_cat != "Todas":
                         st.warning(f"⚠️ No se encontraron activos con estos filtros.")
 
-            # --- 6. EJECUTAR FRAGMENTO ---
             fragmento_tabla_estable(df_filtered)
-                
         else:
             st.info("Aún no hay activos registrados para mostrar en la lista.")
-    # ==============================================================================
-    # 🆕 PESTAÑA 2: CREAR NUEVO (Código anterior)
-    # ==============================================================================
+
     with tab_nuevo:
         if 'activo_creado_info' in st.session_state and st.session_state.activo_creado_info is not None:
             info = st.session_state.activo_creado_info
@@ -1055,11 +1007,9 @@ elif choice == "Inventario Activos":
             b1, b2, b3 = st.columns(3)
             with b1:
                 if st.button("✅ FINALIZAR Y NUEVO", type="primary", use_container_width=True):
-                    st.toast("✅ Proceso finalizado", icon="🎉")
                     del st.session_state['activo_creado_info']
                     st.session_state.specs_data = pd.DataFrame(columns=["Componente/Dato", "Valor"])
                     st.session_state.draft_data = {}
-                    time.sleep(1)
                     st.rerun()
             with b2:
                 if st.button("✏️ EDITAR (CORREGIR)", use_container_width=True):
@@ -1077,8 +1027,7 @@ elif choice == "Inventario Activos":
                     del st.session_state['activo_creado_info']
                     st.session_state.specs_data = pd.DataFrame(columns=["Componente/Dato", "Valor"])
                     st.session_state.draft_data = {}
-                    st.toast("Registro cancelado", icon="🗑️")
-                    time.sleep(1)
+                    agregar_notificacion('warning', 'Registro cancelado.')
                     st.rerun()
 
         else:
@@ -1108,7 +1057,7 @@ elif choice == "Inventario Activos":
             st.markdown("---")
             st.markdown("#### 📸 Fotografía (Obligatorio)")
             if draft.get('foto_url'):
-                st.image(draft['foto_url'], width=100, caption="Foto actual (se mantendrá si no subes otra)")
+                st.image(draft['foto_url'], width=100, caption="Foto actual")
             foto_archivo = st.file_uploader("Subir imagen", type=["jpg", "png", "jpeg"], key="uploader_new")
             
             st.markdown("---")
@@ -1150,9 +1099,6 @@ elif choice == "Inventario Activos":
                     except Exception as e:
                         agregar_notificacion('error', f'Error: {e}')
 
-    # ==============================================================================
-    # ✏️ PESTAÑA 3: EDITAR / QR (Código anterior)
-    # ==============================================================================
     with tab_edit:
         if not df_act.empty:
             all_assets = df_act['nombre'].values
@@ -1187,14 +1133,11 @@ elif choice == "Inventario Activos":
             col_f1, col_f2 = st.columns([1, 2])
             with col_f1:
                 st.markdown("#### 🖼️ Foto Actual")
-                if dat.get('foto_url'):
-                    st.image(dat['foto_url'], use_container_width=True)
-                else:
-                    st.warning("Sin imagen")
+                if dat.get('foto_url'): st.image(dat['foto_url'], use_container_width=True)
+                else: st.warning("Sin imagen")
             
             with col_f2:
                 st.markdown("#### 🔄 Cambiar Foto (Opcional)")
-                st.info("Si no subes nada, se mantiene la foto actual.")
                 edit_foto_file = st.file_uploader("Subir nueva foto", type=["jpg", "png"], key=f"edit_uploader_{id_suffix}")
             
             st.markdown("---")
@@ -1205,13 +1148,8 @@ elif choice == "Inventario Activos":
                 current_specs_df = pd.DataFrame(list(dat['detalles'].items()), columns=["Componente/Dato", "Valor"])
             
             edited_specs = st.data_editor(
-                current_specs_df,
-                num_rows="dynamic",
-                use_container_width=True,
-                column_config={
-                    "Componente/Dato": st.column_config.TextColumn("Característica"),
-                    "Valor": st.column_config.TextColumn("Valor")
-                },
+                current_specs_df, num_rows="dynamic", use_container_width=True,
+                column_config={"Componente/Dato": st.column_config.TextColumn("Característica"), "Valor": st.column_config.TextColumn("Valor")},
                 key=f"editor_edit_{id_suffix}"
             )
             
@@ -1220,7 +1158,7 @@ elif choice == "Inventario Activos":
             with bc1:
                 if st.button("💾 GUARDAR CAMBIOS", type="primary", use_container_width=True, key=f"btn_save_{id_suffix}"):
                     if not edit_nom:
-                        st.toast("❌ El nombre no puede estar vacío", icon="Error")
+                        agregar_notificacion("error", "El nombre no puede estar vacío")
                     else:
                         try:
                             with st.spinner("Actualizando activo..."):
@@ -1237,7 +1175,7 @@ elif choice == "Inventario Activos":
                                 }).eq("id", dat['id']).execute()
                                 
                                 st.cache_data.clear()
-                                st.toast(f"✅ Activo '{edit_nom}' actualizado correctamente", icon="💾")
+                                agregar_notificacion("success", f"Activo '{edit_nom}' actualizado correctamente")
                                 time.sleep(1.5)
                                 st.rerun()
                         except Exception as e:
@@ -1250,7 +1188,7 @@ elif choice == "Inventario Activos":
                             supabase.table("ordenes").delete().eq("activo_id", dat['id']).execute()
                             supabase.table("activos").delete().eq("id", dat['id']).execute()
                             st.cache_data.clear()
-                            st.toast("🗑️ Activo eliminado permanentemente", icon="👋")
+                            agregar_notificacion("delete", "Activo eliminado permanentemente")
                             time.sleep(1.5)
                             st.rerun()
                         except Exception as e:
@@ -1261,426 +1199,206 @@ elif choice == "Inventario Activos":
                 st.image(dat['qr_url'], width=150)
         else:
             st.info("No hay activos registrados para editar.")
-elif choice == "Crear Orden":
-    st.title("GENERAR ORDEN DE TRABAJO")
+
+elif choice == "Ordenes de Trabajo":
+    st.title("GESTIÓN DE ÓRDENES DE TRABAJO")
     mostrar_notificaciones()
     
-    # Cargar datos frescos
+    # Cargar datos necesarios
     df_act = run_query("activos")
     df_users = run_query("usuarios")
-    df_ordenes_activas = run_query("ordenes", filters={"estado": "Abierta"})
-    
-    if not df_act.empty:
-        # Crear diccionario para búsqueda rápida: "Nombre Activo" -> ID
-        act_dict = dict(zip(df_act['nombre'], df_act['id']))
-        lista_nombres = sorted(list(act_dict.keys()))
-        
-        st.markdown("<div class='card-style'>", unsafe_allow_html=True)
-        st.subheader("1. Seleccionar Equipo")
-        
-        # Selector del activo con búsqueda
-        sel_activo_nombre = st.selectbox("Buscar Activo", lista_nombres, help="Escriba para buscar...")
-        id_activo_seleccionado = act_dict[sel_activo_nombre]
-        
-        # Recuperar datos completos del activo seleccionado
-        activo_info = df_act[df_act['id'] == id_activo_seleccionado].iloc[0]
-        
-        # --- VISUALIZACIÓN INTELIGENTE DEL ACTIVO ---
-        st.markdown("---")
-        c_visual, c_datos = st.columns([1, 2])
-        
-        with c_visual:
-            if activo_info.get('foto_url'):
-                st.image(activo_info['foto_url'], caption="Referencia Visual", use_container_width=True)
-            else:
-                st.info("🖼️ Sin fotografía disponible")
-                
-        with c_datos:
-            st.markdown(f"### {activo_info['nombre']}")
-            st.caption(f"ID: {activo_info['id']} | Ubicación: {activo_info['ubicacion']}")
-            
-            # Mostrar alerta si ya tiene órdenes abiertas
-            ordenes_pendientes = df_ordenes_activas[df_ordenes_activas['activo_id'] == id_activo_seleccionado]
-            cantidad_pendientes = len(ordenes_pendientes)
-            
-            if cantidad_pendientes > 0:
-                st.warning(f"⚠️ ¡ATENCIÓN! Este activo ya tiene {cantidad_pendientes} orden(es) abierta(s).")
-                with st.expander("Ver órdenes pendientes"):
-                    st.dataframe(ordenes_pendientes[['id', 'descripcion', 'tecnico_asignado', 'fecha_creacion']], hide_index=True)
-            else:
-                st.success("✅ El equipo está disponible (Sin órdenes pendientes).")
-
-            # Mostrar especificaciones técnicas (JSON)
-            detalles = activo_info.get('detalles')
-            if detalles and isinstance(detalles, dict) and len(detalles) > 0:
-                with st.expander("Ver Ficha Técnica"):
-                    # Convertimos el JSON a tabla para que se vea bonito
-                    df_detalles = pd.DataFrame(list(detalles.items()), columns=["Dato", "Valor"])
-                    st.table(df_detalles)
-
-        # --- FORMULARIO DE LA ORDEN ---
-        st.markdown("---")
-        st.subheader("2. Detalles del Mantenimiento")
-        
-        with st.form("crear_orden_form"):
-            c1, c2 = st.columns(2)
-            
-            tipo = c1.selectbox("Tipo de Mantenimiento", ["Correctivo", "Preventivo", "Mejora", "Instalación"])
-            crit = c2.select_slider("Criticidad / Urgencia", ["Baja", "Media", "Alta", "Crítica"], value="Media")
-            
-            desc = st.text_area("Descripción de la Falla o Trabajo a realizar", height=100, placeholder="Describa el problema detalladamente...")
-            
-            # Selector de Técnicos
-            if not df_users.empty:
-                # Muestra Nombre y Rol en la lista
-                tech_options = {f"{u['nombre']} ({u['rol']})": u['id'] for _, u in df_users.iterrows()}
-                tech_list = ["-- Seleccionar Técnico --"] + list(tech_options.keys())
-                
-                sel_tech = st.selectbox("Asignar a:", tech_list)
-            else:
-                st.error("No hay usuarios registrados para asignar.")
-                sel_tech = "-- Seleccionar Técnico --"
-
-            st.markdown("<br>", unsafe_allow_html=True)
-            btn_crear = st.form_submit_button("🚀 GENERAR ORDEN DE TRABAJO", type="primary", use_container_width=True)
-            
-            if btn_crear:
-                # Validaciones
-                if sel_tech == "-- Seleccionar Técnico --":
-                    agregar_notificacion('error', 'Debe asignar un técnico responsable.')
-                elif not desc.strip():
-                    agregar_notificacion('error', 'La descripción es obligatoria.')
-                else:
-                    try:
-                        tecnico_id = tech_options[sel_tech]
-                        
-                        # Insertar orden
-                        new_ot = {
-                            "activo_id": int(id_activo_seleccionado),
-                            "descripcion": desc,
-                            "criticidad": crit,
-                            "tipo_mantenimiento": tipo,
-                            "estado": "Abierta",
-                            "tecnico_asignado": str(tecnico_id),
-                            "fecha_creacion": datetime.now().isoformat()
-                        }
-                        
-                        res = supabase.table("ordenes").insert(new_ot).execute()
-                        
-                        if res.data:
-                            new_id = res.data[0]['id']
-                            st.cache_data.clear()
-                            agregar_notificacion('success', f'Orden OT-{new_id} creada exitosamente para {sel_activo_nombre}.')
-                            time.sleep(1)
-                            st.rerun()
-                    except Exception as e:
-                        agregar_notificacion('error', f'Error al crear la orden: {e}')
-
-        st.markdown("</div>", unsafe_allow_html=True)
-    else:
-        st.warning("⚠️ No hay activos registrados. Vaya a 'Inventario' para crear uno primero.")
-
-elif choice == "Gestionar Órdenes":
-    st.title("GESTIONAR ÓRDENES DE TRABAJO")
-    mostrar_notificaciones()
-    
     df_ordenes = run_query("ordenes")
-    df_activos = run_query("activos")
-    df_users = run_query("usuarios")
     
-    if not df_ordenes.empty:
-        
-        # Filtros en la parte superior
-        st.markdown("### 🔍 Filtros")
-        col_f1, col_f2, col_f3 = st.columns(3)
-        
-        with col_f1:
-            filter_estado = st.selectbox(
-                "Estado:",
-                ["Todas", "Abierta", "Concluida"],
-                key="filter_estado"
-            )
-        
-        with col_f2:
-            filter_criticidad = st.selectbox(
-                "Criticidad:",
-                ["Todas", "Baja", "Media", "Alta", "Crítica"],
-                key="filter_criticidad"
-            )
-        
-        with col_f3:
-            filter_tipo = st.selectbox(
-                "Tipo:",
-                ["Todos", "Correctivo", "Preventivo"],
-                key="filter_tipo"
-            )
-        
-        # Aplicar filtros
-        df_filtered = df_ordenes.copy()
-        
-        if filter_estado != "Todas":
-            df_filtered = df_filtered[df_filtered['estado'] == filter_estado]
-        
-        if filter_criticidad != "Todas":
-            df_filtered = df_filtered[df_filtered['criticidad'] == filter_criticidad]
-        
-        if filter_tipo != "Todos":
-            df_filtered = df_filtered[df_filtered['tipo_mantenimiento'] == filter_tipo]
-        
-        # Mostrar tabla con las órdenes filtradas
-        st.markdown("---")
-        st.markdown(f"### 📋 Órdenes Encontradas: **{len(df_filtered)}**")
-        
-        if not df_filtered.empty:
-            # Crear DataFrame mejorado con información de activo y técnico
-            df_display = df_filtered.copy()
+    # Definir pestañas según el rol
+    if rol == "Tecnico":
+        tab_gestion, tab_crear = st.tabs(["MIS ÓRDENES / CERRAR", "SOLICITAR MANTENIMIENTO"])
+    else:
+        tab_crear, tab_gestion = st.tabs(["NUEVA ORDEN", "GESTIÓN Y CIERRE"])
+
+    # ==========================================================================
+    # 📝 PESTAÑA 1: CREAR NUEVA ORDEN
+    # ==========================================================================
+    with tab_crear:
+        if not df_act.empty:
+            act_dict = dict(zip(df_act['nombre'], df_act['id']))
+            lista_nombres = sorted(list(act_dict.keys()))
             
-            # Mapear nombres de activos
-            if not df_activos.empty:
-                activo_map = dict(zip(df_activos['id'], df_activos['nombre']))
-                df_display['activo_nombre'] = df_display['activo_id'].map(activo_map)
+            st.markdown("<div class='card-style'>", unsafe_allow_html=True)
+            c_sel, c_info = st.columns([1, 2])
             
-            # Mapear nombres de técnicos - ACTUALIZADO PARA USAR DATOS EN TIEMPO REAL
+            with c_sel:
+                sel_activo_nombre = st.selectbox("Seleccionar Activo", lista_nombres, help="Escriba para buscar...")
+                id_activo_seleccionado = act_dict[sel_activo_nombre]
+                
+                # Foto del activo seleccionado
+                activo_info = df_act[df_act['id'] == id_activo_seleccionado].iloc[0]
+                if activo_info.get('foto_url'):
+                    st.image(activo_info['foto_url'], caption="Referencia Visual", use_container_width=True)
+                else:
+                    st.info("Sin foto disponible")
+
+            with c_info:
+                st.subheader(f"{activo_info['nombre']}")
+                st.caption(f"Ubicación: {activo_info['ubicacion']}")
+                
+                # Alerta de duplicados
+                pendientes = df_ordenes[(df_ordenes['activo_id'] == id_activo_seleccionado) & (df_ordenes['estado'] == 'Abierta')]
+                if not pendientes.empty:
+                    st.warning(f"⚠️ Este activo tiene {len(pendientes)} orden(es) pendiente(s).")
+                
+                with st.form("crear_ot_unificado"):
+                    c1, c2 = st.columns(2)
+                    tipo = c1.selectbox("Tipo", ["Correctivo", "Preventivo", "Mejora", "Instalación"])
+                    crit = c2.select_slider("Criticidad", ["Baja", "Media", "Alta", "Crítica"], value="Media")
+                    desc = st.text_area("Descripción del Trabajo", height=80)
+                    
+                    # Asignación
+                    if rol != "Tecnico" and not df_users.empty:
+                         tech_opts = {f"{u['nombre']}": u['id'] for _, u in df_users.iterrows()}
+                         asignado_a = st.selectbox("Asignar Técnico", ["-- Seleccionar --"] + list(tech_opts.keys()))
+                    else:
+                        asignado_a = None 
+
+                    if st.form_submit_button("🚀 CREAR ORDEN", type="primary", use_container_width=True):
+                        if not desc:
+                            agregar_notificacion('error', 'Descripción obligatoria.')
+                        else:
+                            tech_id = tech_opts[asignado_a] if (rol != "Tecnico" and asignado_a != "-- Seleccionar --") else None
+                            if rol != "Tecnico" and not tech_id:
+                                agregar_notificacion('error', 'Debe asignar un técnico.')
+                            else:
+                                try:
+                                    supabase.table("ordenes").insert({
+                                        "activo_id": int(id_activo_seleccionado),
+                                        "descripcion": desc,
+                                        "criticidad": crit,
+                                        "tipo_mantenimiento": tipo,
+                                        "estado": "Abierta",
+                                        "tecnico_asignado": str(tech_id) if tech_id else None,
+                                        "fecha_creacion": datetime.now().isoformat()
+                                    }).execute()
+                                    st.cache_data.clear()
+                                    agregar_notificacion('success', 'Orden creada exitosamente.')
+                                    time.sleep(1)
+                                    st.rerun()
+                                except Exception as e:
+                                    agregar_notificacion('error', f'Error: {e}')
+            st.markdown("</div>", unsafe_allow_html=True)
+        else:
+            st.warning("No hay activos para generar órdenes.")
+
+    # ==========================================================================
+    # 📋 PESTAÑA 2: GESTIÓN Y CIERRE
+    # ==========================================================================
+    with tab_gestion:
+        if df_ordenes.empty:
+            st.info("No hay órdenes registradas.")
+        else:
+            # 1. FILTROS
+            c_f1, c_f2, c_f3 = st.columns(3)
+            filtro_estado = c_f1.selectbox("Filtrar Estado", ["Todas", "Abierta", "Concluida"])
+            filtro_tec = c_f2.selectbox("Filtrar Técnico", ["Todos"] + list(df_users['nombre'].values) if not df_users.empty else ["Todos"])
+            
+            # Aplicar filtros
+            df_view = df_ordenes.copy()
+            if filtro_estado != "Todas":
+                df_view = df_view[df_view['estado'] == filtro_estado]
+            
+            # Mapeos
             if not df_users.empty:
                 user_map = dict(zip(df_users['id'].astype(str), df_users['nombre']))
-                df_display['tecnico_nombre'] = df_display['tecnico_asignado'].astype(str).map(user_map).fillna('Sin asignar')
+                df_view['tecnico_nombre'] = df_view['tecnico_asignado'].astype(str).map(user_map).fillna('Sin asignar')
             
-            # Mostrar tabla con clave única para forzar actualización
+            if not df_act.empty:
+                act_map = dict(zip(df_act['id'], df_act['nombre']))
+                df_view['activo_nombre'] = df_view['activo_id'].map(act_map).fillna('Desconocido')
+
+            # 2. TABLA
             st.dataframe(
-                df_display[['id', 'activo_nombre', 'tipo_mantenimiento', 'criticidad', 
-                           'estado', 'tecnico_nombre', 'fecha_creacion']].rename(columns={
-                    'id': 'ID',
-                    'activo_nombre': 'Activo',
-                    'tipo_mantenimiento': 'Tipo',
-                    'criticidad': 'Criticidad',
-                    'estado': 'Estado',
-                    'tecnico_nombre': 'Asignado a',
-                    'fecha_creacion': 'Fecha Creación'
-                }),
-                hide_index=True,
+                df_view[['id', 'activo_nombre', 'descripcion', 'estado', 'tecnico_nombre', 'criticidad']],
                 use_container_width=True,
-                key=f"tabla_ordenes_{datetime.now().timestamp()}"  # Clave única para forzar actualización
+                hide_index=True
             )
             
-            # Selector de orden para editar
+            # 3. SELECTOR
             st.markdown("---")
-            st.markdown("### ✏️ Editar / Reasignar Orden")
+            st.subheader("🛠️ Acciones sobre la Orden")
             
-            # Crear opciones para el selectbox
-            orden_options = {
-                f"OT-{row['id']} | {activo_map.get(row['activo_id'], 'N/A')} | {row['estado']}": row['id']
-                for _, row in df_filtered.iterrows()
-            }
+            ordenes_list = {f"OT-{row['id']} | {row['activo_nombre']}": row['id'] for _, row in df_view.iterrows()}
+            sel_ot_key = st.selectbox("Seleccione una Orden para Gestionar o Cerrar", ["-- Seleccionar --"] + list(ordenes_list.keys()))
             
-            orden_options_list = ["-- Seleccione una orden --"] + list(orden_options.keys())
-            
-            selected_orden_option = st.selectbox(
-                "Orden de Trabajo:",
-                orden_options_list,
-                key="orden_selector"
-            )
-            
-            if selected_orden_option != "-- Seleccione una orden --":
-                orden_id = orden_options[selected_orden_option]
-                orden_actual = df_ordenes[df_ordenes['id'] == orden_id].iloc[0]
+            if sel_ot_key != "-- Seleccionar --":
+                id_ot = ordenes_list[sel_ot_key]
+                ot_data = df_ordenes[df_ordenes['id'] == id_ot].iloc[0]
                 
-                st.markdown(f"""
-                    <div class='card-style' style='border-left: 4px solid {PRO_ORANGE}; background: rgba(245, 158, 11, 0.05);'>
-                        <p><strong>📌 Orden Seleccionada:</strong> OT-{orden_actual['id']}</p>
-                        <p><strong>🔧 Activo:</strong> {activo_map.get(orden_actual['activo_id'], 'N/A')}</p>
-                        <p><strong>📅 Creada:</strong> {orden_actual['fecha_creacion']}</p>
-                    </div>
-                """, unsafe_allow_html=True)
+                st.markdown(f"<div class='card-style'>", unsafe_allow_html=True)
+                col_detalles, col_acciones = st.columns([1, 1.5])
                 
-                # Formulario de edición
-                with st.form(key=f"edit_orden_form_{orden_id}"):
-                    st.markdown("#### Información de la Orden")
+                with col_detalles:
+                    st.markdown(f"#### Detalles OT-{id_ot}")
+                    st.write(f"**Descripción:** {ot_data['descripcion']}")
+                    st.write(f"**Criticidad:** {ot_data['criticidad']}")
+                    st.write(f"**Fecha:** {ot_data['fecha_creacion'][:10]}")
                     
-                    col1, col2 = st.columns(2)
-                    
-                    # Campo Activo
-                    activo_actual = activo_map.get(orden_actual['activo_id'], 'N/A')
-                    activo_index = list(df_activos['nombre']).index(activo_actual) if activo_actual in df_activos['nombre'].values else 0
-                    nuevo_activo = col1.selectbox(
-                        "Activo",
-                        df_activos['nombre'].values,
-                        index=activo_index
-                    )
-                    
-                    # Campo Tipo
-                    tipo_options = ["Correctivo", "Preventivo"]
-                    tipo_index = tipo_options.index(orden_actual['tipo_mantenimiento']) if orden_actual['tipo_mantenimiento'] in tipo_options else 0
-                    nuevo_tipo = col2.selectbox(
-                        "Tipo de Mantenimiento",
-                        tipo_options,
-                        index=tipo_index
-                    )
-                    
-                    # Campo Criticidad
-                    crit_options = ["Baja", "Media", "Alta", "Crítica"]
-                    crit_index = crit_options.index(orden_actual['criticidad']) if orden_actual['criticidad'] in crit_options else 0
-                    nueva_crit = col1.select_slider(
-                        "Criticidad",
-                        crit_options,
-                        value=crit_options[crit_index]
-                    )
-                    
-                    # Campo Estado
-                    estado_options = ["Abierta", "Concluida"]
-                    estado_index = estado_options.index(orden_actual['estado']) if orden_actual['estado'] in estado_options else 0
-                    nuevo_estado = col2.selectbox(
-                        "Estado",
-                        estado_options,
-                        index=estado_index
-                    )
-                    
-                    # Campo Descripción
-                    nueva_desc = st.text_area(
-                        "Descripción",
-                        value=orden_actual.get('descripcion', ''),
-                        height=100
-                    )
-                    
-                    # Campo Reasignar Técnico
-                    st.markdown("#### 👤 Reasignación de Técnico")
-                    
-                    if not df_users.empty:
-                        user_options = {
-                            f"{row['nombre']} - {row['rol']}": str(row['id'])
-                            for _, row in df_users.iterrows()
-                        }
+                    if ot_data['estado'] == 'Concluida':
+                        st.success("✅ ORDEN FINALIZADA")
+                        if ot_data.get('comentarios_cierre'):
+                            st.caption(f"**Reporte:** {ot_data['comentarios_cierre']}")
+                        if ot_data.get('evidencia_url'):
+                            st.image(ot_data['evidencia_url'], caption="Evidencia del Cierre", width=200)
+                
+                with col_acciones:
+                    if ot_data['estado'] == 'Abierta':
+                        tab_cerrar, tab_editar = st.tabs(["✅ FINALIZAR/CERRAR", "✏️ EDITAR DATOS"])
                         
-                        # Encontrar el índice del técnico actual
-                        tecnico_actual_id = str(orden_actual.get('tecnico_asignado', ''))
-                        tecnico_actual_nombre = user_map.get(tecnico_actual_id, 'Sin asignar')
-                        
-                        # Buscar la opción que corresponde al técnico actual
-                        current_tech_option = None
-                        for option, uid in user_options.items():
-                            if uid == tecnico_actual_id:
-                                current_tech_option = option
-                                break
-                        
-                        user_options_list = list(user_options.keys())
-                        current_index = user_options_list.index(current_tech_option) if current_tech_option else 0
-                        
-                        nuevo_tecnico_option = st.selectbox(
-                            "Asignar a:",
-                            user_options_list,
-                            index=current_index,
-                            help=f"Actualmente asignado a: {tecnico_actual_nombre}"
-                        )
-                        
-                        nuevo_tecnico_id = user_options[nuevo_tecnico_option]
-                    else:
-                        st.warning("No hay usuarios disponibles")
-                        nuevo_tecnico_id = tecnico_actual_id
-                    
-                    # Comentarios adicionales
-                    comentarios = st.text_area(
-                        "Comentarios de cierre (Opcional)",
-                        value=orden_actual.get('comentarios_cierre', ''),
-                        height=80
-                    )
-                    
-                    # Botones de acción
-                    st.markdown("<br>", unsafe_allow_html=True)
-                    col_btn1, col_btn2 = st.columns(2)
-                    
-                    with col_btn1:
-                        actualizar_btn = st.form_submit_button(
-                            "✅ ACTUALIZAR ORDEN",
-                            type="primary",
-                            use_container_width=True
-                        )
-                    
-                    with col_btn2:
-                        cancelar_btn = st.form_submit_button(
-                            "🗑️ ELIMINAR ORDEN",
-                            type="secondary",
-                            use_container_width=True
-                        )
-                    
-                    # PROCESAR ACTUALIZACIÓN
-                    if actualizar_btn:
-                        try:
-                            # Obtener el ID del activo seleccionado
-                            nuevo_activo_id = int(df_activos[df_activos['nombre'] == nuevo_activo].iloc[0]['id'])
-                            
-                            # Preparar los datos actualizados con conversión explícita
-                            update_data = {
-                                "activo_id": nuevo_activo_id,
-                                "tipo_mantenimiento": str(nuevo_tipo),
-                                "criticidad": str(nueva_crit),
-                                "estado": str(nuevo_estado),
-                                "descripcion": str(nueva_desc),
-                                "tecnico_asignado": str(nuevo_tecnico_id),
-                                "comentarios_cierre": str(comentarios) if comentarios else None
-                            }
-                            
-                            # Validar datos requeridos
-                            if not update_data["descripcion"].strip():
-                                agregar_notificacion('error', 'La descripción no puede estar vacía.')
+                        with tab_cerrar:
+                            with st.form(f"cerrar_ot_{id_ot}"):
+                                reporte = st.text_area("Reporte Técnico de Solución", placeholder="Describa qué trabajo se realizó...")
+                                evidencia = st.file_uploader("Evidencia Fotográfica (Opcional)")
+                                if st.form_submit_button("FINALIZAR TRABAJO", type="primary", use_container_width=True):
+                                    if not reporte:
+                                        st.error("El reporte es obligatorio.")
+                                    else:
+                                        url_evidencia = subir_imagen(evidencia) if evidencia else None
+                                        supabase.table("ordenes").update({
+                                            "estado": "Concluida",
+                                            "comentarios_cierre": reporte,
+                                            "evidencia_url": url_evidencia,
+                                            "fecha_cierre": datetime.now().isoformat()
+                                        }).eq("id", id_ot).execute()
+                                        st.cache_data.clear()
+                                        st.success("Orden cerrada correctamente!")
+                                        time.sleep(1)
+                                        st.rerun()
+
+                        with tab_editar:
+                            if rol in ["Admin", "Programador"]:
+                                with st.form(f"edit_ot_{id_ot}"):
+                                    if not df_users.empty:
+                                        curr_tech = ot_data['tecnico_asignado']
+                                        u_opts = {f"{u['nombre']}": u['id'] for _, u in df_users.iterrows()}
+                                        new_tech_name = st.selectbox("Reasignar Técnico", list(u_opts.keys()))
+                                    
+                                    new_crit = st.select_slider("Cambiar Criticidad", ["Baja", "Media", "Alta", "Crítica"], value=ot_data['criticidad'])
+                                    
+                                    c_b1, c_b2 = st.columns(2)
+                                    if c_b1.form_submit_button("GUARDAR CAMBIOS"):
+                                        supabase.table("ordenes").update({
+                                            "tecnico_asignado": u_opts[new_tech_name],
+                                            "criticidad": new_crit
+                                        }).eq("id", id_ot).execute()
+                                        st.cache_data.clear()
+                                        st.rerun()
+                                    
+                                    if c_b2.form_submit_button("🗑️ ELIMINAR", type="secondary"):
+                                        supabase.table("ordenes").delete().eq("id", id_ot).execute()
+                                        st.cache_data.clear()
+                                        st.rerun()
                             else:
-                                # Ejecutar actualización
-                                supabase.table("ordenes").update(update_data).eq("id", int(orden_id)).execute()
-                                
-                                # LIMPIAR CACHE Y ACTUALIZAR INMEDIATAMENTE
-                                st.cache_data.clear()
-                                agregar_notificacion('success', f'Orden OT-{orden_id} actualizada correctamente.')
-                                st.rerun()
-                                
-                        except Exception as e:
-                            agregar_notificacion('error', f'Error al actualizar la orden: {str(e)}')
-                    
-                    # PROCESAR ELIMINACIÓN
-                    if cancelar_btn:
-                        try:
-                            # Confirmación adicional para eliminar
-                            st.warning(f"⚠️ Está a punto de eliminar permanentemente la orden OT-{orden_id}")
-                            confirmar = st.checkbox("Confirmar eliminación")
-                            
-                            if confirmar:
-                                supabase.table("ordenes").delete().eq("id", int(orden_id)).execute()
-                                
-                                # LIMPIAR CACHE Y FORZAR ACTUALIZACIÓN
-                                st.cache_data.clear()
-                                agregar_notificacion('delete', f'Orden OT-{orden_id} eliminada permanentemente.')
-                                st.rerun()
-                                
-                        except Exception as e:
-                            agregar_notificacion('error', f'Error al eliminar la orden: {str(e)}')
-        
-        else:
-            st.info("No se encontraron órdenes con los filtros seleccionados.")
-    
-    else:
-        st.info("📭 No hay órdenes de trabajo registradas en el sistema.")
-        
-elif choice == "Cerrar Orden":
-    st.title("CERRAR ORDEN")
-    mostrar_notificaciones()
-    
-    df_ot = run_query("ordenes")
-        
-    if not df_ot.empty:
-        my_ots = df_ot[(df_ot['estado']!='Concluida')]
-        if not my_ots.empty:
-            st.markdown("<div class='card-style'>", unsafe_allow_html=True)
-            st.dataframe(my_ots[['id','descripcion','criticidad']], use_container_width=True)
-            sid = st.selectbox("ID Orden", my_ots['id'].values)
-            with st.form("close"):
-                rep = st.text_area("Reporte Técnico")
-                img = st.file_uploader("Foto")
-                if st.form_submit_button("FINALIZAR"):
-                    url = subir_imagen(img)
-                    supabase.table("ordenes").update({"estado":"Concluida", "comentarios_cierre":rep, "evidencia_url":url}).eq("id",sid).execute()
-                    st.cache_data.clear()
-                    agregar_notificacion('success', 'Orden cerrada exitosamente.')
-                    st.rerun()
-            st.markdown("</div>", unsafe_allow_html=True)
-        else: 
-            st.info("No hay órdenes pendientes para cerrar.")
+                                st.info("Solo Administradores pueden editar parámetros de la orden.")
+                    else:
+                        st.info("Esta orden ya está cerrada. No requiere acciones.")
+                st.markdown("</div>", unsafe_allow_html=True)
 
 elif choice == "Usuarios":
     st.title("USUARIOS")
@@ -1690,7 +1408,6 @@ elif choice == "Usuarios":
 
     with tab_crear:
         st.subheader("Registrar Nuevo Usuario")
-
         with st.form("new_user_form"):
             c1, c2 = st.columns(2)
             documento = c1.text_input("Documento/ID", key="new_user_doc")
@@ -1709,10 +1426,7 @@ elif choice == "Usuarios":
                     else:
                         try:
                             res = supabase.table("usuarios").insert({
-                                "documento": documento, 
-                                "nombre": nombre, 
-                                "password": password, 
-                                "rol": rol
+                                "documento": documento, "nombre": nombre, "password": password, "rol": rol
                             }).execute()
 
                             if res.data:
@@ -1728,27 +1442,15 @@ elif choice == "Usuarios":
 
     with tab_gestionar:
         df_users = run_query("usuarios")
-
         if not df_users.empty:
             st.subheader("Seleccionar Usuario para Gestionar")
-
-            user_options = {f"{row['nombre']} (ID: {row['id']})": row['id'] 
-                           for _, row in df_users.iterrows()}
-            
+            user_options = {f"{row['nombre']} (ID: {row['id']})": row['id'] for _, row in df_users.iterrows()}
             user_options_list = ["-- Seleccione un usuario --"] + list(user_options.keys())
             
-            selected_option = st.selectbox(
-                "Usuario:",
-                user_options_list,
-                key="user_selector"
-            )
+            selected_option = st.selectbox("Usuario:", user_options_list, key="user_selector")
 
             st.markdown("### Lista Completa de Usuarios")
-            st.dataframe(
-                df_users[['id', 'documento', 'nombre', 'rol']],
-                hide_index=True,
-                use_container_width=True
-            )
+            st.dataframe(df_users[['id', 'documento', 'nombre', 'rol']], hide_index=True, use_container_width=True)
 
             if selected_option != "-- Seleccione un usuario --":
                 user_id = user_options[selected_option]
@@ -1758,27 +1460,13 @@ elif choice == "Usuarios":
                 st.markdown(f"### Editando: **{selected_user['nombre']}** (ID: {user_id})")
 
                 with st.form(key=f"edit_user_form_{user_id}"):
-                    st.subheader("Información del Usuario")
-
                     c1, c2 = st.columns(2)
-
-                    edit_doc = c1.text_input(
-                        "Documento/ID", 
-                        value=selected_user['documento']
-                    )
-                    edit_name = c2.text_input(
-                        "Nombre Completo", 
-                        value=selected_user['nombre']
-                    )
-
+                    edit_doc = c1.text_input("Documento/ID", value=selected_user['documento'])
+                    edit_name = c2.text_input("Nombre Completo", value=selected_user['nombre'])
                     rol_options = ["Tecnico", "Programador", "Admin"]
                     current_rol_index = rol_options.index(selected_user['rol']) if selected_user['rol'] in rol_options else 0
                     new_rol = st.selectbox("Rol", rol_options, index=current_rol_index)
-
-                    new_password = st.text_input(
-                        "Nueva Contraseña (Dejar vacío para no cambiar)", 
-                        type="password"
-                    )
+                    new_password = st.text_input("Nueva Contraseña (Dejar vacío para no cambiar)", type="password")
 
                     st.markdown("<br>", unsafe_allow_html=True)
                     update_submitted = st.form_submit_button("✅ ACTUALIZAR USUARIO", type="primary", use_container_width=True)
@@ -1792,11 +1480,7 @@ elif choice == "Usuarios":
                         if not validar_usuario_unico(edit_doc, user_id):
                             agregar_notificacion('error', 'El documento ya está en uso por otro usuario.')
                         else:
-                            update_data = {
-                                "documento": edit_doc,
-                                "nombre": edit_name,
-                                "rol": new_rol
-                            }
+                            update_data = {"documento": edit_doc, "nombre": edit_name, "rol": new_rol}
                             if new_password:
                                 if len(new_password) < 4:
                                     agregar_notificacion('error', 'La contraseña debe tener al menos 4 caracteres.')
@@ -1815,32 +1499,16 @@ elif choice == "Usuarios":
                 st.markdown("### 🗑️ Zona de Eliminación")
                 
                 has_open_orders = check_open_orders(user_id)
-                
                 if has_open_orders:
                     st.markdown(f"""
-                        <div style='background: rgba(239, 68, 68, 0.15); 
-                                    border: 2px solid #EF4444; 
-                                    border-radius: 8px; 
-                                    padding: 20px; 
-                                    text-align: center;'>
-                            <p style='color: #FCA5A5; margin: 0; font-size: 1.1rem;'>
-                                ⚠️ <strong>ELIMINACIÓN BLOQUEADA</strong>
-                            </p>
-                            <p style='color: #FEE2E2; margin-top: 10px; font-size: 0.95rem;'>
-                                El usuario <strong>{selected_user['nombre']}</strong> tiene Órdenes de Trabajo pendientes.<br>
-                                Debe cerrarlas o reasignarlas antes de eliminar este usuario.
-                            </p>
+                        <div style='background: rgba(239, 68, 68, 0.15); border: 2px solid #EF4444; border-radius: 8px; padding: 20px; text-align: center;'>
+                            <p style='color: #FCA5A5; margin: 0; font-size: 1.1rem;'>⚠️ <strong>ELIMINACIÓN BLOQUEADA</strong></p>
+                            <p style='color: #FEE2E2; margin-top: 10px; font-size: 0.95rem;'>El usuario <strong>{selected_user['nombre']}</strong> tiene Órdenes de Trabajo pendientes.<br>Debe cerrarlas o reasignarlas antes de eliminar este usuario.</p>
                         </div>
                     """, unsafe_allow_html=True)
                 else:
                     st.warning(f"⚠️ Esta acción eliminará permanentemente al usuario **{selected_user['nombre']}**")
-                    
-                    if st.button(
-                        "🗑️ ELIMINAR USUARIO PERMANENTEMENTE",
-                        type="secondary",
-                        use_container_width=True,
-                        key=f"delete_btn_{user_id}"
-                    ):
+                    if st.button("🗑️ ELIMINAR USUARIO PERMANENTEMENTE", type="secondary", use_container_width=True, key=f"delete_btn_{user_id}"):
                         try:
                             supabase.table("usuarios").delete().eq("id", user_id).execute()
                             st.cache_data.clear()
@@ -1848,6 +1516,5 @@ elif choice == "Usuarios":
                             st.rerun()
                         except Exception as e:
                             agregar_notificacion('error', f'Error al eliminar: {e}')
-
         else:
             st.info("No se encontraron usuarios en la base de datos. Use la pestaña 'CREAR USUARIO'.")
