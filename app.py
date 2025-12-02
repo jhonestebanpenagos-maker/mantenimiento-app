@@ -898,12 +898,34 @@ elif choice == "Inventario Activos":
     # --- DEFINICIÓN DE PESTAÑAS (AHORA SON 3) ---
     tab_lista, tab_nuevo, tab_edit = st.tabs(["📋 LISTA DE ACTIVOS", "➕ NUEVO ACTIVO", "✏️ EDITAR / QR"])
 
-   # ==============================================================================
-    # 📋 PESTAÑA 1: LISTA MAESTRA (TABLA AUTO-AJUSTABLE)
+  # ==============================================================================
+    # 📋 PESTAÑA 1: LISTA MAESTRA (CON VISOR FLOTANTE)
     # ==============================================================================
     with tab_lista:
         if not df_act.empty:
-            # --- MÉTRICAS RÁPIDAS ---
+            # --- DEFINICIÓN DEL MODAL (VENTANA FLOTANTE) ---
+            @st.dialog("📸 Detalle Visual del Activo")
+            def mostrar_visor(nombre, foto, qr):
+                st.subheader(nombre)
+                st.markdown("---")
+                c_zoom1, c_zoom2 = st.columns(2)
+                
+                with c_zoom1:
+                    st.markdown("**Fotografía Real**")
+                    if foto:
+                        st.image(foto, use_container_width=True)
+                    else:
+                        st.warning("Sin foto")
+
+                with c_zoom2:
+                    st.markdown("**Código QR**")
+                    if qr:
+                        st.image(qr, width=250)
+                    else:
+                        st.warning("Sin QR")
+                st.caption("Presione la 'X' arriba a la derecha o 'Esc' para cerrar.")
+
+            # --- MÉTRICAS ---
             col_kpi1, col_kpi2, col_kpi3, col_kpi4 = st.columns(4)
             col_kpi1.metric("Total Activos", len(df_act))
             col_kpi2.metric("Áreas Activas", df_act['area'].nunique())
@@ -913,72 +935,75 @@ elif choice == "Inventario Activos":
             
             st.markdown("---")
             
-            # --- BARRA DE FILTROS ---
+            # --- FILTROS ---
             st.markdown("#### 🔍 Explorador de Activos")
-            
             c_fil1, c_fil2, c_fil3, c_fil4 = st.columns([2, 1, 1, 1])
             
-            # 1. Búsqueda por Texto
-            search_term = c_fil1.text_input(
-                "Buscar por nombre", 
-                placeholder="Escribe y presiona Enter...",
-                help="Busca coincidencias de letras en el nombre del activo."
-            )
-            
-            # 2. Filtro Área
+            search_term = c_fil1.text_input("Buscar por nombre", placeholder="Escribe y presiona Enter...", help="Busca coincidencias de letras en el nombre del activo.")
             area_opts = ["Todas"] + sorted(areas_data.keys())
             filtro_area = c_fil2.selectbox("Filtrar Área", area_opts)
             
-            # 3. Filtro Sub-área (Dinámico)
             sub_opts = ["Todas"]
             if filtro_area != "Todas":
                 sub_opts += sorted(areas_data[filtro_area])
             filtro_sub = c_fil3.selectbox("Filtrar Sub-área", sub_opts)
             
-            # 4. Filtro Categoría
             cat_opts = ["Todas"] + categorias_list
             filtro_cat = c_fil4.selectbox("Filtrar Categoría", cat_opts)
             
-            # --- LÓGICA DE FILTRADO ---
+            # --- LÓGICA FILTRADO ---
             df_filtered = df_act.copy()
-            
             if search_term:
                 df_filtered = df_filtered[df_filtered['nombre'].str.contains(search_term, case=False, na=False)]
-            
             if filtro_area != "Todas":
                 df_filtered = df_filtered[df_filtered['area'] == filtro_area]
-            
             if filtro_sub != "Todas":
                 df_filtered = df_filtered[df_filtered['ubicacion'].str.contains(f"\[{filtro_sub}\]", regex=True, na=False)]
-            
             if filtro_cat != "Todas":
                 df_filtered = df_filtered[df_filtered['categoria'] == filtro_cat]
             
-            # --- TABLA DE RESULTADOS AJUSTADA ---
+            # --- TABLA INTERACTIVA CON SELECCIÓN ---
             if not df_filtered.empty:
                 st.markdown(f"###### 🧬 Resultados: {len(df_filtered)}")
+                st.info("👆 **Haga clic en una fila** para ver la Foto y el QR en grande.")
                 
-                # CÁLCULO DE ALTURA DINÁMICA
-                # 35px por fila + 38px de cabecera. 
-                # Mínimo 100px para que no se vea rota, Máximo 600px para que active scroll si hay muchos.
                 altura_tabla = (len(df_filtered) * 35) + 38
                 altura_final = min(max(altura_tabla, 100), 600)
 
-                st.dataframe(
+                # Configuramos el evento de selección
+                event = st.dataframe(
                     df_filtered[['id', 'foto_url', 'nombre', 'categoria', 'area', 'ubicacion', 'qr_url']],
                     column_config={
                         "foto_url": st.column_config.ImageColumn("Foto", width="small"),
                         "qr_url": st.column_config.ImageColumn("QR", width="small"),
                         "id": st.column_config.NumberColumn("ID", format="%d", width="small"),
-                        "nombre": st.column_config.TextColumn("Nombre", width="medium"), # Ajustado el ancho
+                        "nombre": st.column_config.TextColumn("Nombre", width="medium"),
                         "categoria": st.column_config.TextColumn("Categoría", width="small"),
                         "area": st.column_config.TextColumn("Área", width="small"),
-                        "ubicacion": st.column_config.TextColumn("Ubicación", width="medium"), # Ajustado el ancho
+                        "ubicacion": st.column_config.TextColumn("Ubicación", width="medium"),
                     },
-                    use_container_width=True, # Ocupa todo el ancho disponible
+                    use_container_width=True,
                     hide_index=True,
-                    height=altura_final # ¡Altura exacta sin espacios vacíos!
+                    height=altura_final,
+                    # ESTO ES LO NUEVO: ACTIVAR SELECCIÓN
+                    selection_mode="single-row",
+                    on_select="rerun"
                 )
+
+                # --- DETECTAR CLIC Y ABRIR MODAL ---
+                if len(event.selection.rows) > 0:
+                    # Obtenemos el índice de la fila seleccionada
+                    selected_index = event.selection.rows[0]
+                    # Obtenemos los datos de esa fila
+                    selected_data = df_filtered.iloc[selected_index]
+                    
+                    # LLAMAMOS AL DIALOGO (VENTANA FLOTANTE)
+                    mostrar_visor(
+                        selected_data['nombre'], 
+                        selected_data['foto_url'], 
+                        selected_data['qr_url']
+                    )
+
             else:
                 if search_term or filtro_area != "Todas" or filtro_cat != "Todas":
                     st.warning(f"⚠️ No se encontraron activos con estos filtros.")
