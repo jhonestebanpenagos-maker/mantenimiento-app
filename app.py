@@ -897,269 +897,282 @@ elif choice == "Inventario Activos":
 
     tab1, tab2 = st.tabs(["NUEVO ACTIVO", "EDITAR / QR"])
 
+    # ==============================================================================
+    # 🆕 PESTAÑA 1: CREAR NUEVO (Código anterior optimizado)
+    # ==============================================================================
     with tab1:
-        # ==============================================================================
-        # 🟢 VISTA RESUMEN (DESPUÉS DE GUARDAR)
-        # ==============================================================================
+        # VISTA DE ÉXITO (Resumen tras guardar)
         if 'activo_creado_info' in st.session_state and st.session_state.activo_creado_info is not None:
             info = st.session_state.activo_creado_info
             
             st.markdown(f"""
-                <div style="
-                    background-color: rgba(6, 78, 59, 0.5); 
-                    border: 1px solid #10B981; 
-                    border-radius: 10px; 
-                    padding: 20px; 
-                    margin-bottom: 20px;">
+                <div style="background-color: rgba(6, 78, 59, 0.5); border: 1px solid #10B981; border-radius: 10px; padding: 20px; margin-bottom: 20px;">
                     <h2 style="color: #10B981; text-align: center; margin:0;">✨ ACTIVO REGISTRADO</h2>
                     <p style="text-align: center; color: #D1FAE5;">Verifique los datos a continuación</p>
                 </div>
             """, unsafe_allow_html=True)
             
-            # Layout de 3 columnas para el resumen
             c_foto, c_datos, c_qr = st.columns([1, 1.5, 1])
-            
             with c_foto:
-                st.markdown("##### 📸 Fotografía")
-                if info['foto_url']:
-                    st.image(info['foto_url'], use_container_width=True)
-            
+                if info['foto_url']: st.image(info['foto_url'], use_container_width=True)
             with c_datos:
                 st.markdown(f"### {info['nombre']}")
                 st.markdown(f"**📍 Ubicación:** {info['area']} / {info['ubicacion']}")
                 st.markdown(f"**🔧 Categoría:** {info['categoria']}")
-                
                 st.markdown("---")
-                st.markdown("##### ⚙️ Componentes / Ficha")
                 detalles = info['detalles']
                 if detalles and isinstance(detalles, dict) and len(detalles) > 0:
-                    df_detalles = pd.DataFrame(list(detalles.items()), columns=["Característica", "Dato"])
-                    st.table(df_detalles)
-                else:
-                    st.info("Sin componentes adicionales.")
-
+                    st.table(pd.DataFrame(list(detalles.items()), columns=["Característica", "Dato"]))
             with c_qr:
-                st.markdown("##### 📱 Código QR Asignado")
-                if info.get('qr_url'):
-                    st.image(info['qr_url'], caption="Escanee para acceder", width=180)
-                else:
-                    st.warning("QR no generado")
+                if info.get('qr_url'): st.image(info['qr_url'], caption="QR Asignado", width=180)
 
             st.markdown("---")
-            
-            # --- BOTONES DE ACCIÓN ---
             b1, b2, b3 = st.columns(3)
-            
-            # 1. FINALIZAR
             with b1:
                 if st.button("✅ FINALIZAR Y NUEVO", type="primary", use_container_width=True):
-                    # --- AQUÍ ESTÁ EL CAMBIO PARA EL MENSAJE FLOTANTE ---
-                    st.toast("✅ El activo se ha creado con éxito", icon="🎉")
-                    time.sleep(1) # Breve pausa para ver el mensaje antes de recargar
-                    
-                    # Limpieza
+                    st.toast("✅ Proceso finalizado", icon="🎉")
                     del st.session_state['activo_creado_info']
                     st.session_state.specs_data = pd.DataFrame(columns=["Componente/Dato", "Valor"])
                     st.session_state.draft_data = {}
+                    time.sleep(1)
                     st.rerun()
-
-            # 2. EDITAR
             with b2:
                 if st.button("✏️ EDITAR (CORREGIR)", use_container_width=True):
-                    try:
-                        supabase.table("activos").delete().eq("id", info['id']).execute()
-                        st.cache_data.clear()
-                        
-                        st.session_state.draft_data = info
-                        
-                        if info['detalles']:
-                             st.session_state.specs_data = pd.DataFrame(
-                                 list(info['detalles'].items()), 
-                                 columns=["Componente/Dato", "Valor"]
-                             )
-                        
-                        del st.session_state['activo_creado_info']
-                        st.rerun()
-                    except Exception as e:
-                        st.error(f"Error al intentar editar: {e}")
-
-            # 3. NO GUARDAR
+                    supabase.table("activos").delete().eq("id", info['id']).execute()
+                    st.cache_data.clear()
+                    st.session_state.draft_data = info
+                    if info['detalles']:
+                         st.session_state.specs_data = pd.DataFrame(list(info['detalles'].items()), columns=["Componente/Dato", "Valor"])
+                    del st.session_state['activo_creado_info']
+                    st.rerun()
             with b3:
-                if st.button("🗑️ NO GUARDAR (DESHACER)", type="secondary", use_container_width=True):
-                    try:
-                        supabase.table("activos").delete().eq("id", info['id']).execute()
-                        st.cache_data.clear()
-                        
-                        del st.session_state['activo_creado_info']
-                        st.session_state.specs_data = pd.DataFrame(columns=["Componente/Dato", "Valor"])
-                        st.session_state.draft_data = {}
-                        st.toast("🗑️ Registro cancelado", icon="⚠️")
-                        time.sleep(1)
-                        st.rerun()
-                    except Exception as e:
-                        st.error(f"Error al deshacer: {e}")
+                if st.button("🗑️ DESHACER", type="secondary", use_container_width=True):
+                    supabase.table("activos").delete().eq("id", info['id']).execute()
+                    st.cache_data.clear()
+                    del st.session_state['activo_creado_info']
+                    st.session_state.specs_data = pd.DataFrame(columns=["Componente/Dato", "Valor"])
+                    st.session_state.draft_data = {}
+                    st.toast("Registro cancelado", icon="🗑️")
+                    time.sleep(1)
+                    st.rerun()
 
-        # ==============================================================================
-        # 📝 VISTA FORMULARIO (CREACIÓN)
-        # ==============================================================================
+        # VISTA DE FORMULARIO DE CREACIÓN
         else:
             st.markdown("### Registrar Nuevo Activo")
-            
             draft = st.session_state.get('draft_data', {})
-            
             c1, c2 = st.columns(2)
             
-            def get_index(options, value):
-                try: return list(options).index(value)
+            # Helpers para pre-llenado
+            def get_idx(opts, val): 
+                try: return list(opts).index(val) 
                 except: return 0
             
-            # Áreas
             keys_areas = sorted(areas_data.keys())
-            idx_area = get_index(keys_areas, draft.get('area'))
-            area_principal = c1.selectbox("Área Principal", keys_areas, index=idx_area)
+            area_principal = c1.selectbox("Área Principal", keys_areas, index=get_idx(keys_areas, draft.get('area')))
+            sub_areas = sorted(areas_data[area_principal])
             
-            sub_areas_disponibles = sorted(areas_data[area_principal])
-            
-            default_sub = ""
-            default_detail = ""
+            # Parsear ubicación guardada [Sub] Detalle
+            d_sub, d_det = "", ""
             if draft.get('ubicacion'):
                 parts = draft['ubicacion'].split('] ', 1)
-                default_sub = parts[0].replace('[', '')
-                default_detail = parts[1] if len(parts) > 1 else ""
-            
-            idx_sub = get_index(sub_areas_disponibles, default_sub)
-            sub_area = c2.selectbox("Sub-área", sub_areas_disponibles, index=idx_sub)
-            
-            nom = c1.text_input("Nombre del Activo", value=draft.get('nombre', ''))
-            ubic_detalle = c2.text_input("Ubicación Exacta / Detalle", value=default_detail)
-            
-            idx_cat = get_index(categorias_list, draft.get('categoria'))
-            cat = c1.selectbox("Categoría", categorias_list, index=idx_cat)
-            
-            st.markdown("---")
-            st.markdown("#### 📸 Fotografía del Activo (Obligatorio)")
-            
-            if draft.get('foto_url'):
-                st.info("ℹ️ Estás corrigiendo un activo. Si no subes una foto nueva, se usará la anterior.")
-                st.image(draft['foto_url'], width=100, caption="Foto actual")
+                d_sub = parts[0].replace('[', '')
+                d_det = parts[1] if len(parts) > 1 else ""
                 
-            foto_archivo = st.file_uploader("Subir imagen", type=["jpg", "png", "jpeg"])
-            if foto_archivo:
-                st.image(foto_archivo, width=150)
-
-            st.markdown("---")
-            st.markdown("#### ⚙️ Especificaciones y Componentes")
+            sub_area = c2.selectbox("Sub-área", sub_areas, index=get_idx(sub_areas, d_sub))
+            nom = c1.text_input("Nombre del Activo", value=draft.get('nombre', ''))
+            ubic_detalle = c2.text_input("Ubicación Exacta / Detalle", value=d_det)
+            cat = c1.selectbox("Categoría", categorias_list, index=get_idx(categorias_list, draft.get('categoria')))
             
-            edited_df = st.data_editor(
-                st.session_state.specs_data,
+            st.markdown("---")
+            st.markdown("#### 📸 Fotografía (Obligatorio)")
+            if draft.get('foto_url'):
+                st.image(draft['foto_url'], width=100, caption="Foto actual (se mantendrá si no subes otra)")
+            foto_archivo = st.file_uploader("Subir imagen", type=["jpg", "png", "jpeg"], key="uploader_new")
+            
+            st.markdown("---")
+            st.markdown("#### ⚙️ Especificaciones")
+            edited_df = st.data_editor(st.session_state.specs_data, num_rows="dynamic", use_container_width=True, key="editor_new")
+
+            st.markdown("<br>", unsafe_allow_html=True)
+            if st.button("💾 GUARDAR ACTIVO", type="primary", use_container_width=True):
+                # Lógica de foto (Nueva o Reusada)
+                final_url = None
+                if foto_archivo:
+                    with st.spinner("Subiendo foto..."):
+                        final_url = subir_imagen(foto_archivo)
+                elif draft.get('foto_url'):
+                    final_url = draft['foto_url']
+                
+                if not nom or not final_url:
+                    agregar_notificacion('error', 'Nombre y Foto son obligatorios.')
+                else:
+                    try:
+                        detalles_json = {row["Componente/Dato"]: row["Valor"] for i, row in edited_df.iterrows() if row["Componente/Dato"] and row["Valor"]}
+                        ubic_final = f"[{sub_area}] {ubic_detalle}" if ubic_detalle else f"[{sub_area}]"
+                        
+                        res = supabase.table("activos").insert({
+                            "nombre": nom, "area": area_principal, "ubicacion": ubic_final,
+                            "categoria": cat, "foto_url": final_url, "detalles": detalles_json
+                        }).execute()
+                        
+                        if res.data:
+                            nid = res.data[0]['id']
+                            qr = generar_qr_activo(nid, nom)
+                            supabase.table("activos").update({"qr_url":qr}).eq("id", nid).execute()
+                            st.cache_data.clear()
+                            st.session_state.draft_data = {}
+                            st.session_state.activo_creado_info = {
+                                "id": nid, "nombre": nom, "area": area_principal, "ubicacion": ubic_final,
+                                "categoria": cat, "foto_url": final_url, "detalles": detalles_json, "qr_url": qr
+                            }
+                            st.rerun()
+                    except Exception as e:
+                        agregar_notificacion('error', f'Error: {e}')
+
+    # ==============================================================================
+    # ✏️ PESTAÑA 2: EDITAR / QR (¡AHORA CON EDICIÓN REAL!)
+    # ==============================================================================
+    with tab2:
+        if not df_act.empty:
+            # 1. SELECCIONAR ACTIVO
+            all_assets = df_act['nombre'].values
+            sel_asset = st.selectbox("🔍 Buscar Activo para Ver o Editar", all_assets)
+            
+            # Obtener datos del activo seleccionado
+            dat = df_act[df_act['nombre']==sel_asset].iloc[0]
+            
+            st.markdown("---")
+            st.subheader(f"Editando: {dat['nombre']}")
+            
+            # --- FORMULARIO DE EDICIÓN ---
+            c1, c2 = st.columns(2)
+            
+            # AREA Y SUB-AREA (Logica de parseo)
+            current_area_idx = list(sorted(areas_data.keys())).index(dat['area']) if dat['area'] in areas_data else 0
+            edit_area = c1.selectbox("Área", sorted(areas_data.keys()), index=current_area_idx, key="edit_area")
+            
+            # Parsear ubicación actual
+            curr_sub, curr_det = "", ""
+            if dat['ubicacion']:
+                parts = dat['ubicacion'].split('] ', 1)
+                curr_sub = parts[0].replace('[', '')
+                curr_det = parts[1] if len(parts) > 1 else ""
+            
+            sub_areas_edit = sorted(areas_data[edit_area])
+            curr_sub_idx = sub_areas_edit.index(curr_sub) if curr_sub in sub_areas_edit else 0
+            
+            edit_sub = c2.selectbox("Sub-área", sub_areas_edit, index=curr_sub_idx, key="edit_sub")
+            
+            # CAMPOS DE TEXTO
+            edit_nom = c1.text_input("Nombre", value=dat['nombre'], key="edit_nom")
+            edit_det = c2.text_input("Ubicación Detalle", value=curr_det, key="edit_det")
+            
+            curr_cat_idx = categorias_list.index(dat['categoria']) if dat['categoria'] in categorias_list else 0
+            edit_cat = c1.selectbox("Categoría", categorias_list, index=curr_cat_idx, key="edit_cat")
+            
+            # --- FOTO (OBLIGATORIA PERO CAMBIABLE) ---
+            st.markdown("---")
+            col_f1, col_f2 = st.columns([1, 2])
+            with col_f1:
+                st.markdown("#### 🖼️ Foto Actual")
+                if dat.get('foto_url'):
+                    st.image(dat['foto_url'], use_container_width=True)
+                else:
+                    st.warning("Sin imagen")
+            
+            with col_f2:
+                st.markdown("#### 🔄 Cambiar Foto (Opcional)")
+                st.info("Si no subes nada, se mantiene la foto actual.")
+                edit_foto_file = st.file_uploader("Subir nueva foto", type=["jpg", "png"], key="edit_uploader")
+            
+            # --- TABLA DE COMPONENTES EDITABLE ---
+            st.markdown("---")
+            st.markdown("#### ⚙️ Editar Especificaciones")
+            
+            # Convertir JSON actual a DataFrame para el editor
+            current_specs_df = pd.DataFrame(columns=["Componente/Dato", "Valor"])
+            if dat.get('detalles') and isinstance(dat['detalles'], dict):
+                current_specs_df = pd.DataFrame(list(dat['detalles'].items()), columns=["Componente/Dato", "Valor"])
+            
+            edited_specs = st.data_editor(
+                current_specs_df,
                 num_rows="dynamic",
                 use_container_width=True,
                 column_config={
-                    "Componente/Dato": st.column_config.TextColumn("Característica (Ej: Gas, Marca)"),
-                    "Valor": st.column_config.TextColumn("Valor (Ej: R404a, Siemens)")
+                    "Componente/Dato": st.column_config.TextColumn("Característica"),
+                    "Valor": st.column_config.TextColumn("Valor")
                 },
-                key="editor_componentes"
+                key=f"editor_edit_{dat['id']}" # Key única para evitar conflictos al cambiar de activo
             )
-
+            
             st.markdown("<br>", unsafe_allow_html=True)
             
-            if st.button("💾 GUARDAR ACTIVO", type="primary", use_container_width=True):
-                foto_final_url = None
-                
-                if foto_archivo:
-                    with st.spinner("Subiendo imagen nueva..."):
-                        foto_final_url = subir_imagen(foto_archivo, "evidencias")
-                elif draft.get('foto_url'):
-                    foto_final_url = draft['foto_url']
-                
-                if not nom:
-                    agregar_notificacion('error', 'El nombre es obligatorio.')
-                elif not foto_final_url:
-                    agregar_notificacion('error', '⚠️ Debe subir una foto obligatoriamente.')
-                else:
-                    try:
-                        with st.spinner("Procesando datos..."):
-                            detalles_json = {}
-                            if not edited_df.empty:
-                                for index, row in edited_df.iterrows():
-                                    if row["Componente/Dato"] and row["Valor"]:
-                                        detalles_json[row["Componente/Dato"]] = row["Valor"]
-
-                            ubicacion_final = f"[{sub_area}] {ubic_detalle}" if ubic_detalle else f"[{sub_area}]"
-
-                            res = supabase.table("activos").insert({
-                                "nombre": nom, 
-                                "area": area_principal,
-                                "ubicacion": ubicacion_final, 
-                                "categoria": cat,
-                                "foto_url": foto_final_url,
-                                "detalles": detalles_json
-                            }).execute()
-                            
-                            if res.data:
-                                nid = res.data[0]['id']
-                                qr_url = generar_qr_activo(nid, nom)
-                                supabase.table("activos").update({"qr_url":qr_url}).eq("id", nid).execute()
+            # --- BOTONES DE ACCIÓN ---
+            bc1, bc2 = st.columns([2, 1])
+            
+            # BOTÓN ACTUALIZAR
+            with bc1:
+                if st.button("💾 GUARDAR CAMBIOS", type="primary", use_container_width=True):
+                    if not edit_nom:
+                        st.toast("❌ El nombre no puede estar vacío", icon="Error")
+                    else:
+                        try:
+                            with st.spinner("Actualizando activo..."):
+                                # 1. Gestionar Foto
+                                final_edit_url = dat['foto_url'] # Por defecto la vieja
+                                if edit_foto_file:
+                                    final_edit_url = subir_imagen(edit_foto_file) # Si hay nueva, subimos la nueva
+                                
+                                # 2. Gestionar Ubicacion
+                                final_edit_ubic = f"[{edit_sub}] {edit_det}" if edit_det else f"[{edit_sub}]"
+                                
+                                # 3. Gestionar JSON Specs
+                                final_specs_json = {row["Componente/Dato"]: row["Valor"] for i, row in edited_specs.iterrows() if row["Componente/Dato"] and row["Valor"]}
+                                
+                                # 4. Update en DB
+                                supabase.table("activos").update({
+                                    "nombre": edit_nom,
+                                    "area": edit_area,
+                                    "ubicacion": final_edit_ubic,
+                                    "categoria": edit_cat,
+                                    "foto_url": final_edit_url,
+                                    "detalles": final_specs_json
+                                }).eq("id", dat['id']).execute()
                                 
                                 st.cache_data.clear()
-                                st.session_state.draft_data = {}
-                                
-                                st.session_state.activo_creado_info = {
-                                    "id": nid,
-                                    "nombre": nom,
-                                    "area": area_principal,
-                                    "ubicacion": ubicacion_final,
-                                    "categoria": cat,
-                                    "foto_url": foto_final_url,
-                                    "detalles": detalles_json,
-                                    "qr_url": qr_url
-                                }
+                                st.toast(f"✅ Activo '{edit_nom}' actualizado correctamente", icon="💾")
+                                time.sleep(1.5)
                                 st.rerun()
+                                
+                        except Exception as e:
+                            st.error(f"Error al actualizar: {e}")
 
-                    except Exception as e:
-                        agregar_notificacion('error', f'Error crítico: {e}')
-
-    with tab2:
-        if not df_act.empty:
-            all_assets = df_act['nombre'].values
-            sel = st.selectbox("Buscar Activo por Nombre", all_assets)
+            # BOTÓN ELIMINAR
+            with bc2:
+                with st.expander("🗑️ Borrar Activo"):
+                    st.warning("Acción irreversible.")
+                    if st.button("CONFIRMAR BORRADO", type="secondary", use_container_width=True):
+                        try:
+                            # Borrar historial de órdenes primero (Integridad referencial)
+                            supabase.table("ordenes").delete().eq("activo_id", dat['id']).execute()
+                            # Borrar activo
+                            supabase.table("activos").delete().eq("id", dat['id']).execute()
+                            
+                            st.cache_data.clear()
+                            st.toast("🗑️ Activo eliminado permanentemente", icon="👋")
+                            time.sleep(1.5)
+                            st.rerun()
+                        except Exception as e:
+                            st.error(f"Error al borrar: {e}")
             
-            dat = df_act[df_act['nombre']==sel].iloc[0]
-            
-            col_img, col_info = st.columns([1, 2])
-            
-            with col_img:
-                if dat.get('foto_url'):
-                    st.image(dat['foto_url'], caption="Foto Real", use_container_width=True)
-                else:
-                    st.warning("Sin foto")
-                if dat.get('qr_url'):
-                    st.image(dat['qr_url'], width=100, caption="QR")
-
-            with col_info:
-                st.markdown(f"### {dat['nombre']}")
-                st.info(f"**Ubicación:** {dat['area']} > {dat['ubicacion']}")
-                st.write(f"**Categoría:** {dat.get('categoria', 'N/A')}")
-                
-                st.markdown("#### ⚙️ Especificaciones:")
-                detalles = dat.get('detalles')
-                if detalles and isinstance(detalles, dict):
-                    df_detalles = pd.DataFrame(list(detalles.items()), columns=["Componente", "Valor"])
-                    st.table(df_detalles)
-
+            # --- QR (SOLO VISUALIZACIÓN) ---
             st.markdown("---")
-            with st.expander("🗑️ Zona de Peligro"):
-                if st.button("ELIMINAR DEFINITIVAMENTE"):
-                    try:
-                        supabase.table("ordenes").delete().eq("activo_id", dat['id']).execute()
-                        supabase.table("activos").delete().eq("id", dat['id']).execute()
-                        st.cache_data.clear()
-                        agregar_notificacion('delete', 'Activo eliminado correctamente.')
-                        st.rerun()
-                    except Exception as e:
-                        agregar_notificacion('error', f'Error: {e}')
+            if dat.get('qr_url'):
+                st.caption("Código QR del Activo (Generado automáticamente)")
+                st.image(dat['qr_url'], width=150)
+            
         else:
-            st.info("No hay activos registrados.")
+            st.info("No hay activos registrados para editar.")
 elif choice == "Crear Orden":
     st.title("GENERAR ORDEN")
     mostrar_notificaciones()
