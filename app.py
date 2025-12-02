@@ -899,7 +899,7 @@ elif choice == "Inventario Activos":
     tab_lista, tab_nuevo, tab_edit = st.tabs(["📋 LISTA DE ACTIVOS", "➕ NUEVO ACTIVO", "✏️ EDITAR / QR"])
 
    # ==============================================================================
-    # 📋 PESTAÑA 1: LISTA MAESTRA (BUSCADOR PREDICTIVO)
+    # 📋 PESTAÑA 1: LISTA MAESTRA (BÚSQUEDA FLEXIBLE)
     # ==============================================================================
     with tab_lista:
         if not df_act.empty:
@@ -916,16 +916,14 @@ elif choice == "Inventario Activos":
             # --- BARRA DE FILTROS ---
             st.markdown("#### 🔍 Explorador de Activos")
             
+            # Layout de filtros
             c_fil1, c_fil2, c_fil3, c_fil4 = st.columns([2, 1, 1, 1])
             
-            # 1. BUSCADOR PREDICTIVO (Multiselect en lugar de Text Input)
-            # Esto permite escribir y ver resultados al instante en el desplegable
-            nombres_disponibles = df_act['nombre'].unique()
-            filtro_nombres = c_fil1.multiselect(
-                "Buscar por nombre (Predictivo)", 
-                options=nombres_disponibles,
-                placeholder="Escribe aquí para buscar activos...",
-                help="Escribe para ver sugerencias inmediatas. Selecciona uno o varios."
+            # 1. Búsqueda por Texto (Flexible)
+            search_term = c_fil1.text_input(
+                "Buscar por nombre", 
+                placeholder="Escribe y presiona Enter (ej: bomba, aire...)",
+                help="Busca coincidencias de letras en el nombre del activo."
             )
             
             # 2. Filtro Área
@@ -945,46 +943,45 @@ elif choice == "Inventario Activos":
             # --- LÓGICA DE FILTRADO ---
             df_filtered = df_act.copy()
             
-            # A. Filtro por Buscador (Si hay algo seleccionado, manda esto sobre los demás)
-            if filtro_nombres:
-                df_filtered = df_filtered[df_filtered['nombre'].isin(filtro_nombres)]
+            # A. Filtro de Texto (Coincidencia parcial / letras similares)
+            if search_term:
+                # Busca cualquier coincidencia sin importar mayúsculas/minúsculas
+                df_filtered = df_filtered[df_filtered['nombre'].str.contains(search_term, case=False, na=False)]
             
-            # B. Filtros de Categoría/Área (Se aplican siempre)
+            # B. Filtros de Selección
             if filtro_area != "Todas":
                 df_filtered = df_filtered[df_filtered['area'] == filtro_area]
             
             if filtro_sub != "Todas":
-                # Buscamos el string "[Subarea]" en la columna ubicacion
                 df_filtered = df_filtered[df_filtered['ubicacion'].str.contains(f"\[{filtro_sub}\]", regex=True, na=False)]
             
             if filtro_cat != "Todas":
                 df_filtered = df_filtered[df_filtered['categoria'] == filtro_cat]
             
-            # --- TABLA INTERACTIVA ---
-            st.markdown(f"###### 🧬 Resultados: {len(df_filtered)} activos")
-            
-            st.dataframe(
-                df_filtered[['id', 'foto_url', 'nombre', 'categoria', 'area', 'ubicacion', 'qr_url']],
-                column_config={
-                    "foto_url": st.column_config.ImageColumn(
-                        "Foto", help="Vista previa", width="small"
-                    ),
-                    "qr_url": st.column_config.ImageColumn(
-                        "QR", width="small"
-                    ),
-                    "id": st.column_config.NumberColumn("ID", format="%d", width="small"),
-                    "nombre": st.column_config.TextColumn("Nombre del Activo", width="large"),
-                    "categoria": st.column_config.TextColumn("Categoría", width="medium"),
-                    "area": st.column_config.TextColumn("Área", width="medium"),
-                    "ubicacion": st.column_config.TextColumn("Ubicación Detallada", width="large"),
-                },
-                use_container_width=True,
-                hide_index=True,
-                height=500
-            )
-            
-            if len(df_filtered) == 0:
-                st.warning("No se encontraron activos con estos filtros.")
+            # --- TABLA DE RESULTADOS ---
+            # Solo mostramos la tabla si hay resultados. Si está vacía, no mostramos nada (o un aviso sutil).
+            if not df_filtered.empty:
+                st.markdown(f"###### 🧬 Resultados: {len(df_filtered)} activos encontrados")
+                
+                st.dataframe(
+                    df_filtered[['id', 'foto_url', 'nombre', 'categoria', 'area', 'ubicacion', 'qr_url']],
+                    column_config={
+                        "foto_url": st.column_config.ImageColumn("Foto", width="small"),
+                        "qr_url": st.column_config.ImageColumn("QR", width="small"),
+                        "id": st.column_config.NumberColumn("ID", format="%d", width="small"),
+                        "nombre": st.column_config.TextColumn("Nombre del Activo", width="large"),
+                        "categoria": st.column_config.TextColumn("Categoría", width="medium"),
+                        "area": st.column_config.TextColumn("Área", width="medium"),
+                        "ubicacion": st.column_config.TextColumn("Ubicación Detallada", width="large"),
+                    },
+                    use_container_width=True,
+                    hide_index=True,
+                    height=500
+                )
+            else:
+                # Mensaje opcional cuando no hay datos, o simplemente dejar vacío como pediste
+                if search_term or filtro_area != "Todas" or filtro_cat != "Todas":
+                    st.warning(f"⚠️ No se encontraron activos que coincidan con la búsqueda.")
                 
         else:
             st.info("Aún no hay activos registrados para mostrar en la lista.")
