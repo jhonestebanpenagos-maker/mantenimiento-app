@@ -1,6 +1,6 @@
 # ==============================================================================
 # PROYECTO: ORIÓN - Mantenimiento Inteligente
-# AUTOR: [JHON ESTEBAN PENAGOS Jhonestebanpenagos@gmail.com +57 3184705862]
+# AUTOR: [JHON ESTEBN PENAGOS Jhonestebanpenagos@gmail.com +57 3184705862]
 # FECHA DE CREACIÓN: Noviembre 2025
 # DERECHOS: Todos los derechos reservados. Prohibida su copia o distribución.
 # ==============================================================================
