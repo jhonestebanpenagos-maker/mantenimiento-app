@@ -15,7 +15,7 @@ from io import BytesIO
 try:
     secrets = toml.load(".streamlit/secrets.toml")
     
-    TELEGRAM_TOKEN = "PEGA_AQUI_TU_TOKEN_SI_NO_USAS_TOML" # <--- ¡CAMBIAR SI ES NECESARIO!
+    TELEGRAM_TOKEN = "8382805163:AAHFklVKQZtFUblLfefnXsAfWYfPq6KK1As" # <--- ¡CAMBIAR SI ES NECESARIO!
     
     # Si usas TOML, sobreescribimos la variable de arriba
     if "telegram" in secrets and "token" in secrets["telegram"]:
