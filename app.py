@@ -1387,25 +1387,36 @@ elif choice == "Ordenes de Trabajo":
                         
                         with cols_val[3]:
                             if st.button("✅ APROBAR", key=f"btn_ap_{sol['id']}", type="primary"):
-                                # 1. Crear la Orden (CORREGIDO AQUÍ)
-                                supabase.table("ordenes").insert({
-                                    # Protección contra valor nulo en activo_id
-                                    "activo_id": int(sol['activo_id']) if sol.get('activo_id') is not None else 0,
-                                    "descripcion": f"[Origen: Solicitud] {sol['descripcion']}",
-                                    "criticidad": sol['prioridad_sugerida'] if sol['prioridad_sugerida'] else "Media",
-                                    "tipo_mantenimiento": tipo_ot,
-                                    "estado": "Abierta",
-                                    "tecnico_asignado": str(tech_options[asignar_a]),
-                                    "fecha_creacion": datetime.now().isoformat(),
-                                }).execute()
+                                # --- 1. VALIDACIÓN DE SEGURIDAD ---
+                                id_activo_final = sol.get('activo_id')
                                 
-                                # 2. Marcar Solicitud como Aprobada
-                                supabase.table("solicitudes").update({"estado": "Aprobada"}).eq("id", sol['id']).execute()
-                                
-                                st.success("Solicitud convertida en Orden.")
-                                st.cache_data.clear()
-                                time.sleep(1)
-                                st.rerun()
+                                # Si el ID es None, 0 o vacío, detenemos todo y mostramos error
+                                if not id_activo_final:
+                                    st.error("❌ ERROR CRÍTICO: Esta solicitud no tiene un Activo vinculado válido en la base de datos. Debes RECHAZARLA y pedir que la creen de nuevo.")
+                                else:
+                                    # --- 2. SI EL DATO EXISTE, CREAMOS LA ORDEN ---
+                                    try:
+                                        supabase.table("ordenes").insert({
+                                            "activo_id": int(id_activo_final), # Ahora estamos seguros que no es None
+                                            "descripcion": f"[Origen: Solicitud] {sol['descripcion']}",
+                                            "criticidad": sol['prioridad_sugerida'] if sol['prioridad_sugerida'] else "Media",
+                                            "tipo_mantenimiento": tipo_ot,
+                                            "estado": "Abierta",
+                                            "tecnico_asignado": str(tech_options[asignar_a]),
+                                            "fecha_creacion": datetime.now().isoformat(),
+                                        }).execute()
+                                        
+                                        # 3. Marcar Solicitud como Aprobada
+                                        supabase.table("solicitudes").update({"estado": "Aprobada"}).eq("id", sol['id']).execute()
+                                        
+                                        st.success("✅ Solicitud convertida en Orden correctamente.")
+                                        st.cache_data.clear()
+                                        time.sleep(1)
+                                        st.rerun()
+                                    
+                                    except Exception as e:
+                                        # Si falla por otra cosa (ej. técnico no existe), lo mostramos
+                                        st.error(f"Error de base de datos: {e}")
                                 
                             if st.button("❌ RECHAZAR", key=f"btn_rej_{sol['id']}", type="secondary"):
                                 supabase.table("solicitudes").update({"estado": "Rechazada"}).eq("id", sol['id']).execute()
@@ -1599,3 +1610,4 @@ elif choice == "Usuarios":
                             agregar_notificacion('error', f'Error al eliminar: {e}')
         else:
             st.info("No se encontraron usuarios en la base de datos. Use la pestaña 'CREAR USUARIO'.")
+
