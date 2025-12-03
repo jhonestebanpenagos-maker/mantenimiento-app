@@ -1335,7 +1335,7 @@ elif choice == "Ordenes de Trabajo":
                 st.error("No se pudo identificar tu usuario técnico.")
 
     # ==========================================================================
-    # 👮 PESTAÑA ADMIN: BUZÓN DE VALIDACIÓN (LA NUEVA FUNCIONALIDAD)
+    # 👮 PESTAÑA ADMIN: BUZÓN DE VALIDACIÓN (CORREGIDO)
     # ==========================================================================
     if rol in ["Admin", "Programador"]:
         with tab_buzon:
@@ -1349,74 +1349,96 @@ elif choice == "Ordenes de Trabajo":
             else:
                 st.markdown(f"### 📥 Solicitudes Pendientes ({len(df_solicitudes)})")
                 
+                # Preparamos la lista de activos para el selector
+                if not df_act.empty:
+                    act_map_nombre_id = dict(zip(df_act['nombre'], df_act['id']))
+                    act_map_id_nombre = dict(zip(df_act['id'], df_act['nombre']))
+                    lista_nombres_activos = sorted(list(act_map_nombre_id.keys()))
+                else:
+                    st.error("⚠️ No hay activos registrados en el sistema. Crea activos primero.")
+                    st.stop()
+
                 for idx, sol in df_solicitudes.iterrows():
-                    # Obtener nombre del activo
-                    nombre_activo = "Desconocido"
-                    if not df_act.empty:
-                        match = df_act[df_act['id'] == sol['activo_id']]
-                        if not match.empty:
-                            nombre_activo = match.iloc[0]['nombre']
+                    # 1. Determinar qué activo viene en la solicitud (si existe)
+                    id_original = sol.get('activo_id')
+                    nombre_activo_preseleccionado = "Seleccionar..."
+                    index_activo = 0
+
+                    # Intentamos buscar el nombre del activo original
+                    if id_original and id_original in act_map_id_nombre:
+                        nombre_activo_preseleccionado = act_map_id_nombre[id_original]
+                        if nombre_activo_preseleccionado in lista_nombres_activos:
+                            index_activo = lista_nombres_activos.index(nombre_activo_preseleccionado)
                     
-                    # Tarjeta de Solicitud
+                    # --- TARJETA DE VALIDACIÓN ---
                     with st.container():
                         st.markdown(f"""
                         <div style="border: 1px solid #374151; border-radius: 8px; padding: 15px; margin-bottom: 15px; background-color: #1F2937;">
-                            <h4 style="color: #F59E0B; margin: 0;">{nombre_activo}</h4>
+                            <div style="display:flex; justify-content:space-between;">
+                                <h4 style="color: #F59E0B; margin: 0;">Solicitud #{sol['id']}</h4>
+                                <span style="color: #6B7280; font-size: 0.8em;">📅 {sol['fecha_solicitud'][:10]}</span>
+                            </div>
                             <p style="margin: 5px 0; color: #D1D5DB;">👤 <b>Solicita:</b> {sol['solicitante_id']}</p>
-                            <p style="margin: 5px 0; color: #9CA3AF;">📝 <b>Reporte:</b> {sol['descripcion']}</p>
-                            <p style="font-size: 0.8em; color: #6B7280;">📅 {sol['fecha_solicitud'][:10]}</p>
+                            <p style="margin: 5px 0; color: #E5E7EB; background: rgba(255,255,255,0.05); padding: 8px; border-radius: 4px;">
+                                📝 <i>"{sol['descripcion']}"</i>
+                            </p>
                         </div>
                         """, unsafe_allow_html=True)
                         
+                        # Layout de controles
                         cols_val = st.columns([1, 2, 2, 1])
                         
-                        # Ver foto si existe
+                        # Columna 1: Foto
                         with cols_val[0]:
                             if sol['foto_url']:
-                                st.image(sol['foto_url'], width=80)
+                                st.image(sol['foto_url'], width=80, caption="Evidencia")
                             else:
-                                st.caption("Sin foto")
+                                st.markdown("<br><p style='text-align:center; color:#6B7280; font-size:0.8em;'>Sin foto</p>", unsafe_allow_html=True)
                         
-                        # Controles de validación
+                        # Columna 2: DEFINICIÓN TÉCNICA (Activo y Tipo)
                         with cols_val[1]:
+                            # AQUÍ ESTÁ LA SOLUCIÓN: Selector para que TÚ definas el activo
+                            activo_final_nombre = st.selectbox(
+                                "Vincular Activo", 
+                                lista_nombres_activos, 
+                                index=index_activo,
+                                key=f"act_sel_{sol['id']}"
+                            )
                             tipo_ot = st.selectbox("Tipo Mant.", ["Correctivo", "Mejora"], key=f"tipo_{sol['id']}")
+
+                        # Columna 3: ASIGNACIÓN (Técnico)
                         with cols_val[2]:
-                            # Asignar técnico (obligatorio para aprobar)
                             tech_options = {u['nombre']: u['id'] for i, u in df_users.iterrows()}
                             asignar_a = st.selectbox("Asignar a", list(tech_options.keys()), key=f"tech_{sol['id']}")
+                            st.caption(f"Criticidad Sugerida: {sol['prioridad_sugerida']}")
                         
+                        # Columna 4: ACCIONES
                         with cols_val[3]:
-                            if st.button("✅ APROBAR", key=f"btn_ap_{sol['id']}", type="primary"):
-                                # --- 1. VALIDACIÓN DE SEGURIDAD ---
-                                id_activo_final = sol.get('activo_id')
-                                
-                                # Si el ID es None, 0 o vacío, detenemos todo y mostramos error
-                                if not id_activo_final:
-                                    st.error("❌ ERROR CRÍTICO: Esta solicitud no tiene un Activo vinculado válido en la base de datos. Debes RECHAZARLA y pedir que la creen de nuevo.")
-                                else:
-                                    # --- 2. SI EL DATO EXISTE, CREAMOS LA ORDEN ---
-                                    try:
-                                        supabase.table("ordenes").insert({
-                                            "activo_id": int(id_activo_final), # Ahora estamos seguros que no es None
-                                            "descripcion": f"[Origen: Solicitud] {sol['descripcion']}",
-                                            "criticidad": sol['prioridad_sugerida'] if sol['prioridad_sugerida'] else "Media",
-                                            "tipo_mantenimiento": tipo_ot,
-                                            "estado": "Abierta",
-                                            "tecnico_asignado": str(tech_options[asignar_a]),
-                                            "fecha_creacion": datetime.now().isoformat(),
-                                        }).execute()
-                                        
-                                        # 3. Marcar Solicitud como Aprobada
-                                        supabase.table("solicitudes").update({"estado": "Aprobada"}).eq("id", sol['id']).execute()
-                                        
-                                        st.success("✅ Solicitud convertida en Orden correctamente.")
-                                        st.cache_data.clear()
-                                        time.sleep(1)
-                                        st.rerun()
+                            st.markdown("<br>", unsafe_allow_html=True)
+                            if st.button("✅ CREAR", key=f"btn_ap_{sol['id']}", type="primary"):
+                                # Obtenemos el ID real basado en lo que TU seleccionaste en el selectbox
+                                id_activo_final = act_map_nombre_id[activo_final_nombre]
+
+                                try:
+                                    supabase.table("ordenes").insert({
+                                        "activo_id": int(id_activo_final), # Usamos el ID validado por ti
+                                        "descripcion": f"[Solicitud #{sol['id']}] {sol['descripcion']}",
+                                        "criticidad": sol['prioridad_sugerida'] if sol['prioridad_sugerida'] else "Media",
+                                        "tipo_mantenimiento": tipo_ot,
+                                        "estado": "Abierta",
+                                        "tecnico_asignado": str(tech_options[asignar_a]),
+                                        "fecha_creacion": datetime.now().isoformat(),
+                                    }).execute()
                                     
-                                    except Exception as e:
-                                        # Si falla por otra cosa (ej. técnico no existe), lo mostramos
-                                        st.error(f"Error de base de datos: {e}")
+                                    # Actualizamos solicitud
+                                    supabase.table("solicitudes").update({"estado": "Aprobada"}).eq("id", sol['id']).execute()
+                                    
+                                    st.success(f"Orden creada para {activo_final_nombre}")
+                                    st.cache_data.clear()
+                                    time.sleep(1)
+                                    st.rerun()
+                                except Exception as e:
+                                    st.error(f"Error al crear orden: {e}")
                                 
                             if st.button("❌ RECHAZAR", key=f"btn_rej_{sol['id']}", type="secondary"):
                                 supabase.table("solicitudes").update({"estado": "Rechazada"}).eq("id", sol['id']).execute()
@@ -1425,7 +1447,6 @@ elif choice == "Ordenes de Trabajo":
                                 time.sleep(1)
                                 st.rerun()
                         st.divider()
-
     # ==========================================================================
     # ⚡ PESTAÑA ADMIN: CREAR DIRECTA (LO QUE YA TENÍAS)
     # ==========================================================================
@@ -1610,4 +1631,5 @@ elif choice == "Usuarios":
                             agregar_notificacion('error', f'Error al eliminar: {e}')
         else:
             st.info("No se encontraron usuarios en la base de datos. Use la pestaña 'CREAR USUARIO'.")
+
 
