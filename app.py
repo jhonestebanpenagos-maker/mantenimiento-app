@@ -1226,7 +1226,7 @@ elif choice == "Inventario Activos":
             st.info("No hay activos registrados para editar.")
 
 elif choice == "Ordenes de Trabajo":
-    st.title("GESTIÓN DE ÓRDENES DE TRABAJO")
+    st.title("GESTIÓN DE MANTENIMIENTO")
     mostrar_notificaciones()
     
     # Cargar datos necesarios
@@ -1234,200 +1234,254 @@ elif choice == "Ordenes de Trabajo":
     df_users = run_query("usuarios")
     df_ordenes = run_query("ordenes")
     
-    # Definir pestañas según el rol
+    # --- LÓGICA DE PESTAÑAS SEGÚN ROL ---
+    # Tecnico: Solo ve sus órdenes y puede pedir cosas nuevas
     if rol == "Tecnico":
-        tab_gestion, tab_crear = st.tabs(["MIS ÓRDENES / CERRAR", "SOLICITAR MANTENIMIENTO"])
+        tab_mis_ordenes, tab_solicitar = st.tabs(["👷 MIS ÓRDENES", "📢 SOLICITAR MANTENIMIENTO"])
+    # Admin/Programmer: Ve el buzón de validación, puede crear directo y gestionar todo
     else:
-        tab_crear, tab_gestion = st.tabs(["NUEVA ORDEN", "GESTIÓN Y CIERRE"])
+        # Consultamos solicitudes pendientes solo si somos admin/prog
+        df_solicitudes = run_query("solicitudes", {"estado": "Pendiente"})
+        n_pendientes = len(df_solicitudes)
+        titulo_buzon = f"👮 VALIDAR ({n_pendientes})" if n_pendientes > 0 else "👮 VALIDAR"
+        
+        tab_buzon, tab_gestion, tab_crear_directa = st.tabs([titulo_buzon, "📊 GESTIÓN GLOBAL", "⚡ CREAR DIRECTA"])
 
     # ==========================================================================
-    # 📝 PESTAÑA 1: CREAR NUEVA ORDEN
+    # 📢 PESTAÑA COMÚN: SOLICITAR MANTENIMIENTO (Para Tecnicos o Admin)
     # ==========================================================================
-    with tab_crear:
-        if not df_act.empty:
-            act_dict = dict(zip(df_act['nombre'], df_act['id']))
-            lista_nombres = sorted(list(act_dict.keys()))
-            
-            st.markdown("<div class='card-style'>", unsafe_allow_html=True)
-            c_sel, c_info = st.columns([1, 2])
-            
-            with c_sel:
-                sel_activo_nombre = st.selectbox("Seleccionar Activo", lista_nombres, help="Escriba para buscar...")
-                id_activo_seleccionado = act_dict[sel_activo_nombre]
-                
-                # Foto del activo seleccionado
-                activo_info = df_act[df_act['id'] == id_activo_seleccionado].iloc[0]
-                if activo_info.get('foto_url'):
-                    st.image(activo_info['foto_url'], caption="Referencia Visual", use_container_width=True)
-                else:
-                    st.info("Sin foto disponible")
-
-            with c_info:
-                st.subheader(f"{activo_info['nombre']}")
-                st.caption(f"Ubicación: {activo_info['ubicacion']}")
-                
-                # Alerta de duplicados
-                pendientes = df_ordenes[(df_ordenes['activo_id'] == id_activo_seleccionado) & (df_ordenes['estado'] == 'Abierta')]
-                if not pendientes.empty:
-                    st.warning(f"⚠️ Este activo tiene {len(pendientes)} orden(es) pendiente(s).")
-                
-                with st.form("crear_ot_unificado"):
-                    c1, c2 = st.columns(2)
-                    tipo = c1.selectbox("Tipo", ["Correctivo", "Preventivo", "Mejora", "Instalación"])
-                    crit = c2.select_slider("Criticidad", ["Baja", "Media", "Alta", "Crítica"], value="Media")
-                    desc = st.text_area("Descripción del Trabajo", height=80)
+    # Definimos qué pestaña usar para solicitar dependiendo del rol
+    target_tab = tab_solicitar if rol == "Tecnico" else None 
+    
+    # Si eres Admin, esta funcionalidad no está en una pestaña propia, 
+    # pero si quisieras probarla, podrías agregarla. 
+    # Por ahora, nos enfocamos en que el TÉCNICO solicita y el ADMIN valida.
+    
+    if rol == "Tecnico":
+        with target_tab:
+            st.markdown("### Reportar una Falla o Necesidad")
+            if not df_act.empty:
+                act_nombres = df_act['nombre'].values
+                with st.form("form_solicitud"):
+                    act_sol = st.selectbox("Activo que presenta fallas", act_nombres)
+                    desc_sol = st.text_area("Describa el problema detalladamente")
+                    prio_sol = st.select_slider("¿Qué tan urgente parece?", ["Baja", "Media", "Alta"], value="Media")
+                    foto_sol = st.file_uploader("Foto del daño (Opcional)", type=["jpg", "png"])
                     
-                    # Asignación
-                    if rol != "Tecnico" and not df_users.empty:
-                         tech_opts = {f"{u['nombre']}": u['id'] for _, u in df_users.iterrows()}
-                         asignado_a = st.selectbox("Asignar Técnico", ["-- Seleccionar --"] + list(tech_opts.keys()))
-                    else:
-                        asignado_a = None 
-
-                    if st.form_submit_button("🚀 CREAR ORDEN", type="primary", use_container_width=True):
-                        if not desc:
-                            agregar_notificacion('error', 'Descripción obligatoria.')
+                    if st.form_submit_button("ENVIAR SOLICITUD", type="primary", use_container_width=True):
+                        if not desc_sol:
+                            st.error("La descripción es obligatoria.")
                         else:
-                            tech_id = tech_opts[asignado_a] if (rol != "Tecnico" and asignado_a != "-- Seleccionar --") else None
-                            if rol != "Tecnico" and not tech_id:
-                                agregar_notificacion('error', 'Debe asignar un técnico.')
-                            else:
-                                try:
-                                    supabase.table("ordenes").insert({
-                                        "activo_id": int(id_activo_seleccionado),
-                                        "descripcion": desc,
-                                        "criticidad": crit,
-                                        "tipo_mantenimiento": tipo,
-                                        "estado": "Abierta",
-                                        "tecnico_asignado": str(tech_id) if tech_id else None,
-                                        "fecha_creacion": datetime.now().isoformat()
-                                    }).execute()
-                                    st.cache_data.clear()
-                                    agregar_notificacion('success', 'Orden creada exitosamente.')
+                            # Buscar ID del activo
+                            act_id = df_act[df_act['nombre'] == act_sol].iloc[0]['id']
+                            
+                            # Subir foto si existe
+                            url_foto = None
+                            if foto_sol:
+                                with st.spinner("Subiendo evidencia..."):
+                                    url_foto = subir_imagen(foto_sol)
+                            
+                            supabase.table("solicitudes").insert({
+                                "activo_id": int(act_id),
+                                "solicitante_id": usuario, # Guardamos el nombre del usuario logueado
+                                "descripcion": desc_sol,
+                                "prioridad_sugerida": prio_sol,
+                                "foto_url": url_foto,
+                                "estado": "Pendiente"
+                            }).execute()
+                            
+                            agregar_notificacion("success", "Solicitud enviada al planificador.")
+                            st.rerun()
+            else:
+                st.warning("No hay activos registrados.")
+
+    # ==========================================================================
+    # 👷 PESTAÑA TÉCNICO: MIS ÓRDENES
+    # ==========================================================================
+    if rol == "Tecnico":
+        with tab_mis_ordenes:
+            # Filtramos órdenes asignadas al usuario logueado (usando su ID)
+            # Primero necesitamos el ID del usuario actual
+            mi_id = None
+            if not df_users.empty:
+                usuario_data = df_users[df_users['nombre'] == usuario]
+                if not usuario_data.empty:
+                    mi_id = usuario_data.iloc[0]['id']
+            
+            if mi_id:
+                mis_ots = df_ordenes[(df_ordenes['tecnico_asignado'] == str(mi_id)) & (df_ordenes['estado'] == 'Abierta')]
+                
+                if mis_ots.empty:
+                    st.info("🎉 No tienes órdenes pendientes.")
+                else:
+                    st.write(f"Tienes {len(mis_ots)} órdenes pendientes.")
+                    for index, row in mis_ots.iterrows():
+                        nombre_activo = df_act[df_act['id'] == row['activo_id']].iloc[0]['nombre'] if not df_act.empty else "Activo"
+                        with st.expander(f"🔧 {nombre_activo} | {row['criticidad']}"):
+                            st.write(f"**Falla:** {row['descripcion']}")
+                            st.caption(f"📅 Asignada: {row['fecha_creacion'][:10]}")
+                            
+                            # Formulario de cierre rápido
+                            with st.form(f"cierre_rapido_{row['id']}"):
+                                reporte = st.text_area("Reporte de trabajo realizado")
+                                if st.form_submit_button("✅ CERRAR ORDEN"):
+                                    supabase.table("ordenes").update({
+                                        "estado": "Concluida",
+                                        "comentarios_cierre": reporte,
+                                        "fecha_cierre": datetime.now().isoformat()
+                                    }).eq("id", row['id']).execute()
+                                    st.success("Orden cerrada.")
                                     time.sleep(1)
                                     st.rerun()
-                                except Exception as e:
-                                    agregar_notificacion('error', f'Error: {e}')
-            st.markdown("</div>", unsafe_allow_html=True)
-        else:
-            st.warning("No hay activos para generar órdenes.")
+            else:
+                st.error("No se pudo identificar tu usuario técnico.")
 
     # ==========================================================================
-    # 📋 PESTAÑA 2: GESTIÓN Y CIERRE
+    # 👮 PESTAÑA ADMIN: BUZÓN DE VALIDACIÓN (LA NUEVA FUNCIONALIDAD)
     # ==========================================================================
-    with tab_gestion:
-        if df_ordenes.empty:
-            st.info("No hay órdenes registradas.")
-        else:
-            # 1. FILTROS
-            c_f1, c_f2, c_f3 = st.columns(3)
-            filtro_estado = c_f1.selectbox("Filtrar Estado", ["Todas", "Abierta", "Concluida"])
-            filtro_tec = c_f2.selectbox("Filtrar Técnico", ["Todos"] + list(df_users['nombre'].values) if not df_users.empty else ["Todos"])
-            
-            # Aplicar filtros
-            df_view = df_ordenes.copy()
-            if filtro_estado != "Todas":
-                df_view = df_view[df_view['estado'] == filtro_estado]
-            
-            # Mapeos
-            if not df_users.empty:
-                user_map = dict(zip(df_users['id'].astype(str), df_users['nombre']))
-                df_view['tecnico_nombre'] = df_view['tecnico_asignado'].astype(str).map(user_map).fillna('Sin asignar')
-            
-            if not df_act.empty:
-                act_map = dict(zip(df_act['id'], df_act['nombre']))
-                df_view['activo_nombre'] = df_view['activo_id'].map(act_map).fillna('Desconocido')
-
-            # 2. TABLA
-            st.dataframe(
-                df_view[['id', 'activo_nombre', 'descripcion', 'estado', 'tecnico_nombre', 'criticidad']],
-                use_container_width=True,
-                hide_index=True
-            )
-            
-            # 3. SELECTOR
-            st.markdown("---")
-            st.subheader("🛠️ Acciones sobre la Orden")
-            
-            ordenes_list = {f"OT-{row['id']} | {row['activo_nombre']}": row['id'] for _, row in df_view.iterrows()}
-            sel_ot_key = st.selectbox("Seleccione una Orden para Gestionar o Cerrar", ["-- Seleccionar --"] + list(ordenes_list.keys()))
-            
-            if sel_ot_key != "-- Seleccionar --":
-                id_ot = ordenes_list[sel_ot_key]
-                ot_data = df_ordenes[df_ordenes['id'] == id_ot].iloc[0]
+    if rol in ["Admin", "Programador"]:
+        with tab_buzon:
+            if df_solicitudes.empty:
+                st.markdown("""
+                <div style="text-align: center; padding: 40px; color: #6B7280;">
+                    <h3>✨ Todo limpio</h3>
+                    <p>No hay solicitudes pendientes de aprobación.</p>
+                </div>
+                """, unsafe_allow_html=True)
+            else:
+                st.markdown(f"### 📥 Solicitudes Pendientes ({len(df_solicitudes)})")
                 
-                st.markdown(f"<div class='card-style'>", unsafe_allow_html=True)
-                col_detalles, col_acciones = st.columns([1, 1.5])
-                
-                with col_detalles:
-                    st.markdown(f"#### Detalles OT-{id_ot}")
-                    st.write(f"**Descripción:** {ot_data['descripcion']}")
-                    st.write(f"**Criticidad:** {ot_data['criticidad']}")
-                    st.write(f"**Fecha:** {ot_data['fecha_creacion'][:10]}")
+                for idx, sol in df_solicitudes.iterrows():
+                    # Obtener nombre del activo
+                    nombre_activo = "Desconocido"
+                    if not df_act.empty:
+                        match = df_act[df_act['id'] == sol['activo_id']]
+                        if not match.empty:
+                            nombre_activo = match.iloc[0]['nombre']
                     
-                    if ot_data['estado'] == 'Concluida':
-                        st.success("✅ ORDEN FINALIZADA")
-                        if ot_data.get('comentarios_cierre'):
-                            st.caption(f"**Reporte:** {ot_data['comentarios_cierre']}")
-                        if ot_data.get('evidencia_url'):
-                            st.image(ot_data['evidencia_url'], caption="Evidencia del Cierre", width=200)
-                
-                with col_acciones:
-                    if ot_data['estado'] == 'Abierta':
-                        tab_cerrar, tab_editar = st.tabs(["✅ FINALIZAR/CERRAR", "✏️ EDITAR DATOS"])
+                    # Tarjeta de Solicitud
+                    with st.container():
+                        st.markdown(f"""
+                        <div style="border: 1px solid #374151; border-radius: 8px; padding: 15px; margin-bottom: 15px; background-color: #1F2937;">
+                            <h4 style="color: #F59E0B; margin: 0;">{nombre_activo}</h4>
+                            <p style="margin: 5px 0; color: #D1D5DB;">👤 <b>Solicita:</b> {sol['solicitante_id']}</p>
+                            <p style="margin: 5px 0; color: #9CA3AF;">📝 <b>Reporte:</b> {sol['descripcion']}</p>
+                            <p style="font-size: 0.8em; color: #6B7280;">📅 {sol['fecha_solicitud'][:10]}</p>
+                        </div>
+                        """, unsafe_allow_html=True)
                         
-                        with tab_cerrar:
-                            with st.form(f"cerrar_ot_{id_ot}"):
-                                reporte = st.text_area("Reporte Técnico de Solución", placeholder="Describa qué trabajo se realizó...")
-                                evidencia = st.file_uploader("Evidencia Fotográfica (Opcional)")
-                                if st.form_submit_button("FINALIZAR TRABAJO", type="primary", use_container_width=True):
-                                    if not reporte:
-                                        st.error("El reporte es obligatorio.")
-                                    else:
-                                        url_evidencia = None
-                                        if evidencia:
-                                            with st.spinner("Subiendo evidencia..."):
-                                                url_evidencia = subir_imagen(evidencia)
-                                        
-                                        supabase.table("ordenes").update({
-                                            "estado": "Concluida",
-                                            "comentarios_cierre": reporte,
-                                            "evidencia_url": url_evidencia,
-                                            "fecha_cierre": datetime.now().isoformat()
-                                        }).eq("id", id_ot).execute()
-                                        st.cache_data.clear()
-                                        st.success("Orden cerrada correctamente!")
-                                        time.sleep(1)
-                                        st.rerun()
-
-                        with tab_editar:
-                            if rol in ["Admin", "Programador"]:
-                                with st.form(f"edit_ot_{id_ot}"):
-                                    if not df_users.empty:
-                                        curr_tech = ot_data['tecnico_asignado']
-                                        u_opts = {f"{u['nombre']}": u['id'] for _, u in df_users.iterrows()}
-                                        new_tech_name = st.selectbox("Reasignar Técnico", list(u_opts.keys()))
-                                    
-                                    new_crit = st.select_slider("Cambiar Criticidad", ["Baja", "Media", "Alta", "Crítica"], value=ot_data['criticidad'])
-                                    
-                                    c_b1, c_b2 = st.columns(2)
-                                    if c_b1.form_submit_button("GUARDAR CAMBIOS"):
-                                        supabase.table("ordenes").update({
-                                            "tecnico_asignado": u_opts[new_tech_name],
-                                            "criticidad": new_crit
-                                        }).eq("id", id_ot).execute()
-                                        st.cache_data.clear()
-                                        st.rerun()
-                                    
-                                    if c_b2.form_submit_button("🗑️ ELIMINAR", type="secondary"):
-                                        supabase.table("ordenes").delete().eq("id", id_ot).execute()
-                                        st.cache_data.clear()
-                                        st.rerun()
+                        cols_val = st.columns([1, 2, 2, 1])
+                        
+                        # Ver foto si existe
+                        with cols_val[0]:
+                            if sol['foto_url']:
+                                st.image(sol['foto_url'], width=80)
                             else:
-                                st.info("Solo Administradores pueden editar parámetros de la orden.")
-                    else:
-                        st.info("Esta orden ya está cerrada. No requiere acciones.")
-                st.markdown("</div>", unsafe_allow_html=True)
+                                st.caption("Sin foto")
+                        
+                        # Controles de validación
+                        with cols_val[1]:
+                            tipo_ot = st.selectbox("Tipo Mant.", ["Correctivo", "Mejora"], key=f"tipo_{sol['id']}")
+                        with cols_val[2]:
+                            # Asignar técnico (obligatorio para aprobar)
+                            tech_options = {u['nombre']: u['id'] for i, u in df_users.iterrows()}
+                            asignar_a = st.selectbox("Asignar a", list(tech_options.keys()), key=f"tech_{sol['id']}")
+                        
+                        with cols_val[3]:
+                            if st.button("✅ APROBAR", key=f"btn_ap_{sol['id']}", type="primary"):
+                                # 1. Crear la Orden
+                                supabase.table("ordenes").insert({
+                                    "activo_id": int(sol['activo_id']),
+                                    "descripcion": f"[Origen: Solicitud] {sol['descripcion']}",
+                                    "criticidad": sol['prioridad_sugerida'] if sol['prioridad_sugerida'] else "Media",
+                                    "tipo_mantenimiento": tipo_ot,
+                                    "estado": "Abierta",
+                                    "tecnico_asignado": str(tech_options[asignar_a]),
+                                    "fecha_creacion": datetime.now().isoformat(),
+                                    # Opcional: Podrías guardar la foto de la solicitud en la orden si quisieras
+                                }).execute()
+                                
+                                # 2. Marcar Solicitud como Aprobada
+                                supabase.table("solicitudes").update({"estado": "Aprobada"}).eq("id", sol['id']).execute()
+                                
+                                st.success("Solicitud convertida en Orden.")
+                                st.cache_data.clear()
+                                time.sleep(1)
+                                st.rerun()
+                                
+                            if st.button("❌ RECHAZAR", key=f"btn_rej_{sol['id']}", type="secondary"):
+                                supabase.table("solicitudes").update({"estado": "Rechazada"}).eq("id", sol['id']).execute()
+                                st.warning("Solicitud rechazada.")
+                                st.cache_data.clear()
+                                time.sleep(1)
+                                st.rerun()
+                        st.divider()
+
+    # ==========================================================================
+    # ⚡ PESTAÑA ADMIN: CREAR DIRECTA (LO QUE YA TENÍAS)
+    # ==========================================================================
+    if rol in ["Admin", "Programador"]:
+        with tab_crear_directa:
+            st.info("Esta opción crea una orden inmediatamente sin pasar por validación.")
+            # ... (Aquí reutilizamos la lógica de creación directa si quieres, 
+            # o simplemente la dejamos como alternativa rápida)
+            if not df_act.empty:
+                act_dict = dict(zip(df_act['nombre'], df_act['id']))
+                nombres_activos = sorted(act_dict.keys())
+                
+                sel_act_dir = st.selectbox("Seleccionar Activo", nombres_activos, key="direct_act")
+                id_act_dir = act_dict[sel_act_dir]
+                
+                with st.form("ot_directa"):
+                    c1, c2 = st.columns(2)
+                    tipo_d = c1.selectbox("Tipo", ["Correctivo", "Preventivo"])
+                    crit_d = c2.select_slider("Criticidad", ["Baja", "Media", "Alta"])
+                    desc_d = st.text_area("Descripción")
+                    
+                    tech_opts_d = {u['nombre']: u['id'] for i, u in df_users.iterrows()}
+                    asig_d = st.selectbox("Asignar Técnico", list(tech_opts_d.keys()))
+                    
+                    if st.form_submit_button("CREAR ORDEN YA"):
+                        supabase.table("ordenes").insert({
+                            "activo_id": int(id_act_dir),
+                            "descripcion": desc_d,
+                            "criticidad": crit_d,
+                            "tipo_mantenimiento": tipo_d,
+                            "estado": "Abierta",
+                            "tecnico_asignado": str(tech_opts_d[asig_d]),
+                            "fecha_creacion": datetime.now().isoformat()
+                        }).execute()
+                        st.cache_data.clear()
+                        st.success("Orden creada.")
+                        st.rerun()
+    
+    # ==========================================================================
+    # 📊 PESTAÑA GESTIÓN GLOBAL (TABLA DE ÓRDENES QUE YA EXISTEN)
+    # ==========================================================================
+    if rol in ["Admin", "Programador"]:
+        with tab_gestion:
+            # Aquí va la tabla grande de todas las órdenes que ya tenías
+            # Filtros
+            f_col1, f_col2 = st.columns(2)
+            ver_estado = f_col1.selectbox("Estado", ["Todas", "Abierta", "Concluida"])
+            
+            df_ver = df_ordenes.copy()
+            if ver_estado != "Todas":
+                df_ver = df_ver[df_ver['estado'] == ver_estado]
+            
+            # Mapeos visuales (Nombres en vez de IDs)
+            if not df_ver.empty:
+                # Map activos
+                map_act = dict(zip(df_act['id'], df_act['nombre'])) if not df_act.empty else {}
+                df_ver['Activo'] = df_ver['activo_id'].map(map_act)
+                
+                # Map técnicos
+                map_user = dict(zip(df_users['id'].astype(str), df_users['nombre'])) if not df_users.empty else {}
+                df_ver['Técnico'] = df_ver['tecnico_asignado'].map(map_user)
+                
+                st.dataframe(df_ver[['id', 'Activo', 'descripcion', 'estado', 'Técnico', 'criticidad']], use_container_width=True)
+            else:
+                st.info("No hay órdenes.")
 
 elif choice == "Usuarios":
     st.title("USUARIOS")
@@ -1546,4 +1600,5 @@ elif choice == "Usuarios":
                         except Exception as e:
                             agregar_notificacion('error', f'Error al eliminar: {e}')
         else:
+
             st.info("No se encontraron usuarios en la base de datos. Use la pestaña 'CREAR USUARIO'.")
