@@ -1,7 +1,7 @@
 # ==============================================================================
 # PROYECTO: ORIÓN - Mantenimiento Inteligente
 # AUTOR: [JHON ESTEBN PENAGOS]
-# VERSIÓN: INTEGRACIÓN CLOUDINARY + ORIÓN UI
+# VERSIÓN: INTEGRACIÓN CLOUDINARY + ORIÓN UI (CORREGIDO)
 # ==============================================================================
 import streamlit as st
 import pandas as pd
@@ -28,8 +28,6 @@ st.set_page_config(page_title="Orión | Mantenimiento", layout="wide", initial_s
 # ==============================================================================
 # ☁️ CONFIGURACIÓN DE CLOUDINARY
 # ==============================================================================
-# Intentamos configurar Cloudinary. Si faltan las claves, avisamos pero no rompemos 
-# toda la app inmediatamente (aunque fallará al intentar subir fotos).
 try:
     cloudinary.config(
         cloud_name = st.secrets["cloudinary"]["cloud_name"],
@@ -1389,17 +1387,16 @@ elif choice == "Ordenes de Trabajo":
                         
                         with cols_val[3]:
                             if st.button("✅ APROBAR", key=f"btn_ap_{sol['id']}", type="primary"):
-                                # 1. Crear la Orden
+                                # 1. Crear la Orden (CORREGIDO AQUÍ)
                                 supabase.table("ordenes").insert({
-                                    st.write(f"ID Solicitud: {sol.get('id')}, Valor activo_id: {sol.get('activo_id')}, Tipo: {type(sol.get('activo_id'))}")
-                                    "activo_id": int(sol['activo_id']),
+                                    # Protección contra valor nulo en activo_id
+                                    "activo_id": int(sol['activo_id']) if sol.get('activo_id') is not None else 0,
                                     "descripcion": f"[Origen: Solicitud] {sol['descripcion']}",
                                     "criticidad": sol['prioridad_sugerida'] if sol['prioridad_sugerida'] else "Media",
                                     "tipo_mantenimiento": tipo_ot,
                                     "estado": "Abierta",
                                     "tecnico_asignado": str(tech_options[asignar_a]),
                                     "fecha_creacion": datetime.now().isoformat(),
-                                    # Opcional: Podrías guardar la foto de la solicitud en la orden si quisieras
                                 }).execute()
                                 
                                 # 2. Marcar Solicitud como Aprobada
@@ -1601,6 +1598,4 @@ elif choice == "Usuarios":
                         except Exception as e:
                             agregar_notificacion('error', f'Error al eliminar: {e}')
         else:
-
             st.info("No se encontraron usuarios en la base de datos. Use la pestaña 'CREAR USUARIO'.")
-
