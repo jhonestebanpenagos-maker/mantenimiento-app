@@ -1391,6 +1391,7 @@ elif choice == "Ordenes de Trabajo":
                             if st.button("✅ APROBAR", key=f"btn_ap_{sol['id']}", type="primary"):
                                 # 1. Crear la Orden
                                 supabase.table("ordenes").insert({
+                                    st.write(f"ID Solicitud: {sol.get('id')}, Valor activo_id: {sol.get('activo_id')}, Tipo: {type(sol.get('activo_id'))}")
                                     "activo_id": int(sol['activo_id']),
                                     "descripcion": f"[Origen: Solicitud] {sol['descripcion']}",
                                     "criticidad": sol['prioridad_sugerida'] if sol['prioridad_sugerida'] else "Media",
@@ -1602,3 +1603,4 @@ elif choice == "Usuarios":
         else:
 
             st.info("No se encontraron usuarios en la base de datos. Use la pestaña 'CREAR USUARIO'.")
+
