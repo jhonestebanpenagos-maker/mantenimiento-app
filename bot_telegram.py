@@ -113,6 +113,7 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         datos = {
             "solicitante_id": f"{update.effective_user.first_name} (Telegram)",
+            "chat_id": update.effective_chat.id,
             "descripcion": texto,
             "foto_url": context.user_data['foto_url'],
             "estado": "Pendiente",
