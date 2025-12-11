@@ -1596,26 +1596,36 @@ elif choice == "Ordenes de Trabajo":
                             # --- BOTÓN APROBAR ---
                             if st.button("✅ APROBAR Y CERRAR", key=f"apr_fin_{row['id']}", type="primary", use_container_width=True):
                                 try:
-                                    # 1. Actualizar estado a Concluida
+                                    # 1. Actualizar estado a Concluida en la Base de Datos
                                     supabase.table("ordenes").update({
                                         "estado": "Concluida"
                                     }).eq("id", row['id']).execute()
                                     
-                                    # 2. Notificar al Usuario Final (Telegram)
-                                    msj_final = (
-                                        f"🎉 **¡Solucionado!**\n\n"
-                                        f"La Orden **#{row['id']}** sobre *{nombre_activo}* ha sido cerrada exitosamente.\n\n"
-                                        f"📝 **Solución:** {row.get('comentarios_cierre')}"
-                                    )
-                                    # Enviamos la misma foto que tomó el técnico
-                                    notificar_telegram(row.get('chat_id'), msj_final, row.get('foto_cierre_url'))
+                                    # 2. Lógica de Notificación CONDICIONAL
+                                    chat_id_destino = row.get('chat_id') # Obtenemos el ID
+
+                                    if chat_id_destino: # <--- AQUÍ ESTÁ EL FILTRO
+                                        # Solo entramos aquí si chat_id TIENE datos
+                                        msj_final = (
+                                            f"🎉 **¡Solucionado!**\n\n"
+                                            f"La Orden **#{row['id']}** sobre *{nombre_activo}* ha sido cerrada exitosamente.\n\n"
+                                            f"📝 **Solución:** {row.get('comentarios_cierre')}"
+                                        )
+                                        # Enviamos la notificación
+                                        notificar_telegram(chat_id_destino, msj_final, row.get('foto_cierre_url'))
+                                        st.toast("📧 Usuario notificado por Telegram.")
+                                    else:
+                                        # Si es None o vacío, no hace nada (silencio)
+                                        pass 
                                     
-                                    st.success("Orden cerrada y usuario notificado.")
+                                    # 3. Finalizar proceso en pantalla
+                                    st.success("Orden cerrada correctamente.")
                                     st.cache_data.clear()
                                     time.sleep(1.5)
                                     st.rerun()
+                                    
                                 except Exception as e:
-                                    st.error(f"Error: {e}")
+                                    st.error(f"Error al cerrar la orden: {e}")
 
                             # --- BOTÓN DEVOLVER ---
                             st.markdown("<br>", unsafe_allow_html=True)
@@ -1909,3 +1919,4 @@ elif choice == "Usuarios":
                             agregar_notificacion('error', f'Error al eliminar: {e}')
         else:
             st.info("No se encontraron usuarios en la base de datos. Use la pestaña 'CREAR USUARIO'.")
+
