@@ -1447,13 +1447,16 @@ elif choice == "Ordenes de Trabajo":
                         # Columna 4: ACCIONES
                         with cols_val[3]:
                             st.markdown("<br>", unsafe_allow_html=True)
+                            
+                            # --- BOTÓN 1: CREAR (APROBAR) ---
                             if st.button("✅ CREAR", key=f"btn_ap_{sol['id']}", type="primary"):
-                                # Obtenemos el ID real basado en lo que TU seleccionaste en el selectbox
                                 id_activo_final = act_map_nombre_id[activo_final_nombre]
 
                                 try:
-                                    supabase.table("ordenes").insert({
-                                        "activo_id": int(id_activo_final), # Usamos el ID validado por ti
+                                    # 1. Crear Orden
+                                    res_orden = supabase.table("ordenes").insert({
+                                        "activo_id": int(id_activo_final),
+                                        "chat_id": sol.get('chat_id'), # Guardamos a quién avisar
                                         "descripcion": f"[Solicitud #{sol['id']}] {sol['descripcion']}",
                                         "criticidad": sol['prioridad_sugerida'] if sol['prioridad_sugerida'] else "Media",
                                         "tipo_mantenimiento": tipo_ot,
@@ -1462,23 +1465,34 @@ elif choice == "Ordenes de Trabajo":
                                         "fecha_creacion": datetime.now().isoformat(),
                                     }).execute()
                                     
-                                    # Actualizamos solicitud
+                                    # 2. Notificar Telegram
+                                    nuevo_id = res_orden.data[0]['id'] if res_orden.data else "##"
+                                    msj_ok = f"✅ **¡Solicitud Aprobada!**\n\nSe ha generado la Orden de Trabajo **#{nuevo_id}**.\nUn técnico atenderá tu caso pronto."
+                                    notificar_telegram(sol.get('chat_id'), msj_ok)
+
+                                    # 3. Actualizar Solicitud
                                     supabase.table("solicitudes").update({"estado": "Aprobada"}).eq("id", sol['id']).execute()
                                     
-                                    st.success(f"Orden creada para {activo_final_nombre}")
+                                    st.success(f"Orden creada y usuario notificado.")
                                     st.cache_data.clear()
                                     time.sleep(1)
                                     st.rerun()
                                 except Exception as e:
-                                    st.error(f"Error al crear orden: {e}")
-                                
+                                    st.error(f"Error: {e}")
+                            
+                            # --- BOTÓN 2: RECHAZAR ---
                             if st.button("❌ RECHAZAR", key=f"btn_rej_{sol['id']}", type="secondary"):
+                                # 1. Actualizar Solicitud
                                 supabase.table("solicitudes").update({"estado": "Rechazada"}).eq("id", sol['id']).execute()
-                                st.warning("Solicitud rechazada.")
+                                
+                                # 2. Notificar Telegram
+                                msj_no = f"🚫 **Solicitud Rechazada**\n\nTu reporte sobre: *{sol['descripcion']}* no procedió.\nSi tienes dudas, contacta al departamento de mantenimiento."
+                                notificar_telegram(sol.get('chat_id'), msj_no)
+                                
+                                st.warning("Solicitud rechazada y usuario notificado.")
                                 st.cache_data.clear()
                                 time.sleep(1)
                                 st.rerun()
-                        st.divider()
     # ==========================================================================
     # ⚡ PESTAÑA ADMIN: CREAR DIRECTA (LO QUE YA TENÍAS)
     # ==========================================================================
@@ -1663,6 +1677,7 @@ elif choice == "Usuarios":
                             agregar_notificacion('error', f'Error al eliminar: {e}')
         else:
             st.info("No se encontraron usuarios en la base de datos. Use la pestaña 'CREAR USUARIO'.")
+
 
 
 
