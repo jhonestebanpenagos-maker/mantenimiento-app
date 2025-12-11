@@ -1535,6 +1535,108 @@ elif choice == "Ordenes de Trabajo":
                                 st.cache_data.clear()
                                 time.sleep(1)
                                 st.rerun()
+
+    # ==========================================================================
+    # 💎 PESTAÑA ADMIN: CONTROL DE CALIDAD
+    # ==========================================================================
+    with tab_calidad:
+        # 1. Buscar órdenes que están esperando revisión
+        df_revision = run_query("ordenes", {"estado": "Por Validar"})
+        
+        if df_revision.empty:
+            st.markdown("""
+            <div style="text-align: center; padding: 40px; color: #10B981;">
+                <h3>✨ Todo revisado</h3>
+                <p>No hay trabajos pendientes de control de calidad.</p>
+            </div>
+            """, unsafe_allow_html=True)
+        else:
+            st.markdown(f"### 🧐 Auditoría de Trabajos ({len(df_revision)})")
+            st.info("Revisa la evidencia fotográfica antes de cerrar la orden.")
+            
+            for idx, row in df_revision.iterrows():
+                # Obtenemos nombres legibles
+                nombre_activo = "Desconocido"
+                if not df_act.empty:
+                    act_data = df_act[df_act['id'] == row['activo_id']]
+                    if not act_data.empty: nombre_activo = act_data.iloc[0]['nombre']
+                
+                tecnico_nombre = "Técnico"
+                if not df_users.empty:
+                    tech_data = df_users[df_users['id'].astype(str) == row['tecnico_asignado']]
+                    if not tech_data.empty: tecnico_nombre = tech_data.iloc[0]['nombre']
+
+                # --- TARJETA DE REVISIÓN ---
+                with st.container():
+                    st.markdown(f"""
+                    <div style="border: 1px solid #4B5563; border-radius: 8px; padding: 20px; margin-bottom: 20px; background-color: #1F2937;">
+                        <div style="display:flex; justify-content:space-between; align-items:center;">
+                            <h3 style="color: #60A5FA; margin:0;">OT #{row['id']} | {nombre_activo}</h3>
+                            <span style="background:#FCD34D; color:#92400E; padding:2px 8px; border-radius:4px; font-size:0.8em; font-weight:bold;">POR VALIDAR</span>
+                        </div>
+                        <p style="color: #9CA3AF; margin-top:5px;">👷 Realizado por: <b>{tecnico_nombre}</b></p>
+                        <hr style="border-color: #374151;">
+                    """, unsafe_allow_html=True)
+
+                    col_rev1, col_rev2 = st.columns([1, 1])
+                    
+                    with col_rev1:
+                        st.markdown("**📸 EVIDENCIA DEL TÉCNICO:**")
+                        if row.get('foto_cierre_url'):
+                            st.image(row['foto_cierre_url'], use_container_width=True, caption="Trabajo Terminado")
+                        else:
+                            st.warning("⚠️ El técnico no subió foto (Esto no debería pasar con la nueva validación).")
+                    
+                    with col_rev2:
+                        st.markdown("**📝 REPORTE:**")
+                        st.info(f"{row.get('comentarios_cierre', 'Sin comentarios')}")
+                        
+                        st.markdown("---")
+                        st.markdown("**DECISIÓN FINAL:**")
+                        
+                        # --- BOTÓN APROBAR ---
+                        if st.button("✅ APROBAR Y CERRAR", key=f"apr_fin_{row['id']}", type="primary", use_container_width=True):
+                            try:
+                                # 1. Actualizar estado a Concluida
+                                supabase.table("ordenes").update({
+                                    "estado": "Concluida"
+                                }).eq("id", row['id']).execute()
+                                
+                                # 2. Notificar al Usuario Final (Telegram)
+                                msj_final = (
+                                    f"🎉 **¡Solucionado!**\n\n"
+                                    f"La Orden **#{row['id']}** sobre *{nombre_activo}* ha sido cerrada exitosamente.\n\n"
+                                    f"📝 **Solución:** {row.get('comentarios_cierre')}"
+                                )
+                                # Enviamos la misma foto que tomó el técnico
+                                notificar_telegram(row.get('chat_id'), msj_final, row.get('foto_cierre_url'))
+                                
+                                st.success("Orden cerrada y usuario notificado.")
+                                st.cache_data.clear()
+                                time.sleep(1.5)
+                                st.rerun()
+                            except Exception as e:
+                                st.error(f"Error: {e}")
+
+                        # --- BOTÓN DEVOLVER ---
+                        st.markdown("<br>", unsafe_allow_html=True)
+                        with st.expander("↩️ Devolver al Técnico (Rechazar)"):
+                            motivo = st.text_input("¿Qué le faltó?", key=f"mot_{row['id']}", placeholder="Ej: Faltó limpiar el área...")
+                            if st.button("CONFIRMAR DEVOLUCIÓN", key=f"dev_{row['id']}", type="secondary", use_container_width=True):
+                                if motivo:
+                                    supabase.table("ordenes").update({
+                                        "estado": "Abierta", # Vuelve a estar abierta para el técnico
+                                        "comentarios_validacion": f"DEVUELTA POR CALIDAD: {motivo}"
+                                    }).eq("id", row['id']).execute()
+                                    
+                                    st.warning("Orden devuelta al técnico para corrección.")
+                                    st.cache_data.clear()
+                                    time.sleep(1.5)
+                                    st.rerun()
+                                else:
+                                    st.error("Escribe el motivo para que el técnico sepa qué corregir.")
+                    
+                    st.markdown("</div>", unsafe_allow_html=True)
     # ==========================================================================
     # ⚡ PESTAÑA ADMIN: CREAR DIRECTA (LO QUE YA TENÍAS)
     # ==========================================================================
@@ -1719,6 +1821,7 @@ elif choice == "Usuarios":
                             agregar_notificacion('error', f'Error al eliminar: {e}')
         else:
             st.info("No se encontraron usuarios en la base de datos. Use la pestaña 'CREAR USUARIO'.")
+
 
 
 
