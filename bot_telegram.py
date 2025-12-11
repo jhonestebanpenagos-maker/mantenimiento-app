@@ -8,6 +8,26 @@ import cloudinary
 import cloudinary.uploader
 import toml
 from io import BytesIO
+import os
+from flask import Flask
+from threading import Thread
+
+# --- CÓDIGO PARA MANTENER VIVO EL BOT EN RENDER ---
+app = Flask('')
+
+@app.route('/')
+def home():
+    return "¡Hola! Soy el Bot de Orión y estoy vivo 🤖"
+
+def run():
+    # Render asigna un puerto en la variable de entorno PORT, o usa 8080 por defecto
+    port = int(os.environ.get("PORT", 8080))
+    app.run(host='0.0.0.0', port=port)
+
+def keep_alive():
+    t = Thread(target=run)
+    t.start()
+# --------------------------------------------------
 
 # ==============================================================================
 # 1. CARGA SEGURA DE CREDENCIALES
@@ -144,11 +164,20 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except Exception as e:
         await update.message.reply_text("❌ Error subiendo foto.")
 
-if __name__ == '__main__':
-    # Verificación final antes de arrancar
+    if __name__ == '__main__':
+    # 1. Verificación del Token (Tu código original)
     if not TELEGRAM_TOKEN or "PEGA_AQUI" in TELEGRAM_TOKEN:
         print("❌ ERROR: El Token de Telegram no parece válido. Revisa secrets.toml")
         sys.exit(1)
+
+    # 2. ENCENDER EL SERVIDOR WEB (Esto mantiene vivo a Render)
+    print("🌍 Iniciando servidor web 'Keep Alive'...")
+    keep_alive()
+
+    # 3. ARRANCAR EL BOT
+    print("🤖 Bot de Orión Iniciado y escuchando...")
+    # Asegúrate de que tu variable se llame 'application' o 'updater' según tu código anterior
+    application.run_polling()
         
     try:
         application = ApplicationBuilder().token(TELEGRAM_TOKEN).build()
