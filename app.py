@@ -235,7 +235,34 @@ def init_supabase():
 supabase = init_supabase()
 if not supabase:
     st.stop()
+# ==============================================================================
+# 🔔 SISTEMA DE NOTIFICACIONES (FALTABA ESTO)
+# ==============================================================================
+def agregar_notificacion(tipo, mensaje):
+    """Guarda una notificación en el estado de la sesión"""
+    if 'notifications' not in st.session_state:
+        st.session_state.notifications = []
+    st.session_state.notifications.append({'type': tipo, 'message': mensaje})
 
+def mostrar_notificaciones():
+    """Muestra y limpia las notificaciones pendientes"""
+    if 'notifications' not in st.session_state:
+        st.session_state.notifications = []
+    
+    # Copiamos la lista para iterar y luego la limpiamos
+    for notif in st.session_state.notifications[:]:
+        if notif['type'] == 'success':
+            st.success(f"✅ {notif['message']}")
+        elif notif['type'] == 'error':
+            st.error(f"❌ {notif['message']}")
+        elif notif['type'] == 'warning':
+            st.warning(f"⚠️ {notif['message']}")
+        elif notif['type'] == 'delete':
+            st.error(f"🗑️ {notif['message']}") # Usamos rojo de error para borrado
+            
+    # Limpiar notificaciones ya mostradas
+    st.session_state.notifications = []
+    
 # --- 3. FUNCIONES AUXILIARES MEJORADAS ---
 
 @st.cache_data(ttl=1)  # Cache de 1 segundo para datos en tiempo real
@@ -1931,4 +1958,5 @@ elif choice == "Usuarios":
                             agregar_notificacion('error', f'Error al eliminar: {e}')
         else:
             st.info("No se encontraron usuarios en la base de datos. Use la pestaña 'CREAR USUARIO'.")
+
 
