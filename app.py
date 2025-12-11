@@ -353,77 +353,73 @@ def convertir_tipos_python(data_dict):
 # 🔔 NUEVA FUNCIÓN: NOTIFICACIONES TELEGRAM
 # ==========================================
 def notificar_telegram(chat_id, mensaje, foto_url=None):
-    """Envía notificaciones proactivas al usuario (Compatible con Render Env Vars)"""
-    if not chat_id: return
+    """Versión de DIAGNÓSTICO para encontrar el error en Render"""
     
-    # --- LÓGICA HÍBRIDA PARA OBTENER EL TOKEN ---
-    token = None
-    
-    # 1. Intenta leer de secrets.toml (Local / Estructura anidada)
-    if "telegram" in st.secrets and "token" in st.secrets["telegram"]:
-        token = st.secrets["telegram"]["token"]
-    
-    # 2. Si no lo encuentra, intenta leer de Variable de Entorno (Render)
-    if not token:
-        token = os.environ.get("TELEGRAM_TOKEN")
+    # 1. Imprimir en pantalla qué datos llegaron
+    with st.expander("🕵️ DIAGNÓSTICO TELEGRAM (Clic para ver)", expanded=True):
+        st.write(f"🔹 **1. Chat ID Recibido:** `{chat_id}`")
         
-    # Si después de todo esto no hay token, abortamos para evitar error
-    if not token:
-        print("⚠️ Advertencia: No se encontró el Token de Telegram.")
-        return
-    # --------------------------------------------
+        if not chat_id:
+            st.error("❌ ERROR: El Chat ID está vacío. No se puede enviar nada.")
+            return
 
-    try:
-        base_url = f"https://api.telegram.org/bot{token}"
+        # 2. Buscar el Token y decir de dónde salió
+        token = None
+        origen = "Ninguno"
         
-        if foto_url:
-            requests.post(f"{base_url}/sendPhoto", data={
-                "chat_id": chat_id,
-                "caption": mensaje,
-                "photo": foto_url,
-                "parse_mode": "Markdown"
-            })
+        # Intento A: Secrets.toml
+        if "telegram" in st.secrets and "token" in st.secrets["telegram"]:
+            token = st.secrets["telegram"]["token"]
+            origen = "Secrets.toml (Local)"
+        
+        # Intento B: Variables de Entorno (Render)
+        if not token: # Si falló el A, probamos el B
+            token = os.environ.get("TELEGRAM_TOKEN")
+            origen = "Environment Variable (Render)"
+            
+        st.write(f"🔹 **2. Origen del Token:** {origen}")
+        
+        if not token:
+            st.error("❌ ERROR CRÍTICO: No se encontró ningún TOKEN. Revisa las Environment Variables en Render.")
+            return
         else:
-            requests.post(f"{base_url}/sendMessage", data={
+            # Mostramos solo los primeros 5 caracteres para verificar que no esté vacío
+            st.success(f"✅ Token detectado: `{str(token)[:5]}...`")
+
+        # 3. Intentar el envío real
+        try:
+            base_url = f"https://api.telegram.org/bot{token}"
+            payload = {
                 "chat_id": chat_id,
-                "text": mensaje,
                 "parse_mode": "Markdown"
-            })
-    except Exception as e:
-        print(f"Error notificando a Telegram: {e}")
+            }
+            
+            url_envio = ""
+            if foto_url:
+                st.write("🔹 **3. Modo:** Envio con FOTO")
+                payload["caption"] = mensaje
+                payload["photo"] = foto_url
+                url_envio = f"{base_url}/sendPhoto"
+            else:
+                st.write("🔹 **3. Modo:** Envio solo TEXTO")
+                payload["text"] = mensaje
+                url_envio = f"{base_url}/sendMessage"
 
-# --- SISTEMA DE NOTIFICACIONES MEJORADO ---
-def mostrar_notificaciones():
-    """Sistema de notificaciones más robusto"""
-    if 'notifications' not in st.session_state:
-        st.session_state.notifications = []
-    
-    for notif in st.session_state.notifications[:]:
-        tipo = notif.get('type')
-        mensaje = notif.get('message')
-        
-        if tipo == 'success':
-            st.success(f"✅ {mensaje}")
-        elif tipo == 'error':
-            st.error(f"❌ {mensaje}")
-        elif tipo == 'warning':
-            st.warning(f"⚠️ {mensaje}")
-        elif tipo == 'delete':
-            st.error(f"🗑️ {mensaje}")
-        elif tipo == 'info':
-            st.info(f"ℹ️ {mensaje}")
-        
-        st.session_state.notifications.remove(notif)
+            st.write("⏳ Enviando petición a Telegram...")
+            response = requests.post(url_envio, data=payload)
+            
+            # 4. Analizar la respuesta de Telegram
+            st.write(f"🔹 **4. Código de Respuesta:** `{response.status_code}`")
+            
+            if response.status_code == 200:
+                st.balloons()
+                st.success("✅ ¡Telegram dice que se envió correctamente!")
+            else:
+                st.error(f"❌ TELEGRAM RECHAZÓ EL MENSAJE:")
+                st.code(response.text) # Aquí saldrá la razón exacta del error
 
-def agregar_notificacion(tipo, mensaje):
-    """Agrega una notificación al sistema"""
-    if 'notifications' not in st.session_state:
-        st.session_state.notifications = []
-    
-    st.session_state.notifications.append({
-        'type': tipo,
-        'message': mensaje
-    })
+        except Exception as e:
+            st.error(f"❌ Error de Conexión Python: {e}")
 
 # --- VALIDACIONES MEJORADAS ---
 def validar_usuario_unico(documento, usuario_id=None):
@@ -1935,3 +1931,4 @@ elif choice == "Usuarios":
                             agregar_notificacion('error', f'Error al eliminar: {e}')
         else:
             st.info("No se encontraron usuarios en la base de datos. Use la pestaña 'CREAR USUARIO'.")
+
