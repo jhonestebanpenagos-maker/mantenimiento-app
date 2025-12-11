@@ -1672,8 +1672,8 @@ elif choice == "Ordenes de Trabajo":
                                     # 3. Finalizar proceso en pantalla
                                     st.success("Orden cerrada correctamente.")
                                     st.cache_data.clear()
-                                    time.sleep(1.5)
-                                    st.rerun()
+                                    #time.sleep(1.5)
+                                    #st.rerun()
                                     
                                 except Exception as e:
                                     st.error(f"Error al cerrar la orden: {e}")
@@ -1970,6 +1970,7 @@ elif choice == "Usuarios":
                             agregar_notificacion('error', f'Error al eliminar: {e}')
         else:
             st.info("No se encontraron usuarios en la base de datos. Use la pestaña 'CREAR USUARIO'.")
+
 
 
 
