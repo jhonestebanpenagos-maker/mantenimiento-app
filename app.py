@@ -405,7 +405,19 @@ def notificar_telegram(chat_id, mensaje, foto_url=None):
             origen = "Environment Variable (Render)"
             
         st.write(f"🔹 **2. Origen del Token:** {origen}")
+
+        # ... (dentro de notificar_telegram, antes del if not token) ...
         
+        st.write(f"🔹 **2. Origen del Token:** {origen}")
+        
+        # --- AGREGA ESTO TEMPORALMENTE ---
+        if not token:
+            st.warning("⚠️ DEBUG: Listando variables de entorno disponibles (buscando TELEGRAM_TOKEN)...")
+            # Mostramos todas las llaves (keys) para ver si está mal escrita
+            keys_disponibles = [k for k in os.environ.keys() if "TOKEN" in k or "TELEGRAM" in k]
+            st.code(f"Variables encontradas parecidas: {keys_disponibles}")
+        # ---------------------------------
+      
         if not token:
             st.error("❌ ERROR CRÍTICO: No se encontró ningún TOKEN. Revisa las Environment Variables en Render.")
             return
@@ -1958,5 +1970,6 @@ elif choice == "Usuarios":
                             agregar_notificacion('error', f'Error al eliminar: {e}')
         else:
             st.info("No se encontraron usuarios en la base de datos. Use la pestaña 'CREAR USUARIO'.")
+
 
 
