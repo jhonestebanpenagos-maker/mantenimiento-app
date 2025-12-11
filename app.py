@@ -353,12 +353,27 @@ def convertir_tipos_python(data_dict):
 # 🔔 NUEVA FUNCIÓN: NOTIFICACIONES TELEGRAM
 # ==========================================
 def notificar_telegram(chat_id, mensaje, foto_url=None):
-    """Envía notificaciones proactivas al usuario"""
+    """Envía notificaciones proactivas al usuario (Compatible con Render Env Vars)"""
     if not chat_id: return
     
-    # Intenta leer el token. Si falla, no rompe la app, solo imprime error en consola
+    # --- LÓGICA HÍBRIDA PARA OBTENER EL TOKEN ---
+    token = None
+    
+    # 1. Intenta leer de secrets.toml (Local / Estructura anidada)
+    if "telegram" in st.secrets and "token" in st.secrets["telegram"]:
+        token = st.secrets["telegram"]["token"]
+    
+    # 2. Si no lo encuentra, intenta leer de Variable de Entorno (Render)
+    if not token:
+        token = os.environ.get("TELEGRAM_TOKEN")
+        
+    # Si después de todo esto no hay token, abortamos para evitar error
+    if not token:
+        print("⚠️ Advertencia: No se encontró el Token de Telegram.")
+        return
+    # --------------------------------------------
+
     try:
-        token = st.secrets["telegram"]["token"] 
         base_url = f"https://api.telegram.org/bot{token}"
         
         if foto_url:
@@ -1920,5 +1935,3 @@ elif choice == "Usuarios":
                             agregar_notificacion('error', f'Error al eliminar: {e}')
         else:
             st.info("No se encontraron usuarios en la base de datos. Use la pestaña 'CREAR USUARIO'.")
-
-
