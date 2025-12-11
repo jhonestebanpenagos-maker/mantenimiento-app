@@ -164,19 +164,23 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except Exception as e:
         await update.message.reply_text("❌ Error subiendo foto.")
 
-    if __name__ == '__main__':
-    # 1. Verificación del Token (Tu código original)
+if __name__ == '__main__':
+    # 1. Verificación del Token
+    # NOTA: Fíjate que esta línea tiene 4 espacios al inicio
     if not TELEGRAM_TOKEN or "PEGA_AQUI" in TELEGRAM_TOKEN:
-        print("❌ ERROR: El Token de Telegram no parece válido. Revisa secrets.toml")
+        print("❌ ERROR: El Token de Telegram no parece válido. Revisa las Variables de Entorno en Render.")
+        # Importante: sys debe estar importado arriba (import sys)
+        import sys
         sys.exit(1)
 
-    # 2. ENCENDER EL SERVIDOR WEB (Esto mantiene vivo a Render)
+    # 2. ENCENDER EL SERVIDOR WEB (Keep Alive)
     print("🌍 Iniciando servidor web 'Keep Alive'...")
     keep_alive()
 
     # 3. ARRANCAR EL BOT
     print("🤖 Bot de Orión Iniciado y escuchando...")
-    # Asegúrate de que tu variable se llame 'application' o 'updater' según tu código anterior
+    
+    # Aquí es donde arranca el bot realmente
     application.run_polling()
         
     try:
