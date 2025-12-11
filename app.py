@@ -8,6 +8,7 @@ import pandas as pd
 from supabase import create_client, Client
 from datetime import datetime
 import io
+import requests
 import urllib.parse
 import json
 import qrcode
@@ -1631,5 +1632,6 @@ elif choice == "Usuarios":
                             agregar_notificacion('error', f'Error al eliminar: {e}')
         else:
             st.info("No se encontraron usuarios en la base de datos. Use la pestaña 'CREAR USUARIO'.")
+
 
 
