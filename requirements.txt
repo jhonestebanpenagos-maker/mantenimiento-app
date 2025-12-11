@@ -8,3 +8,6 @@ opencv-python-headless
 numpy
 plotly
 cloudinary
+python-telegram-bot
+flask
+requests
