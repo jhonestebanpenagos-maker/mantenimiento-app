@@ -6,13 +6,13 @@ from telegram.ext import ApplicationBuilder, ContextTypes, CommandHandler, Messa
 from supabase import create_client
 import cloudinary
 import cloudinary.uploader
-import toml
 from io import BytesIO
-import os
 from flask import Flask
 from threading import Thread
 
-# --- CÓDIGO PARA MANTENER VIVO EL BOT EN RENDER ---
+# ==============================================================================
+# 1. SERVIDOR WEB "KEEP ALIVE" (Para que Render no se duerma)
+# ==============================================================================
 app = Flask('')
 
 @app.route('/')
@@ -27,45 +27,30 @@ def run():
 def keep_alive():
     t = Thread(target=run)
     t.start()
-# --------------------------------------------------
 
 # ==============================================================================
-# 1. CARGA SEGURA DE CREDENCIALES
+# 2. CARGA DE CREDENCIALES (Compatible con Render)
 # ==============================================================================
-print("🔍 Buscando archivo secrets.toml...")
+# En Render, usamos os.environ.get para leer las variables que configuraste en el panel.
+print("🔍 Leyendo credenciales del sistema...")
 
-try:
-    # Buscamos el archivo en la ruta estándar de Streamlit
-    secrets_path = ".streamlit/secrets.toml"
-    
-    if not os.path.exists(secrets_path):
-        print(f"❌ ERROR: No encuentro el archivo en: {os.path.abspath(secrets_path)}")
-        sys.exit(1)
-        
-    # Cargamos el archivo
-    secrets = toml.load(secrets_path)
-    print("✅ Archivo encontrado. Leyendo claves...")
+TELEGRAM_TOKEN = os.environ.get("TELEGRAM_TOKEN")
+SUPABASE_URL = os.environ.get("SUPABASE_URL")
+SUPABASE_KEY = os.environ.get("SUPABASE_KEY")
+CLOUDINARY_CLOUD = os.environ.get("CLOUDINARY_CLOUD_NAME")
+CLOUDINARY_KEY = os.environ.get("CLOUDINARY_API_KEY")
+CLOUDINARY_SECRET = os.environ.get("CLOUDINARY_API_SECRET")
 
-    # Extraemos las claves (Si falla aquí, es porque falta agregarlas al archivo toml)
-    TELEGRAM_TOKEN = secrets["telegram"]["token"]
-    SUPABASE_URL = secrets["supabase"]["SUPABASE_URL"]
-    SUPABASE_KEY = secrets["supabase"]["SUPABASE_KEY"]
-    CLOUDINARY_CLOUD = secrets["cloudinary"]["cloud_name"]
-    CLOUDINARY_KEY = secrets["cloudinary"]["api_key"]
-    CLOUDINARY_SECRET = secrets["cloudinary"]["api_secret"]
-    
-    print("🔒 Credenciales cargadas correctamente.")
-
-except KeyError as e:
-    print(f"❌ ERROR DE CONFIGURACIÓN: Falta la sección o clave {e} en secrets.toml")
-    print("💡 Asegúrate de agregar [telegram] token = '...' en tu archivo secrets.toml")
-    sys.exit(1)
-except Exception as e:
-    print(f"❌ Error inesperado cargando configuración: {e}")
+# Verificamos que todo exista antes de continuar
+if not all([TELEGRAM_TOKEN, SUPABASE_URL, SUPABASE_KEY, CLOUDINARY_CLOUD]):
+    print("❌ ERROR CRÍTICO: Faltan variables de entorno.")
+    print("Asegúrate de haberlas agregado en el panel de Render (Environment Variables).")
     sys.exit(1)
 
+print("✅ Credenciales detectadas correctamente.")
+
 # ==============================================================================
-# 2. INICIALIZACIÓN DE SERVICIOS
+# 3. INICIALIZACIÓN DE SERVICIOS
 # ==============================================================================
 try:
     supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
@@ -76,13 +61,13 @@ try:
         secure = True
     )
 except Exception as e:
-    print(f"❌ Error conectando con Supabase o Cloudinary: {e}")
+    print(f"❌ Error conectando con servicios externos: {e}")
     sys.exit(1)
 
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
 
 # ==============================================================================
-# 3. LÓGICA DEL BOT
+# 4. LÓGICA DEL BOT (Handlers)
 # ==============================================================================
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -91,7 +76,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data.clear()
 
     if args:
-        # MODO QR
+        # MODO QR (Si el link trajo parámetros)
         activo_id = args[0]
         try:
             res = supabase.table("activos").select("nombre").eq("id", activo_id).execute()
@@ -133,11 +118,13 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
         }
 
         try:
+            # NOTA: Asegúrate de que la tabla 'solicitudes' exista en Supabase, 
+            # si no, cambia esto a 'ordenes' temporalmente o crea la tabla.
             supabase.table("solicitudes").insert(datos).execute()
             await update.message.reply_text("🚀 **¡Reporte Enviado!**")
             context.user_data.clear()
         except Exception as e:
-            await update.message.reply_text(f"❌ Error: {e}")
+            await update.message.reply_text(f"❌ Error al guardar en base de datos: {e}")
     else:
         await update.message.reply_text("📸 Falta la foto. Envíala antes de describir el problema.")
 
@@ -164,32 +151,28 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except Exception as e:
         await update.message.reply_text("❌ Error subiendo foto.")
 
+# ==============================================================================
+# 5. EJECUCIÓN PRINCIPAL
+# ==============================================================================
 if __name__ == '__main__':
-    # 1. Verificación del Token
-    # NOTA: Fíjate que esta línea tiene 4 espacios al inicio
-    if not TELEGRAM_TOKEN or "PEGA_AQUI" in TELEGRAM_TOKEN:
-        print("❌ ERROR: El Token de Telegram no parece válido. Revisa las Variables de Entorno en Render.")
-        # Importante: sys debe estar importado arriba (import sys)
-        import sys
-        sys.exit(1)
-
-    # 2. ENCENDER EL SERVIDOR WEB (Keep Alive)
+    # 1. ENCENDER EL SERVIDOR WEB (Keep Alive)
     print("🌍 Iniciando servidor web 'Keep Alive'...")
     keep_alive()
 
-    # 3. ARRANCAR EL BOT
-    print("🤖 Bot de Orión Iniciado y escuchando...")
-    
-    # Aquí es donde arranca el bot realmente
-    application.run_polling()
-        
+    # 2. CONSTRUIR LA APLICACIÓN
+    # ¡IMPORTANTE! Primero construimos la app, LUEGO la ejecutamos
     try:
         application = ApplicationBuilder().token(TELEGRAM_TOKEN).build()
+        
+        # Agregar los manejadores (Handlers)
         application.add_handler(CommandHandler('start', start))
         application.add_handler(MessageHandler(filters.PHOTO, handle_photo))
         application.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), handle_text))
         
-        print("🤖 Bot ORIÓN conectado y escuchando de forma segura...")
+        print("🤖 Bot ORIÓN conectado y escuchando...")
+        
+        # 3. ARRANCAR EL BOT
         application.run_polling()
+        
     except Exception as e:
-        print(f"❌ Error al iniciar el bot: {e}")
+        print(f"❌ Error fatal al iniciar el bot: {e}")
