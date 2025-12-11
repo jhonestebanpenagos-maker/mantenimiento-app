@@ -347,7 +347,7 @@ def convertir_tipos_python(data_dict):
         else:
             converted[key] = value
     return converted
-else:
+        else:
             converted[key] = value
     return converted
 
@@ -1821,6 +1821,7 @@ elif choice == "Usuarios":
                             agregar_notificacion('error', f'Error al eliminar: {e}')
         else:
             st.info("No se encontraron usuarios en la base de datos. Use la pestaña 'CREAR USUARIO'.")
+
 
 
 
