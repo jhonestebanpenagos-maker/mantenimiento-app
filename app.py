@@ -1275,7 +1275,8 @@ elif choice == "Ordenes de Trabajo":
         n_pendientes = len(df_solicitudes)
         titulo_buzon = f"👮 VALIDAR ({n_pendientes})" if n_pendientes > 0 else "👮 VALIDAR"
         
-        tab_buzon, tab_gestion, tab_crear_directa = st.tabs([titulo_buzon, "📊 GESTIÓN GLOBAL", "⚡ CREAR DIRECTA"])
+       # ✅ NUEVA DEFINICIÓN DE PESTAÑAS
+        tab_buzon, tab_calidad, tab_gestion, tab_crear_directa = st.tabs([titulo_buzon, "💎 CALIDAD", "📊 GESTIÓN GLOBAL", "⚡ CREAR DIRECTA"])
 
     # ==========================================================================
     # 📢 PESTAÑA COMÚN: SOLICITAR MANTENIMIENTO (Para Tecnicos o Admin)
@@ -1718,6 +1719,7 @@ elif choice == "Usuarios":
                             agregar_notificacion('error', f'Error al eliminar: {e}')
         else:
             st.info("No se encontraron usuarios en la base de datos. Use la pestaña 'CREAR USUARIO'.")
+
 
 
 
