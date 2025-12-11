@@ -347,6 +347,37 @@ def convertir_tipos_python(data_dict):
         else:
             converted[key] = value
     return converted
+else:
+            converted[key] = value
+    return converted
+
+# ==========================================
+# 🔔 NUEVA FUNCIÓN: NOTIFICACIONES TELEGRAM
+# ==========================================
+def notificar_telegram(chat_id, mensaje, foto_url=None):
+    """Envía notificaciones proactivas al usuario"""
+    if not chat_id: return
+    
+    # Intenta leer el token. Si falla, no rompe la app, solo imprime error en consola
+    try:
+        token = st.secrets["telegram"]["token"] 
+        base_url = f"https://api.telegram.org/bot{token}"
+        
+        if foto_url:
+            requests.post(f"{base_url}/sendPhoto", data={
+                "chat_id": chat_id,
+                "caption": mensaje,
+                "photo": foto_url,
+                "parse_mode": "Markdown"
+            })
+        else:
+            requests.post(f"{base_url}/sendMessage", data={
+                "chat_id": chat_id,
+                "text": mensaje,
+                "parse_mode": "Markdown"
+            })
+    except Exception as e:
+        print(f"Error notificando a Telegram: {e}")
 
 # --- SISTEMA DE NOTIFICACIONES MEJORADO ---
 def mostrar_notificaciones():
@@ -1632,6 +1663,7 @@ elif choice == "Usuarios":
                             agregar_notificacion('error', f'Error al eliminar: {e}')
         else:
             st.info("No se encontraron usuarios en la base de datos. Use la pestaña 'CREAR USUARIO'.")
+
 
 
 
