@@ -1672,33 +1672,122 @@ elif choice == "Ordenes de Trabajo":
                         st.success("Orden creada.")
                         st.rerun()
     
-    # ==========================================================================
-    # 📊 PESTAÑA GESTIÓN GLOBAL (TABLA DE ÓRDENES QUE YA EXISTEN)
-    # ==========================================================================
+# ==========================================================================
+# 📊 PESTAÑA GESTIÓN GLOBAL (AHORA CON EDICIÓN)
+# ==========================================================================
     if rol in ["Admin", "Programador"]:
         with tab_gestion:
-            # Aquí va la tabla grande de todas las órdenes que ya tenías
-            # Filtros
-            f_col1, f_col2 = st.columns(2)
-            ver_estado = f_col1.selectbox("Estado", ["Todas", "Abierta", "Concluida"])
+            st.markdown("### 🎛️ Control Central de Órdenes")
+            st.info("👆 Selecciona una fila para editar, reasignar o cancelar una orden.")
+
+            # --- 1. FILTROS ---
+            col_filtros = st.columns(3)
+            filtro_estado = col_filtros[0].selectbox("Filtrar Estado", ["Todas", "Abierta", "Por Validar", "Concluida"], index=0)
             
-            df_ver = df_ordenes.copy()
-            if ver_estado != "Todas":
-                df_ver = df_ver[df_ver['estado'] == ver_estado]
+            # --- 2. PREPARAR DATOS ---
+            df_display = df_ordenes.copy()
             
-            # Mapeos visuales (Nombres en vez de IDs)
-            if not df_ver.empty:
+            # Aplicar filtro
+            if filtro_estado != "Todas":
+                df_display = df_display[df_display['estado'] == filtro_estado]
+
+            # Mapear IDs a Nombres para que la tabla se vea bonita
+            if not df_display.empty:
                 # Map activos
                 map_act = dict(zip(df_act['id'], df_act['nombre'])) if not df_act.empty else {}
-                df_ver['Activo'] = df_ver['activo_id'].map(map_act)
+                df_display['Activo Nombre'] = df_display['activo_id'].map(map_act).fillna("Desconocido")
                 
                 # Map técnicos
                 map_user = dict(zip(df_users['id'].astype(str), df_users['nombre'])) if not df_users.empty else {}
-                df_ver['Técnico'] = df_ver['tecnico_asignado'].map(map_user)
+                df_display['Técnico Nombre'] = df_display['tecnico_asignado'].map(map_user).fillna("Sin Asignar")
                 
-                st.dataframe(df_ver[['id', 'Activo', 'descripcion', 'estado', 'Técnico', 'criticidad']], use_container_width=True)
+                # Ordenar por ID descendente (las más nuevas arriba)
+                df_display = df_display.sort_values('id', ascending=False)
+
+                # --- 3. TABLA INTERACTIVA ---
+                event = st.dataframe(
+                    df_display[['id', 'estado', 'Activo Nombre', 'descripcion', 'Técnico Nombre', 'criticidad', 'fecha_creacion']],
+                    use_container_width=True,
+                    hide_index=True,
+                    selection_mode="single-row", # ¡ESTO HACE LA MAGIA!
+                    on_select="rerun",
+                    height=300
+                )
+
+                # --- 4. LOGICA DE EDICIÓN AL SELECCIONAR ---
+                if len(event.selection.rows) > 0:
+                    idx_tabla = event.selection.rows[0]
+                    # Obtenemos el ID real de la orden seleccionada
+                    id_orden_selec = df_display.iloc[idx_tabla]['id']
+                    
+                    # Buscamos los datos crudos originales de esa orden
+                    orden_actual = df_ordenes[df_ordenes['id'] == id_orden_selec].iloc[0]
+
+                    st.divider()
+                    st.markdown(f"#### ✏️ Editando Orden #{id_orden_selec}")
+                    
+                    with st.form(key=f"form_edit_orden_{id_orden_selec}"):
+                        c_edit1, c_edit2, c_edit3 = st.columns(3)
+                        
+                        # Selector de Estado (Forzar cambio)
+                        estados_posibles = ["Abierta", "Por Validar", "Concluida", "Cancelada"]
+                        idx_est = estados_posibles.index(orden_actual['estado']) if orden_actual['estado'] in estados_posibles else 0
+                        nuevo_estado = c_edit1.selectbox("Estado", estados_posibles, index=idx_est)
+                        
+                        # Selector de Técnico (Reasignar)
+                        lista_tecnicos = df_users[df_users['rol'].isin(['Tecnico', 'Admin', 'Programador'])]
+                        tech_dict = dict(zip(lista_tecnicos['nombre'], lista_tecnicos['id']))
+                        
+                        # Encontrar el nombre del técnico actual para ponerlo como default
+                        tech_actual_id = str(orden_actual['tecnico_asignado'])
+                        nombre_tech_actual = "Seleccionar..."
+                        
+                        # Buscar nombre inverso
+                        for name, tid in tech_dict.items():
+                            if str(tid) == tech_actual_id:
+                                nombre_tech_actual = name
+                                break
+                        
+                        opciones_tech = list(tech_dict.keys())
+                        index_tech = opciones_tech.index(nombre_tech_actual) if nombre_tech_actual in opciones_tech else 0
+                        
+                        nuevo_tecnico_nombre = c_edit2.selectbox("Reasignar Técnico", opciones_tech, index=index_tech)
+                        nueva_criticidad = c_edit3.select_slider("Criticidad", ["Baja", "Media", "Alta", "Crítica"], value=orden_actual['criticidad'])
+                        
+                        nueva_desc = st.text_area("Descripción de la Falla", value=orden_actual['descripcion'])
+                        
+                        col_btns = st.columns([1, 4])
+                        submitted_save = col_btns[0].form_submit_button("💾 GUARDAR CAMBIOS", type="primary")
+                        
+                        if submitted_save:
+                            try:
+                                nuevo_tecnico_id = tech_dict[nuevo_tecnico_nombre]
+                                supabase.table("ordenes").update({
+                                    "estado": nuevo_estado,
+                                    "tecnico_asignado": str(nuevo_tecnico_id),
+                                    "criticidad": nueva_criticidad,
+                                    "descripcion": nueva_desc
+                                }).eq("id", id_orden_selec).execute()
+                                
+                                st.success("Orden actualizada correctamente.")
+                                st.cache_data.clear()
+                                time.sleep(1)
+                                st.rerun()
+                            except Exception as e:
+                                st.error(f"Error al actualizar: {e}")
+
+                    # --- BOTÓN DE BORRADO (FUERA DEL FORM) ---
+                    with st.expander("🗑️ Zona de Peligro (Eliminar Orden)"):
+                        st.warning("Esta acción es irreversible.")
+                        if st.button("ELIMINAR ORDEN DEFINITIVAMENTE", key=f"del_ot_{id_orden_selec}", type="secondary"):
+                            supabase.table("ordenes").delete().eq("id", id_orden_selec).execute()
+                            agregar_notificacion("delete", f"Orden #{id_orden_selec} eliminada.")
+                            st.cache_data.clear()
+                            time.sleep(1)
+                            st.rerun()
+                            
             else:
-                st.info("No hay órdenes.")
+                st.info("No hay órdenes que coincidan con los filtros.")
 
 elif choice == "Usuarios":
     st.title("USUARIOS")
@@ -1818,6 +1907,7 @@ elif choice == "Usuarios":
                             agregar_notificacion('error', f'Error al eliminar: {e}')
         else:
             st.info("No se encontraron usuarios en la base de datos. Use la pestaña 'CREAR USUARIO'.")
+
 
 
 
