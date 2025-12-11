@@ -1325,13 +1325,12 @@ elif choice == "Ordenes de Trabajo":
             else:
                 st.warning("No hay activos registrados.")
 
-    # ==========================================================================
-    # 👷 PESTAÑA TÉCNICO: MIS ÓRDENES
-    # ==========================================================================
+# ==========================================================================
+# 👷 PESTAÑA TÉCNICO: MIS ÓRDENES (MODO RIGUROSO)
+# ==========================================================================
     if rol == "Tecnico":
         with tab_mis_ordenes:
-            # Filtramos órdenes asignadas al usuario logueado (usando su ID)
-            # Primero necesitamos el ID del usuario actual
+            # 1. Identificar al técnico logueado
             mi_id = None
             if not df_users.empty:
                 usuario_data = df_users[df_users['nombre'] == usuario]
@@ -1339,32 +1338,74 @@ elif choice == "Ordenes de Trabajo":
                     mi_id = usuario_data.iloc[0]['id']
             
             if mi_id:
+                # 2. Filtrar órdenes asignadas y ABIERTAS (o devueltas)
+                # Nota: Si quisieras que vieran las devueltas, podrías añadir esa lógica después.
                 mis_ots = df_ordenes[(df_ordenes['tecnico_asignado'] == str(mi_id)) & (df_ordenes['estado'] == 'Abierta')]
                 
                 if mis_ots.empty:
                     st.info("🎉 No tienes órdenes pendientes.")
                 else:
                     st.write(f"Tienes {len(mis_ots)} órdenes pendientes.")
+                    
                     for index, row in mis_ots.iterrows():
                         nombre_activo = df_act[df_act['id'] == row['activo_id']].iloc[0]['nombre'] if not df_act.empty else "Activo"
-                        with st.expander(f"🔧 {nombre_activo} | {row['criticidad']}"):
-                            st.write(f"**Falla:** {row['descripcion']}")
+                        
+                        # Mostramos tarjeta de la orden
+                        with st.expander(f"🔧 {nombre_activo} | {row['criticidad']} (ID: {row['id']})"):
+                            st.markdown(f"**Falla:** {row['descripcion']}")
                             st.caption(f"📅 Asignada: {row['fecha_creacion'][:10]}")
                             
-                            # Formulario de cierre rápido
-                            with st.form(f"cierre_rapido_{row['id']}"):
-                                reporte = st.text_area("Reporte de trabajo realizado")
-                                if st.form_submit_button("✅ CERRAR ORDEN"):
-                                    supabase.table("ordenes").update({
-                                        "estado": "Concluida",
-                                        "comentarios_cierre": reporte,
-                                        "fecha_cierre": datetime.now().isoformat()
-                                    }).eq("id", row['id']).execute()
-                                    st.success("Orden cerrada.")
-                                    time.sleep(1)
-                                    st.rerun()
+                            # Si la orden fue devuelta, mostrar el motivo
+                            if row.get('comentarios_validacion'):
+                                st.error(f"⚠️ **Devolución:** {row['comentarios_validacion']}")
+                            
+                            st.divider()
+
+                            # 3. FORMULARIO DE EJECUCIÓN (CON FOTO OBLIGATORIA)
+                            with st.form(f"cierre_riguroso_{row['id']}"):
+                                st.markdown("#### 📝 Reporte Técnico")
+                                reporte = st.text_area("Descripción del trabajo realizado:", height=100, placeholder="Describa qué reparó y qué repuestos usó...")
+                                
+                                st.markdown("#### 📸 Evidencia (Obligatoria)")
+                                foto_cierre = st.file_uploader("Subir foto del trabajo terminado", type=["jpg", "png", "jpeg"], key=f"up_cierre_{row['id']}")
+                                
+                                # Botón de envío
+                                if st.form_submit_button("✅ TERMINAR Y ENVIAR A REVISIÓN", type="primary", use_container_width=True):
+                                    
+                                    # VALIDACIÓN: Reporte Y Foto son obligatorios
+                                    if not reporte or not foto_cierre:
+                                        st.error("⚠️ Faltan datos: Es obligatorio escribir el reporte Y subir la foto de evidencia.")
+                                    else:
+                                        try:
+                                            url_final = None
+                                            with st.spinner("Subiendo evidencia a la nube..."):
+                                                # Subimos a carpeta específica de cierres
+                                                url_final = subir_imagen(foto_cierre, "orion_evidencias_cierre")
+                                            
+                                            if not url_final:
+                                                st.error("Error al subir la imagen. Intenta de nuevo.")
+                                                st.stop()
+
+                                            # Preparar los datos para Supabase
+                                            datos_update = {
+                                                "estado": "Por Validar", # <--- EL ESTADO CLAVE
+                                                "comentarios_cierre": reporte,
+                                                "fecha_cierre": datetime.now().isoformat(),
+                                                "foto_cierre_url": url_final,
+                                                "comentarios_validacion": None # Limpiamos comentarios de devolución previos si existían
+                                            }
+                                            
+                                            # Guardar actualización
+                                            supabase.table("ordenes").update(datos_update).eq("id", row['id']).execute()
+                                            
+                                            st.success("🚀 ¡Excelente! Orden enviada a control de calidad.")
+                                            time.sleep(1.5)
+                                            st.rerun()
+                                            
+                                        except Exception as e:
+                                            st.error(f"Error al guardar: {e}")
             else:
-                st.error("No se pudo identificar tu usuario técnico.")
+                st.error("No se pudo identificar tu usuario técnico en la base de datos.")
 
     # ==========================================================================
     # 👮 PESTAÑA ADMIN: BUZÓN DE VALIDACIÓN (CORREGIDO)
@@ -1677,6 +1718,7 @@ elif choice == "Usuarios":
                             agregar_notificacion('error', f'Error al eliminar: {e}')
         else:
             st.info("No se encontraron usuarios en la base de datos. Use la pestaña 'CREAR USUARIO'.")
+
 
 
 
