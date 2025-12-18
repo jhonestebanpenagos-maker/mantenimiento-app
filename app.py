@@ -835,6 +835,7 @@ if choice == "Tablero de Mando":
     
     df = run_query("ordenes")
     df_users = run_query("usuarios")
+    df_solicitudes = run_query("solicitudes")
     
     if not df.empty:
         mostrar_metricas_inteligentes(df, df_users)
@@ -864,6 +865,12 @@ if choice == "Tablero de Mando":
     else: 
         st.info("No hay datos para mostrar.")
 
+mostrar_metricas_inteligentes(df, df_users, df_solicitudes) 
+    
+    st.write("") 
+
+    if not df.empty:
+        st.markdown("### 📈 Métricas Visuales")
 elif choice == "Inventario Activos":
     st.title("INVENTARIO DE ACTIVOS")
     mostrar_notificaciones()
@@ -1898,3 +1905,4 @@ elif choice == "Usuarios":
                             agregar_notificacion('error', f'Error al eliminar: {e}')
         else:
             st.info("No se encontraron usuarios en la base de datos. Use la pestaña 'CREAR USUARIO'.")
+
