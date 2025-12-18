@@ -595,6 +595,124 @@ def graficar_criticidad(df):
     )
     fig.update_traces(textfont_size=14, textposition='outside', marker_line_width=0)
     st.plotly_chart(fig, use_container_width=True)
+    
+# --- 📅 CALENDARIO GANTT INTERACTIVO ---
+def graficar_gantt_mantenimiento(df_ordenes, df_users):
+    """Crea una línea de tiempo visual (Gantt) por Técnico"""
+    if df_ordenes.empty:
+        st.info("No hay datos para generar el calendario.")
+        return
+
+    # 1. Preparar datos
+    df_gantt = df_ordenes.copy()
+    
+    # Mapear nombres de técnicos
+    map_user = dict(zip(df_users['id'].astype(str), df_users['nombre'])) if not df_users.empty else {}
+    df_gantt['Tecnico'] = df_gantt['tecnico_asignado'].map(map_user).fillna("Sin Asignar")
+    
+    # Convertir fechas
+    df_gantt['Inicio'] = pd.to_datetime(df_gantt['fecha_creacion'])
+    
+    # Para el final: si ya cerró, usa fecha_cierre. Si no, usa AHORA (para mostrar que sigue abierta)
+    now = datetime.now()
+    df_gantt['Final_Real'] = pd.to_datetime(df_gantt['fecha_cierre'])
+    df_gantt['Final_Visual'] = df_gantt['Final_Real'].fillna(now)
+    
+    # Calcular duración en horas para el tooltip
+    df_gantt['Duracion_Horas'] = (df_gantt['Final_Visual'] - df_gantt['Inicio']).dt.total_seconds() / 3600
+    df_gantt['Duracion_Horas'] = df_gantt['Duracion_Horas'].round(1)
+
+    # 2. Crear Gráfica Gantt con Plotly
+    fig = px.timeline(
+        df_gantt, 
+        x_start="Inicio", 
+        x_end="Final_Visual", 
+        y="Tecnico",
+        color="criticidad", # Colores según urgencia
+        color_discrete_map={"Alta": "#EF4444", "Media": "#F59E0B", "Baja": "#10B981", "Crítica": "#7F1D1D"},
+        hover_data=["id", "descripcion", "estado", "Duracion_Horas"],
+        title="📅 Línea de Tiempo de Ejecución (Quién hace qué y cuándo)",
+        height=400
+    )
+    
+    # 3. Estilizado "Dark Mode Pro"
+    fig.update_yaxes(categoryorder="total ascending", title=None) # Ordenar por quien tiene más trabajo
+    fig.update_xaxes(title="Tiempo de Ejecución")
+    fig.update_layout(
+        paper_bgcolor='rgba(0,0,0,0)',
+        plot_bgcolor='rgba(255,255,255,0.05)',
+        font=dict(color='white'),
+        legend=dict(orientation="h", y=1.1),
+        margin=dict(l=10, r=10, t=40, b=10)
+    )
+    
+    st.plotly_chart(fig, use_container_width=True)
+
+# --- 🏆 TOP 10 LISTAS (ANTIGUAS Y CRÍTICAS) ---
+def mostrar_tops_ordenes(df_ordenes):
+    """Muestra tablas estilizadas con las órdenes más problemáticas"""
+    if df_ordenes.empty: return
+
+    # Calculamos días abierta
+    now = datetime.now()
+    df_ordenes['fecha_dt'] = pd.to_datetime(df_ordenes['fecha_creacion'])
+    
+    # Solo nos interesan las NO concluidas para el backlog
+    df_abiertas = df_ordenes[df_ordenes['estado'] != 'Concluida'].copy()
+    
+    if df_abiertas.empty:
+        st.success("¡Increíble! No hay órdenes pendientes antiguas.")
+        return
+
+    df_abiertas['dias_abierta'] = (now - df_abiertas['fecha_dt']).dt.days
+    
+    c1, c2 = st.columns(2)
+    
+    # --- TOP 10 ANTIGUAS ---
+    with c1:
+        st.markdown("### 🐢 Top 10 Más Antiguas")
+        df_old = df_abiertas.sort_values('dias_abierta', ascending=False).head(10)
+        
+        st.dataframe(
+            df_old[['id', 'descripcion', 'dias_abierta', 'tecnico_asignado']],
+            column_config={
+                "id": st.column_config.NumberColumn("ID", format="#%d", width="small"),
+                "descripcion": st.column_config.TextColumn("Problema", width="medium"),
+                "dias_abierta": st.column_config.ProgressColumn(
+                    "Días Esperando", 
+                    help="Días desde que se creó", 
+                    format="%d días", 
+                    min_value=0, 
+                    max_value=30 # La barra se llena a los 30 días
+                ),
+                "tecnico_asignado": st.column_config.TextColumn("Técnico ID")
+            },
+            hide_index=True,
+            use_container_width=True,
+            height=300
+        )
+
+    # --- TOP 10 CRÍTICAS ---
+    with c2:
+        st.markdown("### 🔥 Top Críticas Pendientes")
+        # Filtramos Alta o Crítica
+        df_crit = df_abiertas[df_abiertas['criticidad'].isin(['Alta', 'Crítica'])].sort_values('fecha_dt').head(10)
+        
+        if df_crit.empty:
+            st.info("No hay órdenes críticas pendientes.")
+        else:
+            st.dataframe(
+                df_crit[['id', 'criticidad', 'descripcion', 'estado']],
+                column_config={
+                    "id": st.column_config.NumberColumn("ID", format="#%d", width="small"),
+                    "criticidad": st.column_config.TextColumn("Nivel"),
+                    "descripcion": st.column_config.TextColumn("Problema"),
+                    "estado": st.column_config.TextColumn("Estado")
+                },
+                hide_index=True,
+                use_container_width=True,
+                height=300
+            )
 
 def graficar_torta_tipo(df):
     if df.empty: return
@@ -838,36 +956,49 @@ if choice == "Tablero de Mando":
     df_users = run_query("usuarios")
     df_solicitudes = run_query("solicitudes")
     
-    # 2. Mostrar métricas (Asegúrate de haber actualizado la función 'mostrar_metricas_inteligentes' antes)
+    # 2. Métricas KPI (Las que ya arreglamos)
     mostrar_metricas_inteligentes(df, df_users, df_solicitudes)
     
     st.write("") 
 
-    # 3. Gráficas
     if not df.empty:
-        st.markdown("### 📈 Métricas Visuales")
+        # --- NUEVO: CALENDARIO GANTT ---
+        st.markdown("---")
+        graficar_gantt_mantenimiento(df, df_users)
+        st.caption("💡 *Las barras muestran la duración de la orden. Colores indican la criticidad.*")
+        st.markdown("---")
+
+        # --- GRÁFICAS CLÁSICAS (En columnas) ---
+        st.markdown("### 📊 Análisis de Distribución")
         c_left, c_mid, c_right = st.columns(3)
 
         with c_left:
-            st.markdown(f"<div class='card-style'><span class='chart-header'>Progreso de Órdenes</span>", unsafe_allow_html=True)
+            st.markdown(f"<div class='card-style'><span class='chart-header'>Progreso Global</span>", unsafe_allow_html=True)
             graficar_estado_barras(df)
             st.markdown("</div>", unsafe_allow_html=True)
 
         with c_mid:
-            st.markdown(f"<div class='card-style'><span class='chart-header'>Gravedad de las Fallas</span>", unsafe_allow_html=True)
+            st.markdown(f"<div class='card-style'><span class='chart-header'>Nivel de Riesgo</span>", unsafe_allow_html=True)
             graficar_criticidad(df) 
             st.markdown("</div>", unsafe_allow_html=True)
 
         with c_right:
-            st.markdown(f"<div class='card-style'><span class='chart-header'>Tipos de Mantenimiento</span>", unsafe_allow_html=True)
+            st.markdown(f"<div class='card-style'><span class='chart-header'>Por Categoría</span>", unsafe_allow_html=True)
             graficar_torta_tipo(df) 
             st.markdown("</div>", unsafe_allow_html=True)
 
-        st.markdown("### 👥 Órdenes de Trabajo por Técnico")
+        # --- NUEVO: LISTAS TOP 10 ---
+        st.markdown("---")
+        mostrar_tops_ordenes(df)
+        
+        # --- CARGA POR TÉCNICO ---
+        st.markdown("---")
+        st.markdown("### 👥 Productividad del Equipo")
         with st.container():
             graficar_ordenes_por_tecnico(df, df_users)
+
     else: 
-        st.info("No hay órdenes registradas para mostrar gráficas.")
+        st.info("No hay órdenes registradas. El tablero se activará cuando crees la primera orden.")
         
 elif choice == "Inventario Activos":
     st.title("INVENTARIO DE ACTIVOS")
@@ -1903,3 +2034,4 @@ elif choice == "Usuarios":
                             agregar_notificacion('error', f'Error al eliminar: {e}')
         else:
             st.info("No se encontraron usuarios en la base de datos. Use la pestaña 'CREAR USUARIO'.")
+
