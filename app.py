@@ -833,14 +833,18 @@ if choice == "Tablero de Mando":
     st.title("TABLERO DE MANDO")
     mostrar_notificaciones()
     
+    # 1. Cargar datos
     df = run_query("ordenes")
     df_users = run_query("usuarios")
     df_solicitudes = run_query("solicitudes")
     
-    if not df.empty:
-        mostrar_metricas_inteligentes(df, df_users)
-        st.write("") 
+    # 2. Mostrar métricas (Asegúrate de haber actualizado la función 'mostrar_metricas_inteligentes' antes)
+    mostrar_metricas_inteligentes(df, df_users, df_solicitudes)
+    
+    st.write("") 
 
+    # 3. Gráficas
+    if not df.empty:
         st.markdown("### 📈 Métricas Visuales")
         c_left, c_mid, c_right = st.columns(3)
 
@@ -863,14 +867,8 @@ if choice == "Tablero de Mando":
         with st.container():
             graficar_ordenes_por_tecnico(df, df_users)
     else: 
-        st.info("No hay datos para mostrar.")
-
-mostrar_metricas_inteligentes(df, df_users, df_solicitudes) 
-    
-    st.write("") 
-
-    if not df.empty:
-        st.markdown("### 📈 Métricas Visuales")
+        st.info("No hay órdenes registradas para mostrar gráficas.")
+        
 elif choice == "Inventario Activos":
     st.title("INVENTARIO DE ACTIVOS")
     mostrar_notificaciones()
@@ -1905,4 +1903,3 @@ elif choice == "Usuarios":
                             agregar_notificacion('error', f'Error al eliminar: {e}')
         else:
             st.info("No se encontraron usuarios en la base de datos. Use la pestaña 'CREAR USUARIO'.")
-
