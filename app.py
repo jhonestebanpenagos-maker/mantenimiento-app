@@ -1993,12 +1993,12 @@ elif choice == "Ordenes de Trabajo":
                         st.rerun()
     
 # ==========================================================================
-# 📊 PESTAÑA GESTIÓN GLOBAL (AHORA CON EDICIÓN)
+# 📊 PESTAÑA GESTIÓN GLOBAL (CON EDICIÓN + PDF)
 # ==========================================================================
     if rol in ["Admin", "Programador"]:
         with tab_gestion:
             st.markdown("### 🎛️ Control Central de Órdenes")
-            st.info("👆 Selecciona una fila para editar, reasignar o cancelar una orden.")
+            st.info("👆 Selecciona una fila para editar, reasignar, cancelar o descargar reporte.")
 
             # --- 1. FILTROS ---
             col_filtros = st.columns(3)
@@ -2044,8 +2044,36 @@ elif choice == "Ordenes de Trabajo":
                     orden_actual = df_ordenes[df_ordenes['id'] == id_orden_selec].iloc[0]
 
                     st.divider()
-                    st.markdown(f"#### ✏️ Editando Orden #{id_orden_selec}")
+
+                    # --- ENCABEZADO CON BOTÓN PDF ---
+                    c_head1, c_head2 = st.columns([3, 1])
                     
+                    with c_head1:
+                        st.markdown(f"#### ✏️ Editando Orden #{id_orden_selec}")
+
+                    with c_head2:
+                        # Solo permitimos descargar PDF si la orden está avanzada (Concluida o Por Validar)
+                        if orden_actual['estado'] in ['Concluida', 'Por Validar']:
+                            try:
+                                # Recuperamos nombres legibles de la tabla visual
+                                act_nom_pdf = df_display.iloc[idx_tabla]['Activo Nombre']
+                                tec_nom_pdf = df_display.iloc[idx_tabla]['Técnico Nombre']
+                                
+                                # Generamos PDF (Asegúrate de haber pegado la función generar_pdf_orden arriba)
+                                pdf_data = generar_pdf_orden(orden_actual, act_nom_pdf, tec_nom_pdf)
+                                
+                                st.download_button(
+                                    label="📄 Descargar PDF",
+                                    data=pdf_data,
+                                    file_name=f"Reporte_OT_{id_orden_selec}.pdf",
+                                    mime="application/pdf",
+                                    key=f"btn_pdf_{id_orden_selec}"
+                                )
+                            except Exception as e:
+                                st.error("Error generando PDF")
+                                print(e)
+                    
+                    # --- FORMULARIO DE EDICIÓN ---
                     with st.form(key=f"form_edit_orden_{id_orden_selec}"):
                         c_edit1, c_edit2, c_edit3 = st.columns(3)
                         
@@ -2227,3 +2255,4 @@ elif choice == "Usuarios":
                             agregar_notificacion('error', f'Error al eliminar: {e}')
         else:
             st.info("No se encontraron usuarios en la base de datos. Use la pestaña 'CREAR USUARIO'.")
+
