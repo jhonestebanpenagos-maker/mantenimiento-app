@@ -377,18 +377,21 @@ def convertir_tipos_python(data_dict):
     return converted
         
 # ==========================================
-# 🔔 FUNCIÓN MODIFICADA: TOKEN DIRECTO (HARDCODED)
+# 🔔 FUNCIÓN CORREGIDA (SOLO 1 ENVÍO)
 # ==========================================
 def notificar_telegram(chat_id, mensaje, foto_url=None):
-    """Versión con TOKEN MANUAL para solucionar el error de Render"""
+    """Envía notificaciones a Telegram (Versión Limpia)"""
     
-    with st.expander("🕵️ DIAGNÓSTICO TELEGRAM (Clic para ver)", expanded=True):
-        st.write(f"🔹 **1. Chat ID Recibido:** `{chat_id}`")
-        
-        token = "8382805163:AAEfkue6AMQu6qvqyRdTmh05kIOZUOxCdwM" 
-     
-        st.write(f"🔹 **2. Token usado:** {str(token)[:5]}... (Directo en código)")
+    # ---------------------------------------------------------
+    # TOKEN CONFIGURADO DIRECTAMENTE
+    # ---------------------------------------------------------
+    token_raw = "8382805163:AAEfkue6AMQu6qvqyRdTmh05kIOZUOxCdwM" 
+    token = token_raw.strip().replace("bot", "") 
+    # ---------------------------------------------------------
 
+    with st.expander("🕵️ DIAGNÓSTICO TELEGRAM (Clic para ver)", expanded=False):
+        st.write(f"🔹 **1. Chat ID:** `{chat_id}`")
+        
         try:
             base_url = f"https://api.telegram.org/bot{token}"
             payload = {
@@ -398,76 +401,25 @@ def notificar_telegram(chat_id, mensaje, foto_url=None):
             
             url_envio = ""
             if foto_url:
-                st.write("🔹 **3. Modo:** Envio con FOTO")
+                st.write("🔹 **Modo:** FOTO")
                 payload["caption"] = mensaje
                 payload["photo"] = foto_url
                 url_envio = f"{base_url}/sendPhoto"
             else:
-                st.write("🔹 **3. Modo:** Envio solo TEXTO")
+                st.write("🔹 **Modo:** TEXTO")
                 payload["text"] = mensaje
                 url_envio = f"{base_url}/sendMessage"
 
-            st.write("⏳ Enviando petición a Telegram...")
-            response = requests.post(url_envio, data=payload)
+            st.write("⏳ Enviando una sola vez...")
             
-            st.write(f"🔹 **4. Código de Respuesta:** `{response.status_code}`")
+            # --- AQUÍ OCURRE EL ENVÍO (SOLO UNA VEZ) ---
+            response = requests.post(url_envio, data=payload)
+            # -------------------------------------------
             
             if response.status_code == 200:
-                st.balloons()
-                st.success("✅ ¡Telegram dice que se envió correctamente!")
+                st.success("✅ Mensaje entregado a Telegram")
             else:
-                st.error(f"❌ TELEGRAM RECHAZÓ EL MENSAJE:")
-                st.code(response.text)
-
-        except Exception as e:
-            st.error(f"❌ Error de Conexión Python: {e}")
-        
-        # --- AGREGA ESTO TEMPORALMENTE ---
-        if not token:
-            st.warning("⚠️ DEBUG: Listando variables de entorno disponibles (buscando TELEGRAM_TOKEN)...")
-            # Mostramos todas las llaves (keys) para ver si está mal escrita
-            keys_disponibles = [k for k in os.environ.keys() if "TOKEN" in k or "TELEGRAM" in k]
-            st.code(f"Variables encontradas parecidas: {keys_disponibles}")
-        # ---------------------------------
-      
-        if not token:
-            st.error("❌ ERROR CRÍTICO: No se encontró ningún TOKEN. Revisa las Environment Variables en Render.")
-            return
-        else:
-            # Mostramos solo los primeros 5 caracteres para verificar que no esté vacío
-            st.success(f"✅ Token detectado: `{str(token)[:5]}...`")
-
-        # 3. Intentar el envío real
-        try:
-            base_url = f"https://api.telegram.org/bot{token}"
-            payload = {
-                "chat_id": chat_id,
-                "parse_mode": "Markdown"
-            }
-            
-            url_envio = ""
-            if foto_url:
-                st.write("🔹 **3. Modo:** Envio con FOTO")
-                payload["caption"] = mensaje
-                payload["photo"] = foto_url
-                url_envio = f"{base_url}/sendPhoto"
-            else:
-                st.write("🔹 **3. Modo:** Envio solo TEXTO")
-                payload["text"] = mensaje
-                url_envio = f"{base_url}/sendMessage"
-
-            st.write("⏳ Enviando petición a Telegram...")
-            response = requests.post(url_envio, data=payload)
-            
-            # 4. Analizar la respuesta de Telegram
-            st.write(f"🔹 **4. Código de Respuesta:** `{response.status_code}`")
-            
-            if response.status_code == 200:
-                st.balloons()
-                st.success("✅ ¡Telegram dice que se envió correctamente!")
-            else:
-                st.error(f"❌ TELEGRAM RECHAZÓ EL MENSAJE:")
-                st.code(response.text) # Aquí saldrá la razón exacta del error
+                st.error(f"❌ Error {response.status_code}: {response.text}")
 
         except Exception as e:
             st.error(f"❌ Error de Conexión Python: {e}")
@@ -1940,3 +1892,4 @@ elif choice == "Usuarios":
                             agregar_notificacion('error', f'Error al eliminar: {e}')
         else:
             st.info("No se encontraron usuarios en la base de datos. Use la pestaña 'CREAR USUARIO'.")
+
