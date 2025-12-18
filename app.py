@@ -396,13 +396,10 @@ def notificar_telegram(chat_id, mensaje, foto_url=None):
         
         st.write(f"🔹 **2. Token usado:** {str(token)[:5]}... (Directo en código)")
 
-        if not token or token == "8382805163:AAEfkue6AMQu6qvqyRdTmh05kIOZUOxCdwM":
-             st.error("❌ ERROR: No has pegado el token real en el código todavía.")
-             return
         # ---------------------------------------------------------
         # 🧨 CAMBIO IMPORTANTE: TOKEN PEGADO A MANO
         # ---------------------------------------------------------
-        token_raw = "AQUI_PEGA_TU_TOKEN"  # Pega SOLO los números y letras raras
+        token_raw = "8382805163:AAEfkue6AMQu6qvqyRdTmh05kIOZUOxCdwM"  # Pega SOLO los números y letras raras
         
         # LIMPIEZA AUTOMÁTICA (Esto arregla el error 404 por espacios)
         token = token_raw.strip().replace("bot", "") 
@@ -1959,5 +1956,6 @@ elif choice == "Usuarios":
                             agregar_notificacion('error', f'Error al eliminar: {e}')
         else:
             st.info("No se encontraron usuarios en la base de datos. Use la pestaña 'CREAR USUARIO'.")
+
 
 
