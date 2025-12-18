@@ -424,77 +424,66 @@ def notificar_telegram(chat_id, mensaje, foto_url=None):
         except Exception as e:
             st.error(f"❌ Error de Conexión Python: {e}")
 
-# --- MÉTRICAS INTELIGENTES MEJORADAS (VERSIÓN 2.0) ---
+# --- MÉTRICAS INTELIGENTES (VERSIÓN BLINDADA) ---
 def mostrar_metricas_inteligentes(df_ordenes, df_users):
-    """Muestra métricas con Por Validar y Alertas de Calidad"""
+    """Muestra métricas corrigiendo errores de texto y espacios"""
     if df_ordenes.empty:
         st.info("No hay datos para mostrar métricas")
         return
     
-    # 1. Cálculos Básicos
-    total = len(df_ordenes)
+    # --- LIMPIEZA DE DATOS (CRUCIAL) ---
+    # Aseguramos que la columna 'estado' sea texto y quitamos espacios extraños
+    df_ordenes['estado'] = df_ordenes['estado'].astype(str).str.strip()
     
-    # Estado: Abierta (Pendiente de ejecución)
+    # --- CÁLCULOS ---
+    total = len(df_ordenes)
     pendientes = len(df_ordenes[df_ordenes['estado'] == 'Abierta'])
     
-    # Estado: Por Validar (Esperando revisión de calidad)
+    # Aquí estaba el problema: ahora comparamos con texto limpio
     por_validar = len(df_ordenes[df_ordenes['estado'] == 'Por Validar'])
     
-    # Estado: Concluida (Finalizadas exitosamente)
     concluidas = len(df_ordenes[df_ordenes['estado'] == 'Concluida'])
     
-    # 2. Cálculo de Calidad (Devoluciones)
-    # Buscamos órdenes que están Abiertas pero tienen un comentario de validación (significa que fueron devueltas)
+    # Contar devoluciones (Calidad)
+    # Buscamos si hay comentario de validación Y la orden sigue abierta
     devueltas_calidad = len(df_ordenes[
         (df_ordenes['estado'] == 'Abierta') & 
-        (df_ordenes['comentarios_validacion'].notnull())
+        (df_ordenes['comentarios_validacion'].notnull()) &
+        (df_ordenes['comentarios_validacion'] != "")
     ])
 
-    # 3. Eficiencia Global
+    # Eficiencia
     porcentaje_concluidas = (concluidas / total * 100) if total > 0 else 0
     
     if total == 0:
-        eficiencia_valor = "Sin datos"
-        eficiencia_color = "⚪"
+        val, col = "Sin datos", "⚪"
     elif porcentaje_concluidas >= 90:
-        eficiencia_valor = "Excelente"
-        eficiencia_color = "🟢"
+        val, col = "Excelente", "🟢"
     elif porcentaje_concluidas >= 70:
-        eficiencia_valor = "Buena"
-        eficiencia_color = "🟡"
+        val, col = "Buena", "🟡"
     else:
-        eficiencia_valor = "Mejorable"
-        eficiencia_color = "🟠"
+        val, col = "Mejorable", "🟠"
     
-    # --- VISUALIZACIÓN EN 5 COLUMNAS ---
-    # Ajustamos el layout para que quepa todo
+    # --- VISUALIZACIÓN ---
     c1, c2, c3, c4, c5 = st.columns(5)
     
-    with c1:
-        st.metric("📦 Total Órdenes", total)
+    with c1: st.metric("📦 Total", total)
     
-    with c2:
-        # Mostramos pendientes y en pequeño cuántas son devoluciones
-        delta_color = "off" if devueltas_calidad == 0 else "inverse"
-        st.metric("🔨 En Ejecución", pendientes, f"{devueltas_calidad} Devueltas", delta_color=delta_color)
+    with c2: 
+        # Delta invertido: Si hay devoluciones, sale en rojo
+        st.metric("🔨 Ejecución", pendientes, f"{devueltas_calidad} Devueltas" if devueltas_calidad > 0 else None, delta_color="inverse")
     
     with c3:
-        # Esta es la métrica "Por Validar" que pediste
-        st.metric("🧐 Por Validar", por_validar, "Esperando Revisión")
+        # Texto más corto para que no salga "Esperando Revisi..."
+        st.metric("🧐 Por Validar", por_validar, "Revisar")
     
-    with c4:
-        st.metric("✅ Finalizadas", concluidas, f"{porcentaje_concluidas:.0f}%")
+    with c4: st.metric("✅ Listas", concluidas, f"{porcentaje_concluidas:.0f}%")
     
-    with c5:
-        st.metric(f"{eficiencia_color} Eficiencia", eficiencia_valor)
+    with c5: st.metric(f"{col} Eficiencia", val)
 
-    # --- ALERTA VISUAL SI HAY DEVOLUCIONES ---
-    if devueltas_calidad > 0:
-        st.markdown(f"""
-        <div style="background-color: rgba(239, 68, 68, 0.2); border: 1px solid #EF4444; border-radius: 8px; padding: 10px; margin-bottom: 15px; text-align: center;">
-            <span style="color: #FCA5A5;">⚠️ Atención: Hay <b>{devueltas_calidad}</b> órdenes devueltas por problemas de Calidad. Revisar con los técnicos.</span>
-        </div>
-        """, unsafe_allow_html=True)
+    # --- DEBUGGING (SI SIGUE SALIENDO 0, ACTIVA ESTO) ---
+    # st.write("Estados encontrados en BD:", df_ordenes['estado'].unique())
+
 # --- GRÁFICOS (PLOTLY) ---
 def graficar_ordenes_por_tecnico(df_ordenes, df_users):
     """Muestra gráfico compacto de órdenes por técnico"""
@@ -1914,5 +1903,4 @@ elif choice == "Usuarios":
                             agregar_notificacion('error', f'Error al eliminar: {e}')
         else:
             st.info("No se encontraron usuarios en la base de datos. Use la pestaña 'CREAR USUARIO'.")
-
 
