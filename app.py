@@ -1597,8 +1597,8 @@ elif choice == "Ordenes de Trabajo":
             else:
                 st.error("No se pudo identificar tu usuario técnico en la base de datos.")
 
-    # ==========================================================================
-    # 👮 PESTAÑA ADMIN: BUZÓN DE VALIDACIÓN (CORREGIDO)
+  # ==========================================================================
+    # 👮 PESTAÑA ADMIN: BUZÓN DE VALIDACIÓN (AJUSTADO)
     # ==========================================================================
     if rol in ["Admin", "Programador"]:
         with tab_buzon:
@@ -1660,20 +1660,33 @@ elif choice == "Ordenes de Trabajo":
                         
                         # Columna 2: DEFINICIÓN TÉCNICA (Activo y Tipo)
                         with cols_val[1]:
-                            # AQUÍ ESTÁ LA SOLUCIÓN: Selector para que TÚ definas el activo
+                            # Selector para definir el activo
                             activo_final_nombre = st.selectbox(
                                 "Vincular Activo", 
                                 lista_nombres_activos, 
                                 index=index_activo,
                                 key=f"act_sel_{sol['id']}"
                             )
-                            tipo_ot = st.selectbox("Tipo Mant.", ["Correctivo", "Mejora"], key=f"tipo_{sol['id']}")
+                            # ✅ CAMBIO: Se agregó "Preventivo" a las opciones
+                            tipo_ot = st.selectbox("Tipo Mant.", ["Correctivo", "Preventivo", "Mejora"], key=f"tipo_{sol['id']}")
 
-                        # Columna 3: ASIGNACIÓN (Técnico)
+                        # Columna 3: ASIGNACIÓN y CRITICIDAD
                         with cols_val[2]:
                             tech_options = {u['nombre']: u['id'] for i, u in df_users.iterrows()}
                             asignar_a = st.selectbox("Asignar a", list(tech_options.keys()), key=f"tech_{sol['id']}")
-                            st.caption(f"Criticidad Sugerida: {sol['prioridad_sugerida']}")
+                            
+                            # ✅ CAMBIO: Selector manual de Criticidad (Slider)
+                            # Usamos la sugerida como valor por defecto, si no existe usamos "Media"
+                            sug = sol['prioridad_sugerida']
+                            niveles = ["Baja", "Media", "Alta", "Crítica"]
+                            val_defecto = sug if sug in niveles else "Media"
+                            
+                            criticidad_final = st.select_slider(
+                                "Definir Criticidad", 
+                                options=niveles,
+                                value=val_defecto,
+                                key=f"crit_man_{sol['id']}"
+                            )
                         
                         # Columna 4: ACCIONES
                         with cols_val[3]:
@@ -1684,12 +1697,12 @@ elif choice == "Ordenes de Trabajo":
                                 id_activo_final = act_map_nombre_id[activo_final_nombre]
 
                                 try:
-                                    # 1. Crear Orden
+                                    # 1. Crear Orden (Usando la criticidad del slider manual)
                                     res_orden = supabase.table("ordenes").insert({
                                         "activo_id": int(id_activo_final),
                                         "chat_id": sol.get('chat_id'), # Guardamos a quién avisar
                                         "descripcion": f"[Solicitud #{sol['id']}] {sol['descripcion']}",
-                                        "criticidad": sol['prioridad_sugerida'] if sol['prioridad_sugerida'] else "Media",
+                                        "criticidad": criticidad_final, # ✅ Aquí se guarda lo que elegiste manualmente
                                         "tipo_mantenimiento": tipo_ot,
                                         "estado": "Abierta",
                                         "tecnico_asignado": str(tech_options[asignar_a]),
@@ -1698,7 +1711,8 @@ elif choice == "Ordenes de Trabajo":
                                     
                                     # 2. Notificar Telegram
                                     nuevo_id = res_orden.data[0]['id'] if res_orden.data else "##"
-                                    msj_ok = f"✅ **¡Solicitud Aprobada!**\n\nSe ha generado la Orden de Trabajo **#{nuevo_id}**.\nUn técnico atenderá tu caso pronto."
+                                    # En el mensaje mostramos la prioridad final asignada
+                                    msj_ok = f"✅ **¡Solicitud Aprobada!**\n\nSe ha generado la Orden de Trabajo **#{nuevo_id}** ({tipo_ot}).\nPrioridad: {criticidad_final}\nUn técnico atenderá tu caso pronto."
                                     notificar_telegram(sol.get('chat_id'), msj_ok)
 
                                     # 3. Actualizar Solicitud
@@ -1724,7 +1738,6 @@ elif choice == "Ordenes de Trabajo":
                                 st.cache_data.clear()
                                 time.sleep(1)
                                 st.rerun()
-
     # ==========================================================================
     # 💎 PESTAÑA ADMIN: CONTROL DE CALIDAD
     # ==========================================================================
@@ -2111,5 +2124,6 @@ elif choice == "Usuarios":
                             agregar_notificacion('error', f'Error al eliminar: {e}')
         else:
             st.info("No se encontraron usuarios en la base de datos. Use la pestaña 'CREAR USUARIO'.")
+
 
 
