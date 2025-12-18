@@ -1127,7 +1127,134 @@ with st.sidebar:
 # ==============================================================================
 # 📊 PANTALLAS
 # ==============================================================================
+# ==============================================================================
+# 📅 MÓDULO DE MANTENIMIENTO PREVENTIVO
+# ==============================================================================
+def render_tab_preventivos(df_act, df_users):
+    """Interfaz para gestionar y ejecutar planes de mantenimiento"""
+    
+    st.markdown("### 🗓️ Planes de Mantenimiento Recurrente")
+    st.info("Aquí configuras las tareas que se repiten (ej: Limpieza mensual).")
 
+    # 1. FORMULARIO PARA CREAR NUEVO PLAN
+    with st.expander("➕ Crear Nuevo Plan Preventivo"):
+        with st.form("form_plan_prev"):
+            c1, c2 = st.columns(2)
+            
+            # Selectores
+            act_nombres = df_act['nombre'].values if not df_act.empty else []
+            act_sel = c1.selectbox("Activo", act_nombres)
+            
+            users_dict = dict(zip(df_users['nombre'], df_users['id'])) if not df_users.empty else {}
+            tec_sel = c2.selectbox("Técnico Sugerido", list(users_dict.keys()))
+            
+            desc = st.text_input("Tarea a realizar (Ej: Cambio de filtros)")
+            
+            c3, c4 = st.columns(2)
+            dias = c3.number_input("Frecuencia (Días)", min_value=1, value=30, help="¿Cada cuánto se hace?")
+            fecha_base = c4.date_input("Fecha de Inicio / Última vez hecho")
+            
+            if st.form_submit_button("GUARDAR PLAN"):
+                # Buscar ID activo
+                id_act = df_act[df_act['nombre'] == act_sel].iloc[0]['id']
+                id_tec = users_dict[tec_sel]
+                
+                try:
+                    supabase.table("planes_mantenimiento").insert({
+                        "activo_id": int(id_act),
+                        "descripcion": desc,
+                        "frecuencia_dias": int(dias),
+                        "ultima_ejecucion": fecha_base.isoformat(),
+                        "tecnico_default": str(id_tec)
+                    }).execute()
+                    st.success("Plan guardado.")
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"Error: {e}")
+
+    st.divider()
+
+    # 2. LISTADO Y EJECUCIÓN
+    df_planes = run_query("planes_mantenimiento")
+    
+    if df_planes.empty:
+        st.warning("No hay planes configurados.")
+        return
+
+    # Cálculos de Próxima Fecha
+    df_planes['ultima_ejecucion'] = pd.to_datetime(df_planes['ultima_ejecucion'])
+    df_planes['proxima_fecha'] = df_planes['ultima_ejecucion'] + pd.to_timedelta(df_planes['frecuencia_dias'], unit='D')
+    df_planes['dias_restantes'] = (df_planes['proxima_fecha'] - datetime.now()).dt.days
+    
+    # Visualización tipo Semáforo
+    def color_estado(dias):
+        if dias < 0: return "🔴 Vencido"
+        elif dias <= 5: return "🟡 Próximo"
+        else: return "🟢 A tiempo"
+    
+    df_planes['Estado'] = df_planes['dias_restantes'].apply(color_estado)
+    
+    # Enriquecer tabla con nombres
+    map_act = dict(zip(df_act['id'], df_act['nombre']))
+    df_planes['Activo'] = df_planes['activo_id'].map(map_act)
+    
+    # Mostrar tabla
+    st.dataframe(
+        df_planes[['id', 'Activo', 'descripcion', 'frecuencia_dias', 'ultima_ejecucion', 'proxima_fecha', 'Estado']],
+        column_config={
+            "ultima_ejecucion": st.column_config.DateColumn("Última vez"),
+            "proxima_fecha": st.column_config.DateColumn("Próxima"),
+            "frecuencia_dias": st.column_config.NumberColumn("Cada (días)"),
+            "descripcion": "Tarea"
+        },
+        use_container_width=True,
+        hide_index=True
+    )
+
+    # 3. EL BOTÓN MÁGICO (GENERADOR)
+    st.markdown("### 🤖 Generador Automático")
+    c_gen1, c_gen2 = st.columns([3, 1])
+    c_gen1.caption("Este proceso buscará todos los planes 'Vencidos' o 'Próximos' (hoy o antes) y creará las Órdenes de Trabajo automáticamente.")
+    
+    if c_gen2.button("🚀 EJECUTAR RUTINA", type="primary"):
+        contador = 0
+        now = datetime.now()
+        
+        progress_bar = st.progress(0)
+        
+        for idx, plan in df_planes.iterrows():
+            # Si la fecha próxima es HOY o YA PASÓ
+            if plan['proxima_fecha'] <= now:
+                try:
+                    # 1. Crear la Orden
+                    res = supabase.table("ordenes").insert({
+                        "activo_id": int(plan['activo_id']),
+                        "descripcion": f"[PREVENTIVO] {plan['descripcion']}",
+                        "criticidad": "Media", # Preventivos suelen ser Media/Alta
+                        "tipo_mantenimiento": "Preventivo",
+                        "estado": "Abierta",
+                        "tecnico_asignado": str(plan['tecnico_default']),
+                        "fecha_creacion": now.isoformat()
+                    }).execute()
+                    
+                    # 2. Actualizar la fecha de última ejecución en el plan para que no se repita mañana
+                    # (Se asume que al generar la orden, se programa para hoy)
+                    supabase.table("planes_mantenimiento").update({
+                        "ultima_ejecucion": now.isoformat()
+                    }).eq("id", plan['id']).execute()
+                    
+                    contador += 1
+                except Exception as e:
+                    st.error(f"Error en plan {plan['id']}: {e}")
+            
+            progress_bar.progress((idx + 1) / len(df_planes))
+            
+        if contador > 0:
+            st.success(f"✅ Se generaron {contador} órdenes de mantenimiento preventivo.")
+            time.sleep(2)
+            st.rerun()
+        else:
+            st.info("👍 Todo al día. No hay mantenimientos pendientes para hoy.")
 if choice == "Tablero de Mando":
     st.title("TABLERO DE MANDO")
     mostrar_notificaciones()
@@ -1557,31 +1684,74 @@ elif choice == "Ordenes de Trabajo":
     df_ordenes = run_query("ordenes")
     
     # --- LÓGICA DE PESTAÑAS SEGÚN ROL ---
-    # Tecnico: Solo ve sus órdenes y puede pedir cosas nuevas
+    
+    # 👷 TÉCNICO: Solo ve sus órdenes y puede pedir cosas nuevas
     if rol == "Tecnico":
         tab_mis_ordenes, tab_solicitar = st.tabs(["👷 MIS ÓRDENES", "📢 SOLICITAR MANTENIMIENTO"])
-    # Admin/Programmer: Ve el buzón de validación, puede crear directo y gestionar todo
-    else:
-        # Consultamos solicitudes pendientes solo si somos admin/prog
-        df_solicitudes = run_query("solicitudes", {"estado": "Pendiente"})
-        n_pendientes = len(df_solicitudes)
-        titulo_buzon = f"👮 VALIDAR ({n_pendientes})" if n_pendientes > 0 else "👮 VALIDAR"
         
-       # ✅ NUEVA DEFINICIÓN DE PESTAÑAS
-        tab_buzon, tab_calidad, tab_gestion, tab_crear_directa = st.tabs([titulo_buzon, "💎 CALIDAD", "📊 GESTIÓN GLOBAL", "⚡ CREAR DIRECTA"])
+        # PESTAÑA 1: MIS ÓRDENES (Técnico)
+        with tab_mis_ordenes:
+            mi_id = None
+            if not df_users.empty:
+                usuario_data = df_users[df_users['nombre'] == usuario]
+                if not usuario_data.empty:
+                    mi_id = usuario_data.iloc[0]['id']
+            
+            if mi_id:
+                mis_ots = df_ordenes[(df_ordenes['tecnico_asignado'] == str(mi_id)) & (df_ordenes['estado'] == 'Abierta')]
+                
+                if mis_ots.empty:
+                    st.info("🎉 No tienes órdenes pendientes.")
+                else:
+                    st.write(f"Tienes {len(mis_ots)} órdenes pendientes.")
+                    for index, row in mis_ots.iterrows():
+                        nombre_activo = df_act[df_act['id'] == row['activo_id']].iloc[0]['nombre'] if not df_act.empty else "Activo"
+                        
+                        with st.expander(f"🔧 {nombre_activo} | {row['criticidad']} (ID: {row['id']})"):
+                            st.markdown(f"**Falla:** {row['descripcion']}")
+                            st.caption(f"📅 Asignada: {row['fecha_creacion'][:10]}")
+                            
+                            if row.get('comentarios_validacion'):
+                                st.error(f"⚠️ **Devolución:** {row['comentarios_validacion']}")
+                            
+                            st.divider()
 
-    # ==========================================================================
-    # 📢 PESTAÑA COMÚN: SOLICITAR MANTENIMIENTO (Para Tecnicos o Admin)
-    # ==========================================================================
-    # Definimos qué pestaña usar para solicitar dependiendo del rol
-    target_tab = tab_solicitar if rol == "Tecnico" else None 
-    
-    # Si eres Admin, esta funcionalidad no está en una pestaña propia, 
-    # pero si quisieras probarla, podrías agregarla. 
-    # Por ahora, nos enfocamos en que el TÉCNICO solicita y el ADMIN valida.
-    
-    if rol == "Tecnico":
-        with target_tab:
+                            with st.form(f"cierre_riguroso_{row['id']}"):
+                                st.markdown("#### 📝 Reporte Técnico")
+                                reporte = st.text_area("Descripción del trabajo realizado:", height=100, placeholder="Describa qué reparó y qué repuestos usó...")
+                                st.markdown("#### 📸 Evidencia (Obligatoria)")
+                                foto_cierre = st.file_uploader("Subir foto del trabajo terminado", type=["jpg", "png", "jpeg"], key=f"up_cierre_{row['id']}")
+                                
+                                if st.form_submit_button("✅ TERMINAR Y ENVIAR A REVISIÓN", type="primary", use_container_width=True):
+                                    if not reporte or not foto_cierre:
+                                        st.error("⚠️ Faltan datos: Es obligatorio escribir el reporte Y subir la foto de evidencia.")
+                                    else:
+                                        try:
+                                            url_final = None
+                                            with st.spinner("Subiendo evidencia a la nube..."):
+                                                url_final = subir_imagen(foto_cierre, "orion_evidencias_cierre")
+                                            
+                                            if not url_final:
+                                                st.error("Error al subir la imagen. Intenta de nuevo.")
+                                            else:
+                                                supabase.table("ordenes").update({
+                                                    "estado": "Por Validar",
+                                                    "comentarios_cierre": reporte,
+                                                    "fecha_cierre": datetime.now().isoformat(),
+                                                    "foto_cierre_url": url_final,
+                                                    "comentarios_validacion": None
+                                                }).eq("id", row['id']).execute()
+                                                
+                                                st.success("🚀 ¡Excelente! Orden enviada a control de calidad.")
+                                                time.sleep(1.5)
+                                                st.rerun()
+                                        except Exception as e:
+                                            st.error(f"Error al guardar: {e}")
+            else:
+                st.error("No se pudo identificar tu usuario técnico en la base de datos.")
+
+        # PESTAÑA 2: SOLICITAR (Técnico)
+        with tab_solicitar:
             st.markdown("### Reportar una Falla o Necesidad")
             if not df_act.empty:
                 act_nombres = df_act['nombre'].values
@@ -1595,18 +1765,12 @@ elif choice == "Ordenes de Trabajo":
                         if not desc_sol:
                             st.error("La descripción es obligatoria.")
                         else:
-                            # Buscar ID del activo
                             act_id = df_act[df_act['nombre'] == act_sol].iloc[0]['id']
-                            
-                            # Subir foto si existe
-                            url_foto = None
-                            if foto_sol:
-                                with st.spinner("Subiendo evidencia..."):
-                                    url_foto = subir_imagen(foto_sol)
+                            url_foto = subir_imagen(foto_sol) if foto_sol else None
                             
                             supabase.table("solicitudes").insert({
                                 "activo_id": int(act_id),
-                                "solicitante_id": usuario, # Guardamos el nombre del usuario logueado
+                                "solicitante_id": usuario,
                                 "descripcion": desc_sol,
                                 "prioridad_sugerida": prio_sol,
                                 "foto_url": url_foto,
@@ -1618,525 +1782,227 @@ elif choice == "Ordenes de Trabajo":
             else:
                 st.warning("No hay activos registrados.")
 
-# ==========================================================================
-# 👷 PESTAÑA TÉCNICO: MIS ÓRDENES (MODO RIGUROSO)
-# ==========================================================================
-    if rol == "Tecnico":
-        with tab_mis_ordenes:
-            # 1. Identificar al técnico logueado
-            mi_id = None
-            if not df_users.empty:
-                usuario_data = df_users[df_users['nombre'] == usuario]
-                if not usuario_data.empty:
-                    mi_id = usuario_data.iloc[0]['id']
-            
-            if mi_id:
-                # 2. Filtrar órdenes asignadas y ABIERTAS (o devueltas)
-                # Nota: Si quisieras que vieran las devueltas, podrías añadir esa lógica después.
-                mis_ots = df_ordenes[(df_ordenes['tecnico_asignado'] == str(mi_id)) & (df_ordenes['estado'] == 'Abierta')]
-                
-                if mis_ots.empty:
-                    st.info("🎉 No tienes órdenes pendientes.")
-                else:
-                    st.write(f"Tienes {len(mis_ots)} órdenes pendientes.")
-                    
-                    for index, row in mis_ots.iterrows():
-                        nombre_activo = df_act[df_act['id'] == row['activo_id']].iloc[0]['nombre'] if not df_act.empty else "Activo"
-                        
-                        # Mostramos tarjeta de la orden
-                        with st.expander(f"🔧 {nombre_activo} | {row['criticidad']} (ID: {row['id']})"):
-                            st.markdown(f"**Falla:** {row['descripcion']}")
-                            st.caption(f"📅 Asignada: {row['fecha_creacion'][:10]}")
-                            
-                            # Si la orden fue devuelta, mostrar el motivo
-                            if row.get('comentarios_validacion'):
-                                st.error(f"⚠️ **Devolución:** {row['comentarios_validacion']}")
-                            
-                            st.divider()
+    # 👮 ADMIN / PROGRAMADOR: Gestión Completa
+    else:
+        # Consultamos solicitudes pendientes
+        df_solicitudes = run_query("solicitudes", {"estado": "Pendiente"})
+        n_pendientes = len(df_solicitudes)
+        titulo_buzon = f"👮 VALIDAR ({n_pendientes})" if n_pendientes > 0 else "👮 VALIDAR"
+        
+        # ✅ AQUÍ DEFINIMOS LAS 5 PESTAÑAS (INCLUYENDO LA NUEVA DE PREVENTIVOS)
+        tab_buzon, tab_calidad, tab_gestion, tab_crear_directa, tab_preventivos = st.tabs([
+            titulo_buzon, 
+            "💎 CALIDAD", 
+            "📊 GESTIÓN GLOBAL", 
+            "⚡ CREAR DIRECTA", 
+            "📅 PREVENTIVOS" # <--- Nueva Pestaña
+        ])
 
-                            # 3. FORMULARIO DE EJECUCIÓN (CON FOTO OBLIGATORIA)
-                            with st.form(f"cierre_riguroso_{row['id']}"):
-                                st.markdown("#### 📝 Reporte Técnico")
-                                reporte = st.text_area("Descripción del trabajo realizado:", height=100, placeholder="Describa qué reparó y qué repuestos usó...")
-                                
-                                st.markdown("#### 📸 Evidencia (Obligatoria)")
-                                foto_cierre = st.file_uploader("Subir foto del trabajo terminado", type=["jpg", "png", "jpeg"], key=f"up_cierre_{row['id']}")
-                                
-                                # Botón de envío
-                                if st.form_submit_button("✅ TERMINAR Y ENVIAR A REVISIÓN", type="primary", use_container_width=True):
-                                    
-                                    # VALIDACIÓN: Reporte Y Foto son obligatorios
-                                    if not reporte or not foto_cierre:
-                                        st.error("⚠️ Faltan datos: Es obligatorio escribir el reporte Y subir la foto de evidencia.")
-                                    else:
-                                        try:
-                                            url_final = None
-                                            with st.spinner("Subiendo evidencia a la nube..."):
-                                                # Subimos a carpeta específica de cierres
-                                                url_final = subir_imagen(foto_cierre, "orion_evidencias_cierre")
-                                            
-                                            if not url_final:
-                                                st.error("Error al subir la imagen. Intenta de nuevo.")
-                                                st.stop()
-
-                                            # Preparar los datos para Supabase
-                                            datos_update = {
-                                                "estado": "Por Validar", # <--- EL ESTADO CLAVE
-                                                "comentarios_cierre": reporte,
-                                                "fecha_cierre": datetime.now().isoformat(),
-                                                "foto_cierre_url": url_final,
-                                                "comentarios_validacion": None # Limpiamos comentarios de devolución previos si existían
-                                            }
-                                            
-                                            # Guardar actualización
-                                            supabase.table("ordenes").update(datos_update).eq("id", row['id']).execute()
-                                            
-                                            st.success("🚀 ¡Excelente! Orden enviada a control de calidad.")
-                                            time.sleep(1.5)
-                                            st.rerun()
-                                            
-                                        except Exception as e:
-                                            st.error(f"Error al guardar: {e}")
-            else:
-                st.error("No se pudo identificar tu usuario técnico en la base de datos.")
-
-  # ==========================================================================
-    # 👮 PESTAÑA ADMIN: BUZÓN DE VALIDACIÓN (AJUSTADO)
-    # ==========================================================================
-    if rol in ["Admin", "Programador"]:
+        # 1. BUZÓN DE VALIDACIÓN
         with tab_buzon:
             if df_solicitudes.empty:
-                st.markdown("""
-                <div style="text-align: center; padding: 40px; color: #6B7280;">
-                    <h3>✨ Todo limpio</h3>
-                    <p>No hay solicitudes pendientes de aprobación.</p>
-                </div>
-                """, unsafe_allow_html=True)
+                st.markdown("<div style='text-align: center; padding: 40px; color: #6B7280;'><h3>✨ Todo limpio</h3><p>No hay solicitudes pendientes.</p></div>", unsafe_allow_html=True)
             else:
                 st.markdown(f"### 📥 Solicitudes Pendientes ({len(df_solicitudes)})")
-                
-                # Preparamos la lista de activos para el selector
                 if not df_act.empty:
                     act_map_nombre_id = dict(zip(df_act['nombre'], df_act['id']))
                     act_map_id_nombre = dict(zip(df_act['id'], df_act['nombre']))
                     lista_nombres_activos = sorted(list(act_map_nombre_id.keys()))
-                else:
-                    st.error("⚠️ No hay activos registrados en el sistema. Crea activos primero.")
-                    st.stop()
-
-                for idx, sol in df_solicitudes.iterrows():
-                    # 1. Determinar qué activo viene en la solicitud (si existe)
-                    id_original = sol.get('activo_id')
-                    nombre_activo_preseleccionado = "Seleccionar..."
-                    index_activo = 0
-
-                    # Intentamos buscar el nombre del activo original
-                    if id_original and id_original in act_map_id_nombre:
-                        nombre_activo_preseleccionado = act_map_id_nombre[id_original]
-                        if nombre_activo_preseleccionado in lista_nombres_activos:
-                            index_activo = lista_nombres_activos.index(nombre_activo_preseleccionado)
                     
-                    # --- TARJETA DE VALIDACIÓN ---
-                    with st.container():
-                        st.markdown(f"""
-                        <div style="border: 1px solid #374151; border-radius: 8px; padding: 15px; margin-bottom: 15px; background-color: #1F2937;">
-                            <div style="display:flex; justify-content:space-between;">
-                                <h4 style="color: #F59E0B; margin: 0;">Solicitud #{sol['id']}</h4>
-                                <span style="color: #6B7280; font-size: 0.8em;">📅 {sol['fecha_solicitud'][:10]}</span>
+                    for idx, sol in df_solicitudes.iterrows():
+                        # Lógica para preseleccionar activo
+                        id_original = sol.get('activo_id')
+                        index_activo = 0
+                        if id_original and id_original in act_map_id_nombre:
+                             if act_map_id_nombre[id_original] in lista_nombres_activos:
+                                index_activo = lista_nombres_activos.index(act_map_id_nombre[id_original])
+                        
+                        with st.container():
+                            st.markdown(f"""
+                            <div style="border: 1px solid #374151; border-radius: 8px; padding: 15px; margin-bottom: 15px; background-color: #1F2937;">
+                                <div style="display:flex; justify-content:space-between;"><h4 style="color: #F59E0B; margin: 0;">Solicitud #{sol['id']}</h4><span style="color: #6B7280; font-size: 0.8em;">📅 {sol['fecha_solicitud'][:10]}</span></div>
+                                <p style="margin: 5px 0; color: #D1D5DB;">👤 <b>Solicita:</b> {sol['solicitante_id']}</p>
+                                <p style="margin: 5px 0; color: #E5E7EB; background: rgba(255,255,255,0.05); padding: 8px; border-radius: 4px;">📝 <i>"{sol['descripcion']}"</i></p>
                             </div>
-                            <p style="margin: 5px 0; color: #D1D5DB;">👤 <b>Solicita:</b> {sol['solicitante_id']}</p>
-                            <p style="margin: 5px 0; color: #E5E7EB; background: rgba(255,255,255,0.05); padding: 8px; border-radius: 4px;">
-                                📝 <i>"{sol['descripcion']}"</i>
-                            </p>
-                        </div>
-                        """, unsafe_allow_html=True)
-                        
-                        # Layout de controles
-                        cols_val = st.columns([1, 2, 2, 1])
-                        
-                        # Columna 1: Foto
-                        with cols_val[0]:
-                            if sol['foto_url']:
-                                st.image(sol['foto_url'], width=80, caption="Evidencia")
-                            else:
-                                st.markdown("<br><p style='text-align:center; color:#6B7280; font-size:0.8em;'>Sin foto</p>", unsafe_allow_html=True)
-                        
-                        # Columna 2: DEFINICIÓN TÉCNICA (Activo y Tipo)
-                        with cols_val[1]:
-                            # Selector para definir el activo
-                            activo_final_nombre = st.selectbox(
-                                "Vincular Activo", 
-                                lista_nombres_activos, 
-                                index=index_activo,
-                                key=f"act_sel_{sol['id']}"
-                            )
-                            # ✅ CAMBIO: Se agregó "Preventivo" a las opciones
-                            tipo_ot = st.selectbox("Tipo Mant.", ["Correctivo", "Preventivo", "Mejora"], key=f"tipo_{sol['id']}")
-
-                        # Columna 3: ASIGNACIÓN y CRITICIDAD
-                        with cols_val[2]:
-                            tech_options = {u['nombre']: u['id'] for i, u in df_users.iterrows()}
-                            asignar_a = st.selectbox("Asignar a", list(tech_options.keys()), key=f"tech_{sol['id']}")
+                            """, unsafe_allow_html=True)
                             
-                            # ✅ CAMBIO: Selector manual de Criticidad (Slider)
-                            # Usamos la sugerida como valor por defecto, si no existe usamos "Media"
-                            sug = sol['prioridad_sugerida']
-                            niveles = ["Baja", "Media", "Alta", "Crítica"]
-                            val_defecto = sug if sug in niveles else "Media"
+                            cols_val = st.columns([1, 2, 2, 1])
+                            with cols_val[0]:
+                                if sol['foto_url']: st.image(sol['foto_url'], width=80)
+                                else: st.caption("Sin foto")
                             
-                            criticidad_final = st.select_slider(
-                                "Definir Criticidad", 
-                                options=niveles,
-                                value=val_defecto,
-                                key=f"crit_man_{sol['id']}"
-                            )
-                        
-                        # Columna 4: ACCIONES
-                        with cols_val[3]:
-                            st.markdown("<br>", unsafe_allow_html=True)
+                            with cols_val[1]:
+                                activo_final_nombre = st.selectbox("Vincular Activo", lista_nombres_activos, index=index_activo, key=f"act_sel_{sol['id']}")
+                                tipo_ot = st.selectbox("Tipo Mant.", ["Correctivo", "Preventivo", "Mejora"], key=f"tipo_{sol['id']}")
                             
-                            # --- BOTÓN 1: CREAR (APROBAR) ---
-                            if st.button("✅ CREAR", key=f"btn_ap_{sol['id']}", type="primary"):
-                                id_activo_final = act_map_nombre_id[activo_final_nombre]
-
-                                try:
-                                    # 1. Crear Orden (Usando la criticidad del slider manual)
-                                    res_orden = supabase.table("ordenes").insert({
-                                        "activo_id": int(id_activo_final),
-                                        "chat_id": sol.get('chat_id'), # Guardamos a quién avisar
-                                        "descripcion": f"[Solicitud #{sol['id']}] {sol['descripcion']}",
-                                        "criticidad": criticidad_final, # ✅ Aquí se guarda lo que elegiste manualmente
-                                        "tipo_mantenimiento": tipo_ot,
-                                        "estado": "Abierta",
-                                        "tecnico_asignado": str(tech_options[asignar_a]),
-                                        "fecha_creacion": datetime.now().isoformat(),
-                                    }).execute()
-                                    
-                                    # 2. Notificar Telegram
-                                    nuevo_id = res_orden.data[0]['id'] if res_orden.data else "##"
-                                    # En el mensaje mostramos la prioridad final asignada
-                                    msj_ok = f"✅ **¡Solicitud Aprobada!**\n\nSe ha generado la Orden de Trabajo **#{nuevo_id}** ({tipo_ot}).\nPrioridad: {criticidad_final}\nUn técnico atenderá tu caso pronto."
-                                    notificar_telegram(sol.get('chat_id'), msj_ok)
-
-                                    # 3. Actualizar Solicitud
-                                    supabase.table("solicitudes").update({"estado": "Aprobada"}).eq("id", sol['id']).execute()
-                                    
-                                    st.success(f"Orden creada y usuario notificado.")
-                                    st.cache_data.clear()
-                                    time.sleep(1)
+                            with cols_val[2]:
+                                tech_options = {u['nombre']: u['id'] for i, u in df_users.iterrows()}
+                                asignar_a = st.selectbox("Asignar a", list(tech_options.keys()), key=f"tech_{sol['id']}")
+                                
+                                sug = sol['prioridad_sugerida']
+                                val_defecto = sug if sug in ["Baja", "Media", "Alta", "Crítica"] else "Media"
+                                criticidad_final = st.select_slider("Definir Criticidad", options=["Baja", "Media", "Alta", "Crítica"], value=val_defecto, key=f"crit_man_{sol['id']}")
+                            
+                            with cols_val[3]:
+                                st.markdown("<br>", unsafe_allow_html=True)
+                                if st.button("✅ CREAR", key=f"btn_ap_{sol['id']}", type="primary"):
+                                    try:
+                                        res_orden = supabase.table("ordenes").insert({
+                                            "activo_id": int(act_map_nombre_id[activo_final_nombre]),
+                                            "chat_id": sol.get('chat_id'),
+                                            "descripcion": f"[Solicitud #{sol['id']}] {sol['descripcion']}",
+                                            "criticidad": criticidad_final,
+                                            "tipo_mantenimiento": tipo_ot,
+                                            "estado": "Abierta",
+                                            "tecnico_asignado": str(tech_options[asignar_a]),
+                                            "fecha_creacion": datetime.now().isoformat(),
+                                        }).execute()
+                                        
+                                        nuevo_id = res_orden.data[0]['id'] if res_orden.data else "##"
+                                        msj_ok = f"✅ **¡Solicitud Aprobada!**\n\nOrden **#{nuevo_id}** ({tipo_ot}). Prioridad: {criticidad_final}."
+                                        notificar_telegram(sol.get('chat_id'), msj_ok)
+                                        supabase.table("solicitudes").update({"estado": "Aprobada"}).eq("id", sol['id']).execute()
+                                        st.success("Orden creada.")
+                                        st.rerun()
+                                    except Exception as e: st.error(f"Error: {e}")
+                                
+                                if st.button("❌ RECHAZAR", key=f"btn_rej_{sol['id']}", type="secondary"):
+                                    supabase.table("solicitudes").update({"estado": "Rechazada"}).eq("id", sol['id']).execute()
+                                    notificar_telegram(sol.get('chat_id'), "🚫 Solicitud Rechazada.")
+                                    st.warning("Rechazada.")
                                     st.rerun()
-                                except Exception as e:
-                                    st.error(f"Error: {e}")
-                            
-                            # --- BOTÓN 2: RECHAZAR ---
-                            if st.button("❌ RECHAZAR", key=f"btn_rej_{sol['id']}", type="secondary"):
-                                # 1. Actualizar Solicitud
-                                supabase.table("solicitudes").update({"estado": "Rechazada"}).eq("id", sol['id']).execute()
-                                
-                                # 2. Notificar Telegram
-                                msj_no = f"🚫 **Solicitud Rechazada**\n\nTu reporte sobre: *{sol['descripcion']}* no procedió.\nSi tienes dudas, contacta al departamento de mantenimiento."
-                                notificar_telegram(sol.get('chat_id'), msj_no)
-                                
-                                st.warning("Solicitud rechazada y usuario notificado.")
-                                st.cache_data.clear()
-                                time.sleep(1)
-                                st.rerun()
-    # ==========================================================================
-    # 💎 PESTAÑA ADMIN: CONTROL DE CALIDAD
-    # ==========================================================================
-    # AGREGA ESTA LÍNEA AQUÍ 👇
-    if rol in ["Admin", "Programador"]: 
+
+        # 2. CONTROL DE CALIDAD
         with tab_calidad:
-            # 1. Buscar órdenes que están esperando revisión
             df_revision = run_query("ordenes", {"estado": "Por Validar"})
-            
             if df_revision.empty:
-                st.markdown("""
-                <div style="text-align: center; padding: 40px; color: #10B981;">
-                    <h3>✨ Todo revisado</h3>
-                    <p>No hay trabajos pendientes de control de calidad.</p>
-                </div>
-                """, unsafe_allow_html=True)
+                st.markdown("<div style='text-align: center; padding: 40px; color: #10B981;'><h3>✨ Todo revisado</h3><p>No hay trabajos pendientes.</p></div>", unsafe_allow_html=True)
             else:
                 st.markdown(f"### 🧐 Auditoría de Trabajos ({len(df_revision)})")
-                st.info("Revisa la evidencia fotográfica antes de cerrar la orden.")
-                
                 for idx, row in df_revision.iterrows():
-                    # Obtenemos nombres legibles
-                    nombre_activo = "Desconocido"
-                    if not df_act.empty:
-                        act_data = df_act[df_act['id'] == row['activo_id']]
-                        if not act_data.empty: nombre_activo = act_data.iloc[0]['nombre']
-                    
-                    tecnico_nombre = "Técnico"
+                    nombre_activo = df_act[df_act['id'] == row['activo_id']].iloc[0]['nombre'] if not df_act.empty else "N/A"
+                    tecnico_nombre = "Desconocido"
                     if not df_users.empty:
-                        tech_data = df_users[df_users['id'].astype(str) == row['tecnico_asignado']]
-                        if not tech_data.empty: tecnico_nombre = tech_data.iloc[0]['nombre']
-
-                    # --- TARJETA DE REVISIÓN ---
+                        t_data = df_users[df_users['id'].astype(str) == row['tecnico_asignado']]
+                        if not t_data.empty: tecnico_nombre = t_data.iloc[0]['nombre']
+                    
                     with st.container():
-                        st.markdown(f"""
-                        <div style="border: 1px solid #4B5563; border-radius: 8px; padding: 20px; margin-bottom: 20px; background-color: #1F2937;">
-                            <div style="display:flex; justify-content:space-between; align-items:center;">
-                                <h3 style="color: #60A5FA; margin:0;">OT #{row['id']} | {nombre_activo}</h3>
-                                <span style="background:#FCD34D; color:#92400E; padding:2px 8px; border-radius:4px; font-size:0.8em; font-weight:bold;">POR VALIDAR</span>
-                            </div>
-                            <p style="color: #9CA3AF; margin-top:5px;">👷 Realizado por: <b>{tecnico_nombre}</b></p>
-                            <hr style="border-color: #374151;">
-                        """, unsafe_allow_html=True)
-
+                        st.markdown(f"""<div style="border: 1px solid #4B5563; border-radius: 8px; padding: 20px; margin-bottom: 20px; background-color: #1F2937;">
+                            <h3 style="color: #60A5FA; margin:0;">OT #{row['id']} | {nombre_activo}</h3>
+                            <p style="color: #9CA3AF;">👷 Realizado por: <b>{tecnico_nombre}</b></p><hr style="border-color: #374151;">""", unsafe_allow_html=True)
+                        
                         col_rev1, col_rev2 = st.columns([1, 1])
-                        
                         with col_rev1:
-                            st.markdown("**📸 EVIDENCIA DEL TÉCNICO:**")
-                            if row.get('foto_cierre_url'):
-                                st.image(row['foto_cierre_url'], use_container_width=True, caption="Trabajo Terminado")
-                            else:
-                                st.warning("⚠️ El técnico no subió foto (Esto no debería pasar con la nueva validación).")
-                        
+                            st.markdown("**📸 EVIDENCIA:**")
+                            if row.get('foto_cierre_url'): st.image(row['foto_cierre_url'], use_container_width=True)
+                            else: st.warning("Sin foto.")
                         with col_rev2:
                             st.markdown("**📝 REPORTE:**")
-                            st.info(f"{row.get('comentarios_cierre', 'Sin comentarios')}")
-                            
+                            st.info(f"{row.get('comentarios_cierre', 'Sin reporte')}")
                             st.markdown("---")
-                            st.markdown("**DECISIÓN FINAL:**")
                             
-                            # --- BOTÓN APROBAR ---
                             if st.button("✅ APROBAR Y CERRAR", key=f"apr_fin_{row['id']}", type="primary", use_container_width=True):
-                                try:
-                                    # 1. Actualizar estado a Concluida en la Base de Datos
-                                    supabase.table("ordenes").update({
-                                        "estado": "Concluida"
-                                    }).eq("id", row['id']).execute()
-                                    
-                                    # 2. Lógica de Notificación CONDICIONAL
-                                    chat_id_destino = row.get('chat_id') # Obtenemos el ID
-
-                                    if chat_id_destino: # <--- AQUÍ ESTÁ EL FILTRO
-                                        # Solo entramos aquí si chat_id TIENE datos
-                                        msj_final = (
-                                            f"🎉 **¡Solucionado!**\n\n"
-                                            f"La Orden **#{row['id']}** sobre *{nombre_activo}* ha sido cerrada exitosamente.\n\n"
-                                            f"📝 **Solución:** {row.get('comentarios_cierre')}"
-                                        )
-                                        # Enviamos la notificación
-                                        notificar_telegram(chat_id_destino, msj_final, row.get('foto_cierre_url'))
-                                        st.toast("📧 Usuario notificado por Telegram.")
-                                    else:
-                                        # Si es None o vacío, no hace nada (silencio)
-                                        pass 
-                                    
-                                    # 3. Finalizar proceso en pantalla
-                                    st.success("Orden cerrada correctamente.")
-                                    st.cache_data.clear()
-                                    #time.sleep(1.5)
-                                    #st.rerun()
-                                    
-                                except Exception as e:
-                                    st.error(f"Error al cerrar la orden: {e}")
-
-                            # --- BOTÓN DEVOLVER ---
+                                supabase.table("ordenes").update({"estado": "Concluida"}).eq("id", row['id']).execute()
+                                if row.get('chat_id'):
+                                    notificar_telegram(row.get('chat_id'), f"🎉 **¡Solucionado!**\n\nOrden **#{row['id']}** cerrada.\n📝 Solución: {row.get('comentarios_cierre')}", row.get('foto_cierre_url'))
+                                st.success("Orden cerrada.")
+                                st.rerun()
+                            
                             st.markdown("<br>", unsafe_allow_html=True)
-                            with st.expander("↩️ Devolver al Técnico (Rechazar)"):
-                                motivo = st.text_input("¿Qué le faltó?", key=f"mot_{row['id']}", placeholder="Ej: Faltó limpiar el área...")
+                            with st.expander("↩️ Devolver (Rechazar)"):
+                                motivo = st.text_input("Motivo", key=f"mot_{row['id']}")
                                 if st.button("CONFIRMAR DEVOLUCIÓN", key=f"dev_{row['id']}", type="secondary", use_container_width=True):
                                     if motivo:
-                                        supabase.table("ordenes").update({
-                                            "estado": "Abierta", # Vuelve a estar abierta para el técnico
-                                            "comentarios_validacion": f"DEVUELTA POR CALIDAD: {motivo}"
-                                        }).eq("id", row['id']).execute()
-                                        
-                                        st.warning("Orden devuelta al técnico para corrección.")
-                                        st.cache_data.clear()
-                                        time.sleep(1.5)
+                                        supabase.table("ordenes").update({"estado": "Abierta", "comentarios_validacion": f"DEVUELTA: {motivo}"}).eq("id", row['id']).execute()
+                                        st.warning("Devuelta.")
                                         st.rerun()
-                                    else:
-                                        st.error("Escribe el motivo para que el técnico sepa qué corregir.")
-                        
+                                    else: st.error("Falta motivo.")
                         st.markdown("</div>", unsafe_allow_html=True)
-    # ==========================================================================
-    # ⚡ PESTAÑA ADMIN: CREAR DIRECTA (LO QUE YA TENÍAS)
-    # ==========================================================================
-    if rol in ["Admin", "Programador"]:
+
+        # 3. GESTIÓN GLOBAL (CON PDF)
+        with tab_gestion:
+            st.markdown("### 🎛️ Control Central de Órdenes")
+            col_filtros = st.columns(3)
+            filtro_estado = col_filtros[0].selectbox("Filtrar Estado", ["Todas", "Abierta", "Por Validar", "Concluida"], index=0)
+            
+            df_display = df_ordenes.copy()
+            if filtro_estado != "Todas": df_display = df_display[df_display['estado'] == filtro_estado]
+            
+            if not df_display.empty:
+                map_act = dict(zip(df_act['id'], df_act['nombre'])) if not df_act.empty else {}
+                map_user = dict(zip(df_users['id'].astype(str), df_users['nombre'])) if not df_users.empty else {}
+                df_display['Activo Nombre'] = df_display['activo_id'].map(map_act).fillna("Desconocido")
+                df_display['Técnico Nombre'] = df_display['tecnico_asignado'].map(map_user).fillna("Sin Asignar")
+                df_display = df_display.sort_values('id', ascending=False)
+                
+                event = st.dataframe(df_display[['id', 'estado', 'Activo Nombre', 'descripcion', 'Técnico Nombre', 'criticidad', 'fecha_creacion']], use_container_width=True, hide_index=True, selection_mode="single-row", on_select="rerun", height=300)
+                
+                if len(event.selection.rows) > 0:
+                    idx_tabla = event.selection.rows[0]
+                    id_orden_selec = df_display.iloc[idx_tabla]['id']
+                    orden_actual = df_ordenes[df_ordenes['id'] == id_orden_selec].iloc[0]
+                    
+                    st.divider()
+                    c_head1, c_head2 = st.columns([3, 1])
+                    with c_head1: st.markdown(f"#### ✏️ Editando Orden #{id_orden_selec}")
+                    with c_head2:
+                        if orden_actual['estado'] in ['Concluida', 'Por Validar']:
+                            try:
+                                pdf_data = generar_pdf_orden(orden_actual, df_display.iloc[idx_tabla]['Activo Nombre'], df_display.iloc[idx_tabla]['Técnico Nombre'])
+                                st.download_button("📄 Descargar PDF", data=pdf_data, file_name=f"Reporte_OT_{id_orden_selec}.pdf", mime="application/pdf", key=f"btn_pdf_{id_orden_selec}")
+                            except: st.error("Error PDF")
+
+                    with st.form(key=f"form_edit_orden_{id_orden_selec}"):
+                        c_edit1, c_edit2, c_edit3 = st.columns(3)
+                        est_opts = ["Abierta", "Por Validar", "Concluida", "Cancelada"]
+                        nuevo_estado = c_edit1.selectbox("Estado", est_opts, index=est_opts.index(orden_actual['estado']) if orden_actual['estado'] in est_opts else 0)
+                        
+                        lista_tecnicos = df_users[df_users['rol'].isin(['Tecnico', 'Admin', 'Programador'])]
+                        tech_dict = dict(zip(lista_tecnicos['nombre'], lista_tecnicos['id']))
+                        tech_actual_id = str(orden_actual['tecnico_asignado'])
+                        nombre_tech = next((k for k, v in tech_dict.items() if str(v) == tech_actual_id), "Seleccionar...")
+                        nuevo_tec_nom = c_edit2.selectbox("Reasignar", list(tech_dict.keys()), index=list(tech_dict.keys()).index(nombre_tech) if nombre_tech in tech_dict else 0)
+                        
+                        nueva_crit = c_edit3.select_slider("Criticidad", ["Baja", "Media", "Alta", "Crítica"], value=orden_actual['criticidad'])
+                        nueva_desc = st.text_area("Descripción", value=orden_actual['descripcion'])
+                        
+                        if st.form_submit_button("💾 GUARDAR CAMBIOS", type="primary"):
+                            supabase.table("ordenes").update({"estado": nuevo_estado, "tecnico_asignado": str(tech_dict[nuevo_tec_nom]), "criticidad": nueva_crit, "descripcion": nueva_desc}).eq("id", id_orden_selec).execute()
+                            st.success("Actualizado."); st.rerun()
+
+                    with st.expander("🗑️ Zona de Peligro"):
+                        if st.button("ELIMINAR DEFINITIVAMENTE", key=f"del_{id_orden_selec}", type="secondary"):
+                            supabase.table("ordenes").delete().eq("id", id_orden_selec).execute()
+                            st.success("Eliminado."); st.rerun()
+            else: st.info("Sin datos.")
+
+        # 4. CREAR DIRECTA
         with tab_crear_directa:
-            st.info("Esta opción crea una orden inmediatamente sin pasar por validación.")
-            # ... (Aquí reutilizamos la lógica de creación directa si quieres, 
-            # o simplemente la dejamos como alternativa rápida)
+            st.info("Creación rápida sin validación.")
             if not df_act.empty:
                 act_dict = dict(zip(df_act['nombre'], df_act['id']))
-                nombres_activos = sorted(act_dict.keys())
-                
-                sel_act_dir = st.selectbox("Seleccionar Activo", nombres_activos, key="direct_act")
-                id_act_dir = act_dict[sel_act_dir]
+                sel_act_dir = st.selectbox("Activo", sorted(act_dict.keys()), key="direct_act")
                 
                 with st.form("ot_directa"):
                     c1, c2 = st.columns(2)
                     tipo_d = c1.selectbox("Tipo", ["Correctivo", "Preventivo"])
                     crit_d = c2.select_slider("Criticidad", ["Baja", "Media", "Alta"])
                     desc_d = st.text_area("Descripción")
-                    
                     tech_opts_d = {u['nombre']: u['id'] for i, u in df_users.iterrows()}
-                    asig_d = st.selectbox("Asignar Técnico", list(tech_opts_d.keys()))
+                    asig_d = st.selectbox("Asignar", list(tech_opts_d.keys()))
                     
-                    if st.form_submit_button("CREAR ORDEN YA"):
+                    if st.form_submit_button("CREAR ORDEN"):
                         supabase.table("ordenes").insert({
-                            "activo_id": int(id_act_dir),
-                            "descripcion": desc_d,
-                            "criticidad": crit_d,
-                            "tipo_mantenimiento": tipo_d,
-                            "estado": "Abierta",
-                            "tecnico_asignado": str(tech_opts_d[asig_d]),
-                            "fecha_creacion": datetime.now().isoformat()
+                            "activo_id": int(act_dict[sel_act_dir]), "descripcion": desc_d, "criticidad": crit_d, "tipo_mantenimiento": tipo_d,
+                            "estado": "Abierta", "tecnico_asignado": str(tech_opts_d[asig_d]), "fecha_creacion": datetime.now().isoformat()
                         }).execute()
-                        st.cache_data.clear()
-                        st.success("Orden creada.")
-                        st.rerun()
-    
-# ==========================================================================
-# 📊 PESTAÑA GESTIÓN GLOBAL (CON EDICIÓN + PDF)
-# ==========================================================================
-    if rol in ["Admin", "Programador"]:
-        with tab_gestion:
-            st.markdown("### 🎛️ Control Central de Órdenes")
-            st.info("👆 Selecciona una fila para editar, reasignar, cancelar o descargar reporte.")
+                        st.success("Creada."); st.rerun()
 
-            # --- 1. FILTROS ---
-            col_filtros = st.columns(3)
-            filtro_estado = col_filtros[0].selectbox("Filtrar Estado", ["Todas", "Abierta", "Por Validar", "Concluida"], index=0)
-            
-            # --- 2. PREPARAR DATOS ---
-            df_display = df_ordenes.copy()
-            
-            # Aplicar filtro
-            if filtro_estado != "Todas":
-                df_display = df_display[df_display['estado'] == filtro_estado]
-
-            # Mapear IDs a Nombres para que la tabla se vea bonita
-            if not df_display.empty:
-                # Map activos
-                map_act = dict(zip(df_act['id'], df_act['nombre'])) if not df_act.empty else {}
-                df_display['Activo Nombre'] = df_display['activo_id'].map(map_act).fillna("Desconocido")
-                
-                # Map técnicos
-                map_user = dict(zip(df_users['id'].astype(str), df_users['nombre'])) if not df_users.empty else {}
-                df_display['Técnico Nombre'] = df_display['tecnico_asignado'].map(map_user).fillna("Sin Asignar")
-                
-                # Ordenar por ID descendente (las más nuevas arriba)
-                df_display = df_display.sort_values('id', ascending=False)
-
-                # --- 3. TABLA INTERACTIVA ---
-                event = st.dataframe(
-                    df_display[['id', 'estado', 'Activo Nombre', 'descripcion', 'Técnico Nombre', 'criticidad', 'fecha_creacion']],
-                    use_container_width=True,
-                    hide_index=True,
-                    selection_mode="single-row", # ¡ESTO HACE LA MAGIA!
-                    on_select="rerun",
-                    height=300
-                )
-
-                # --- 4. LOGICA DE EDICIÓN AL SELECCIONAR ---
-                if len(event.selection.rows) > 0:
-                    idx_tabla = event.selection.rows[0]
-                    # Obtenemos el ID real de la orden seleccionada
-                    id_orden_selec = df_display.iloc[idx_tabla]['id']
-                    
-                    # Buscamos los datos crudos originales de esa orden
-                    orden_actual = df_ordenes[df_ordenes['id'] == id_orden_selec].iloc[0]
-
-                    st.divider()
-
-                    # --- ENCABEZADO CON BOTÓN PDF ---
-                    c_head1, c_head2 = st.columns([3, 1])
-                    
-                    with c_head1:
-                        st.markdown(f"#### ✏️ Editando Orden #{id_orden_selec}")
-
-                    with c_head2:
-                        # Solo permitimos descargar PDF si la orden está avanzada (Concluida o Por Validar)
-                        if orden_actual['estado'] in ['Concluida', 'Por Validar']:
-                            try:
-                                # Recuperamos nombres legibles de la tabla visual
-                                act_nom_pdf = df_display.iloc[idx_tabla]['Activo Nombre']
-                                tec_nom_pdf = df_display.iloc[idx_tabla]['Técnico Nombre']
-                                
-                                # Generamos PDF (Asegúrate de haber pegado la función generar_pdf_orden arriba)
-                                pdf_data = generar_pdf_orden(orden_actual, act_nom_pdf, tec_nom_pdf)
-                                
-                                st.download_button(
-                                    label="📄 Descargar PDF",
-                                    data=pdf_data,
-                                    file_name=f"Reporte_OT_{id_orden_selec}.pdf",
-                                    mime="application/pdf",
-                                    key=f"btn_pdf_{id_orden_selec}"
-                                )
-                            except Exception as e:
-                                st.error("Error generando PDF")
-                                print(e)
-                    
-                    # --- FORMULARIO DE EDICIÓN ---
-                    with st.form(key=f"form_edit_orden_{id_orden_selec}"):
-                        c_edit1, c_edit2, c_edit3 = st.columns(3)
-                        
-                        # Selector de Estado (Forzar cambio)
-                        estados_posibles = ["Abierta", "Por Validar", "Concluida", "Cancelada"]
-                        idx_est = estados_posibles.index(orden_actual['estado']) if orden_actual['estado'] in estados_posibles else 0
-                        nuevo_estado = c_edit1.selectbox("Estado", estados_posibles, index=idx_est)
-                        
-                        # Selector de Técnico (Reasignar)
-                        lista_tecnicos = df_users[df_users['rol'].isin(['Tecnico', 'Admin', 'Programador'])]
-                        tech_dict = dict(zip(lista_tecnicos['nombre'], lista_tecnicos['id']))
-                        
-                        # Encontrar el nombre del técnico actual para ponerlo como default
-                        tech_actual_id = str(orden_actual['tecnico_asignado'])
-                        nombre_tech_actual = "Seleccionar..."
-                        
-                        # Buscar nombre inverso
-                        for name, tid in tech_dict.items():
-                            if str(tid) == tech_actual_id:
-                                nombre_tech_actual = name
-                                break
-                        
-                        opciones_tech = list(tech_dict.keys())
-                        index_tech = opciones_tech.index(nombre_tech_actual) if nombre_tech_actual in opciones_tech else 0
-                        
-                        nuevo_tecnico_nombre = c_edit2.selectbox("Reasignar Técnico", opciones_tech, index=index_tech)
-                        nueva_criticidad = c_edit3.select_slider("Criticidad", ["Baja", "Media", "Alta", "Crítica"], value=orden_actual['criticidad'])
-                        
-                        nueva_desc = st.text_area("Descripción de la Falla", value=orden_actual['descripcion'])
-                        
-                        col_btns = st.columns([1, 4])
-                        submitted_save = col_btns[0].form_submit_button("💾 GUARDAR CAMBIOS", type="primary")
-                        
-                        if submitted_save:
-                            try:
-                                nuevo_tecnico_id = tech_dict[nuevo_tecnico_nombre]
-                                supabase.table("ordenes").update({
-                                    "estado": nuevo_estado,
-                                    "tecnico_asignado": str(nuevo_tecnico_id),
-                                    "criticidad": nueva_criticidad,
-                                    "descripcion": nueva_desc
-                                }).eq("id", id_orden_selec).execute()
-                                
-                                st.success("Orden actualizada correctamente.")
-                                st.cache_data.clear()
-                                time.sleep(1)
-                                st.rerun()
-                            except Exception as e:
-                                st.error(f"Error al actualizar: {e}")
-
-                    # --- BOTÓN DE BORRADO (FUERA DEL FORM) ---
-                    with st.expander("🗑️ Zona de Peligro (Eliminar Orden)"):
-                        st.warning("Esta acción es irreversible.")
-                        if st.button("ELIMINAR ORDEN DEFINITIVAMENTE", key=f"del_ot_{id_orden_selec}", type="secondary"):
-                            supabase.table("ordenes").delete().eq("id", id_orden_selec).execute()
-                            agregar_notificacion("delete", f"Orden #{id_orden_selec} eliminada.")
-                            st.cache_data.clear()
-                            time.sleep(1)
-                            st.rerun()
-                            
-            else:
-                st.info("No hay órdenes que coincidan con los filtros.")
-
+        # 5. ✅ MÓDULO NUEVO: MANTENIMIENTO PREVENTIVO
+        with tab_preventivos:
+            # Llamamos a la función que pegaste anteriormente
+            # (Asegúrate de haber copiado la función render_tab_preventivos en el PASO 2)
+            render_tab_preventivos(df_act, df_users)
 elif choice == "Usuarios":
     st.title("USUARIOS")
     mostrar_notificaciones()
@@ -2255,4 +2121,5 @@ elif choice == "Usuarios":
                             agregar_notificacion('error', f'Error al eliminar: {e}')
         else:
             st.info("No se encontraron usuarios en la base de datos. Use la pestaña 'CREAR USUARIO'.")
+
 
