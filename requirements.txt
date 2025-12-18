@@ -11,3 +11,4 @@ cloudinary
 python-telegram-bot
 flask
 requests
+fpdf
