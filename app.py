@@ -385,26 +385,10 @@ def notificar_telegram(chat_id, mensaje, foto_url=None):
     with st.expander("🕵️ DIAGNÓSTICO TELEGRAM (Clic para ver)", expanded=True):
         st.write(f"🔹 **1. Chat ID Recibido:** `{chat_id}`")
         
-        # ---------------------------------------------------------
-        # 🧨 CAMBIO IMPORTANTE: TOKEN PEGADO A MANO
-        # Borra la variable de entorno y pon tu token real aquí abajo entre comillas
-        # ---------------------------------------------------------
         token = "8382805163:AAEfkue6AMQu6qvqyRdTmh05kIOZUOxCdwM" 
-        # Ejemplo: "78123456:AAFbg......"
-        # ---------------------------------------------------------
-        
-        
+     
         st.write(f"🔹 **2. Token usado:** {str(token)[:5]}... (Directo en código)")
 
-        # ---------------------------------------------------------
-        # 🧨 CAMBIO IMPORTANTE: TOKEN PEGADO A MANO
-        # ---------------------------------------------------------
-        token_raw = "8382805163:AAEfkue6AMQu6qvqyRdTmh05kIOZUOxCdwM"  # Pega SOLO los números y letras raras
-        
-        # LIMPIEZA AUTOMÁTICA (Esto arregla el error 404 por espacios)
-        token = token_raw.strip().replace("bot", "") 
-        # ---------------------------------------------------------
-        # 3. Intentar el envío real
         try:
             base_url = f"https://api.telegram.org/bot{token}"
             payload = {
@@ -1956,6 +1940,3 @@ elif choice == "Usuarios":
                             agregar_notificacion('error', f'Error al eliminar: {e}')
         else:
             st.info("No se encontraron usuarios en la base de datos. Use la pestaña 'CREAR USUARIO'.")
-
-
-
