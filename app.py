@@ -746,6 +746,84 @@ def graficar_estado_barras(df):
     fig.update_traces(textfont_size=14, textposition='inside')
     st.plotly_chart(fig, use_container_width=True)
 
+# ==============================================================================
+# 🚀 NUEVAS GRÁFICAS: FLUJO & CARRERA
+# ==============================================================================
+def graficar_alternativas_visuales(df_ordenes, df_users):
+    """Genera las gráficas de Flujo (Sankey/Parallel) y Carrera (Strip)"""
+    if df_ordenes.empty: return
+
+    # 1. Preparación de Datos
+    df_vis = df_ordenes.copy()
+    
+    # Mapear nombres de técnicos
+    map_user = dict(zip(df_users['id'].astype(str), df_users['nombre'])) if not df_users.empty else {}
+    df_vis['Tecnico'] = df_vis['tecnico_asignado'].map(map_user).fillna("Sin Asignar")
+    
+    # Calcular Tiempos
+    now = datetime.now()
+    df_vis['Inicio'] = pd.to_datetime(df_vis['fecha_creacion'])
+    # Si tiene fecha cierre, úsala. Si no, usa AHORA.
+    df_vis['Cierre_Calc'] = pd.to_datetime(df_vis['fecha_cierre']).fillna(now)
+    
+    # Días transcurridos (para la gráfica de carrera)
+    df_vis['Dias_Activa'] = (df_vis['Cierre_Calc'] - df_vis['Inicio']).dt.total_seconds() / 86400
+    df_vis['Dias_Activa'] = df_vis['Dias_Activa'].round(1)
+
+    # Definir mapa de colores para consistencia
+    color_map_crit = {"Alta": "#EF4444", "Media": "#F59E0B", "Baja": "#10B981", "Crítica": "#7F1D1D"}
+
+    # --- A. DIAGRAMA DE FLUJO (PARALLEL CATEGORIES) ---
+    st.markdown("### 🌊 Flujo de Distribución")
+    st.caption("Sigue las líneas: Técnico ➔ Criticidad ➔ Estado actual.")
+    
+    fig_flow = px.parallel_categories(
+        df_vis, 
+        dimensions=['Tecnico', 'criticidad', 'estado'],
+        color="Dias_Activa", # El color indica antigüedad
+        color_continuous_scale=px.colors.sequential.Inferno,
+        labels={'Tecnico':'Personal', 'criticidad':'Urgencia', 'estado':'Situación'}
+    )
+    
+    fig_flow.update_layout(
+        paper_bgcolor='rgba(0,0,0,0)',
+        margin=dict(l=20, r=20, t=20, b=20),
+        font=dict(color='white'),
+        height=350
+    )
+    st.plotly_chart(fig_flow, use_container_width=True)
+
+    st.markdown("---")
+
+    # --- B. LA CARRERA (STRIP PLOT) ---
+    st.markdown("### 🏎️ Tiempos de Respuesta (La Carrera)")
+    st.caption("Cada punto es una Orden. Izquierda = Reciente/Rápido. Derecha = Antiguo/Lento.")
+    
+    fig_race = px.strip(
+        df_vis, 
+        x="Dias_Activa", 
+        y="Tecnico", 
+        color="criticidad",
+        color_discrete_map=color_map_crit,
+        orientation="h", 
+        stripmode="overlay",
+        hover_data=["id", "descripcion", "estado"]
+    )
+    
+    fig_race.update_layout(
+        paper_bgcolor='rgba(0,0,0,0)',
+        plot_bgcolor='rgba(255,255,255,0.05)',
+        font=dict(color='white'),
+        height=300,
+        xaxis=dict(title="Días desde creación", showgrid=True, gridcolor='rgba(255,255,255,0.1)'),
+        yaxis=dict(title=None)
+    )
+    
+    # Línea de referencia (ej: 7 días es el límite aceptable)
+    fig_race.add_vline(x=7, line_width=1, line_dash="dash", line_color="white", annotation_text="Límite 7 días")
+    
+    st.plotly_chart(fig_race, use_container_width=True)
+
 # --- FUNCIÓN AISLADA PARA EL SVG ---
 def render_orion_svg(PRO_ORANGE):
     ORION_SVG = f"""
@@ -956,20 +1034,24 @@ if choice == "Tablero de Mando":
     df_users = run_query("usuarios")
     df_solicitudes = run_query("solicitudes")
     
-    # 2. Métricas KPI (Las que ya arreglamos)
+    # 2. Métricas KPI
     mostrar_metricas_inteligentes(df, df_users, df_solicitudes)
     
     st.write("") 
 
     if not df.empty:
-        # --- NUEVO: CALENDARIO GANTT ---
+        # 3. --- NUEVO: GRÁFICAS VISUALES (FLUJO Y CARRERA) ---
         st.markdown("---")
-        graficar_gantt_mantenimiento(df, df_users)
-        st.caption("💡 *Las barras muestran la duración de la orden. Colores indican la criticidad.*")
+        # Aquí llamamos a la nueva función que acabas de pegar arriba
+        graficar_alternativas_visuales(df, df_users)
         st.markdown("---")
 
-        # --- GRÁFICAS CLÁSICAS (En columnas) ---
-        st.markdown("### 📊 Análisis de Distribución")
+        # 4. TOPS (Antiguas y Críticas)
+        mostrar_tops_ordenes(df)
+        st.markdown("---")
+
+        # 5. GRÁFICAS CLÁSICAS DE DISTRIBUCIÓN
+        st.markdown("### 📊 Análisis Global")
         c_left, c_mid, c_right = st.columns(3)
 
         with c_left:
@@ -986,19 +1068,14 @@ if choice == "Tablero de Mando":
             st.markdown(f"<div class='card-style'><span class='chart-header'>Por Categoría</span>", unsafe_allow_html=True)
             graficar_torta_tipo(df) 
             st.markdown("</div>", unsafe_allow_html=True)
-
-        # --- NUEVO: LISTAS TOP 10 ---
-        st.markdown("---")
-        mostrar_tops_ordenes(df)
         
-        # --- CARGA POR TÉCNICO ---
-        st.markdown("---")
-        st.markdown("### 👥 Productividad del Equipo")
+        # 6. PRODUCTIVIDAD
+        st.markdown("### 👥 Carga por Técnico")
         with st.container():
             graficar_ordenes_por_tecnico(df, df_users)
 
     else: 
-        st.info("No hay órdenes registradas. El tablero se activará cuando crees la primera orden.")
+        st.info("No hay órdenes registradas. El tablero se activará con datos.")
         
 elif choice == "Inventario Activos":
     st.title("INVENTARIO DE ACTIVOS")
@@ -2034,4 +2111,5 @@ elif choice == "Usuarios":
                             agregar_notificacion('error', f'Error al eliminar: {e}')
         else:
             st.info("No se encontraron usuarios en la base de datos. Use la pestaña 'CREAR USUARIO'.")
+
 
