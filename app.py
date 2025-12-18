@@ -377,38 +377,61 @@ def convertir_tipos_python(data_dict):
     return converted
         
 # ==========================================
-# 🔔 NUEVA FUNCIÓN: NOTIFICACIONES TELEGRAM
+# 🔔 FUNCIÓN MODIFICADA: TOKEN DIRECTO (HARDCODED)
 # ==========================================
 def notificar_telegram(chat_id, mensaje, foto_url=None):
-    """Versión de DIAGNÓSTICO para encontrar el error en Render"""
+    """Versión con TOKEN MANUAL para solucionar el error de Render"""
     
-    # 1. Imprimir en pantalla qué datos llegaron
     with st.expander("🕵️ DIAGNÓSTICO TELEGRAM (Clic para ver)", expanded=True):
         st.write(f"🔹 **1. Chat ID Recibido:** `{chat_id}`")
         
-        if not chat_id:
-            st.error("❌ ERROR: El Chat ID está vacío. No se puede enviar nada.")
-            return
+        # ---------------------------------------------------------
+        # 🧨 CAMBIO IMPORTANTE: TOKEN PEGADO A MANO
+        # Borra la variable de entorno y pon tu token real aquí abajo entre comillas
+        # ---------------------------------------------------------
+        token = "TU_TOKEN_REAL_EMPIEZA_POR_NUMEROS_AQUI" 
+        # Ejemplo: "78123456:AAFbg......"
+        # ---------------------------------------------------------
+        
+        st.write(f"🔹 **2. Token usado:** {str(token)[:5]}... (Directo en código)")
 
-        # 2. Buscar el Token y decir de dónde salió
-        token = None
-        origen = "Ninguno"
-        
-        # Intento A: Secrets.toml
-        if "telegram" in st.secrets and "token" in st.secrets["telegram"]:
-            token = st.secrets["telegram"]["token"]
-            origen = "Secrets.toml (Local)"
-        
-        # Intento B: Variables de Entorno (Render)
-        if not token: # Si falló el A, probamos el B
-            token = os.environ.get("TELEGRAM_TOKEN")
-            origen = "Environment Variable (Render)"
+        if not token or token == "8382805163:AAEfkue6AMQu6qvqyRdTmh05kIOZUOxCdwM":
+             st.error("❌ ERROR: No has pegado el token real en el código todavía.")
+             return
+             
+        # 3. Intentar el envío real
+        try:
+            base_url = f"https://api.telegram.org/bot{token}"
+            payload = {
+                "chat_id": chat_id,
+                "parse_mode": "Markdown"
+            }
             
-        st.write(f"🔹 **2. Origen del Token:** {origen}")
+            url_envio = ""
+            if foto_url:
+                st.write("🔹 **3. Modo:** Envio con FOTO")
+                payload["caption"] = mensaje
+                payload["photo"] = foto_url
+                url_envio = f"{base_url}/sendPhoto"
+            else:
+                st.write("🔹 **3. Modo:** Envio solo TEXTO")
+                payload["text"] = mensaje
+                url_envio = f"{base_url}/sendMessage"
 
-        # ... (dentro de notificar_telegram, antes del if not token) ...
-        
-        st.write(f"🔹 **2. Origen del Token:** {origen}")
+            st.write("⏳ Enviando petición a Telegram...")
+            response = requests.post(url_envio, data=payload)
+            
+            st.write(f"🔹 **4. Código de Respuesta:** `{response.status_code}`")
+            
+            if response.status_code == 200:
+                st.balloons()
+                st.success("✅ ¡Telegram dice que se envió correctamente!")
+            else:
+                st.error(f"❌ TELEGRAM RECHAZÓ EL MENSAJE:")
+                st.code(response.text)
+
+        except Exception as e:
+            st.error(f"❌ Error de Conexión Python: {e}")
         
         # --- AGREGA ESTO TEMPORALMENTE ---
         if not token:
@@ -459,48 +482,6 @@ def notificar_telegram(chat_id, mensaje, foto_url=None):
 
         except Exception as e:
             st.error(f"❌ Error de Conexión Python: {e}")
-
-# --- VALIDACIONES MEJORADAS ---
-def validar_usuario_unico(documento, usuario_id=None):
-    """Valida que el documento sea único en el sistema"""
-    try:
-        query = supabase.table("usuarios").select("id").eq("documento", documento)
-        if usuario_id:
-            query = query.neq("id", usuario_id)
-        
-        response = query.execute()
-        return len(response.data) == 0
-    except:
-        return False
-
-def check_open_orders(user_id):
-    """Verifica si el usuario tiene órdenes de trabajo activas"""
-    try:
-        user_id_str = str(user_id)
-        response = supabase.table("ordenes") \
-            .select("id, descripcion, fecha_creacion, estado") \
-            .eq("tecnico_asignado", user_id_str) \
-            .neq("estado", "Concluida") \
-            .execute()
-        
-        if response.data and len(response.data) > 0:
-            return True
-        return False
-    except Exception as e:
-        return True
-
-def get_open_orders_details(user_id):
-    """Obtiene los detalles de las órdenes pendientes de un usuario"""
-    try:
-        user_id_str = str(user_id)
-        response = supabase.table("ordenes") \
-            .select("id, descripcion, criticidad, tipo_mantenimiento, fecha_creacion, estado") \
-            .eq("tecnico_asignado", user_id_str) \
-            .neq("estado", "Concluida") \
-            .execute()
-        return response.data if response.data else []
-    except:
-        return []
 
 # --- MÉTRICAS INTELIGENTES MEJORADAS ---
 def mostrar_metricas_inteligentes(df_ordenes, df_users):
@@ -1970,7 +1951,3 @@ elif choice == "Usuarios":
                             agregar_notificacion('error', f'Error al eliminar: {e}')
         else:
             st.info("No se encontraron usuarios en la base de datos. Use la pestaña 'CREAR USUARIO'.")
-
-
-
-
