@@ -389,7 +389,7 @@ def notificar_telegram(chat_id, mensaje, foto_url=None):
         # 🧨 CAMBIO IMPORTANTE: TOKEN PEGADO A MANO
         # Borra la variable de entorno y pon tu token real aquí abajo entre comillas
         # ---------------------------------------------------------
-        token = "TU_TOKEN_REAL_EMPIEZA_POR_NUMEROS_AQUI" 
+        token = "8382805163:AAEfkue6AMQu6qvqyRdTmh05kIOZUOxCdwM" 
         # Ejemplo: "78123456:AAFbg......"
         # ---------------------------------------------------------
         
@@ -1959,4 +1959,5 @@ elif choice == "Usuarios":
                             agregar_notificacion('error', f'Error al eliminar: {e}')
         else:
             st.info("No se encontraron usuarios en la base de datos. Use la pestaña 'CREAR USUARIO'.")
+
 
