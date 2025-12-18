@@ -425,65 +425,60 @@ def notificar_telegram(chat_id, mensaje, foto_url=None):
             st.error(f"❌ Error de Conexión Python: {e}")
 
 # --- MÉTRICAS INTELIGENTES (VERSIÓN BLINDADA) ---
-def mostrar_metricas_inteligentes(df_ordenes, df_users):
-    """Muestra métricas corrigiendo errores de texto y espacios"""
-    if df_ordenes.empty:
-        st.info("No hay datos para mostrar métricas")
-        return
+# --- MÉTRICAS INTELIGENTES (AHORA CON SOLICITUDES) ---
+def mostrar_metricas_inteligentes(df_ordenes, df_users, df_solicitudes):
+    """Muestra métricas incluyendo el Buzón de Solicitudes"""
     
-    # --- LIMPIEZA DE DATOS (CRUCIAL) ---
-    # Aseguramos que la columna 'estado' sea texto y quitamos espacios extraños
-    df_ordenes['estado'] = df_ordenes['estado'].astype(str).str.strip()
-    
-    # --- CÁLCULOS ---
-    total = len(df_ordenes)
-    pendientes = len(df_ordenes[df_ordenes['estado'] == 'Abierta'])
-    
-    # Aquí estaba el problema: ahora comparamos con texto limpio
-    por_validar = len(df_ordenes[df_ordenes['estado'] == 'Por Validar'])
-    
-    concluidas = len(df_ordenes[df_ordenes['estado'] == 'Concluida'])
-    
-    # Contar devoluciones (Calidad)
-    # Buscamos si hay comentario de validación Y la orden sigue abierta
-    devueltas_calidad = len(df_ordenes[
-        (df_ordenes['estado'] == 'Abierta') & 
-        (df_ordenes['comentarios_validacion'].notnull()) &
-        (df_ordenes['comentarios_validacion'] != "")
-    ])
+    # 1. Contar Solicitudes Nuevas (Buzón)
+    n_solicitudes = 0
+    if not df_solicitudes.empty:
+        # Aseguramos limpieza de texto
+        df_solicitudes['estado'] = df_solicitudes['estado'].astype(str).str.strip()
+        n_solicitudes = len(df_solicitudes[df_solicitudes['estado'] == 'Pendiente'])
 
-    # Eficiencia
-    porcentaje_concluidas = (concluidas / total * 100) if total > 0 else 0
-    
-    if total == 0:
-        val, col = "Sin datos", "⚪"
-    elif porcentaje_concluidas >= 90:
-        val, col = "Excelente", "🟢"
-    elif porcentaje_concluidas >= 70:
-        val, col = "Buena", "🟡"
-    else:
-        val, col = "Mejorable", "🟠"
-    
-    # --- VISUALIZACIÓN ---
+    # 2. Contar Órdenes (Trabajos)
+    total = len(df_ordenes)
+    pendientes = 0
+    por_validar = 0
+    concluidas = 0
+    devueltas_calidad = 0
+    porcentaje_concluidas = 0
+
+    if not df_ordenes.empty:
+        df_ordenes['estado'] = df_ordenes['estado'].astype(str).str.strip()
+        pendientes = len(df_ordenes[df_ordenes['estado'] == 'Abierta'])
+        por_validar = len(df_ordenes[df_ordenes['estado'] == 'Por Validar'])
+        concluidas = len(df_ordenes[df_ordenes['estado'] == 'Concluida'])
+        
+        # Devoluciones
+        devueltas_calidad = len(df_ordenes[
+            (df_ordenes['estado'] == 'Abierta') & 
+            (df_ordenes['comentarios_validacion'].notnull()) &
+            (df_ordenes['comentarios_validacion'] != "")
+        ])
+        
+        porcentaje_concluidas = (concluidas / total * 100) if total > 0 else 0
+
+    # 3. Visualización en 5 Columnas
     c1, c2, c3, c4, c5 = st.columns(5)
     
-    with c1: st.metric("📦 Total", total)
+    with c1:
+        # AQUÍ ESTÁ EL CAMBIO: Mostramos las Solicitudes Pendientes
+        color_sol = "normal" if n_solicitudes == 0 else "inverse"
+        st.metric("📬 Solicitudes", n_solicitudes, "Nuevas en Buzón", delta_color=color_sol)
     
     with c2: 
-        # Delta invertido: Si hay devoluciones, sale en rojo
-        st.metric("🔨 Ejecución", pendientes, f"{devueltas_calidad} Devueltas" if devueltas_calidad > 0 else None, delta_color="inverse")
+        st.metric("🔨 En Ejecución", pendientes, f"{devueltas_calidad} Devueltas" if devueltas_calidad > 0 else None, delta_color="inverse")
     
     with c3:
-        # Texto más corto para que no salga "Esperando Revisi..."
-        st.metric("🧐 Por Validar", por_validar, "Revisar")
+        # Esto es Calidad (Técnico terminó -> Admin revisa)
+        st.metric("🧐 Calidad", por_validar, "Por Aprobar")
     
-    with c4: st.metric("✅ Listas", concluidas, f"{porcentaje_concluidas:.0f}%")
-    
-    with c5: st.metric(f"{col} Eficiencia", val)
-
-    # --- DEBUGGING (SI SIGUE SALIENDO 0, ACTIVA ESTO) ---
-    # st.write("Estados encontrados en BD:", df_ordenes['estado'].unique())
-
+    with c4: 
+        st.metric("✅ Finalizadas", concluidas, f"{porcentaje_concluidas:.0f}%")
+        
+    with c5:
+        st.metric("📦 Total OTs", total)
 # --- GRÁFICOS (PLOTLY) ---
 def graficar_ordenes_por_tecnico(df_ordenes, df_users):
     """Muestra gráfico compacto de órdenes por técnico"""
@@ -1903,4 +1898,3 @@ elif choice == "Usuarios":
                             agregar_notificacion('error', f'Error al eliminar: {e}')
         else:
             st.info("No se encontraron usuarios en la base de datos. Use la pestaña 'CREAR USUARIO'.")
-
