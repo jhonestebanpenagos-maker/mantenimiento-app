@@ -1655,66 +1655,67 @@ elif choice == "Inventario Activos":
                         except Exception as e:
                             st.error(f"Error al actualizar: {e}")
             with bc2:
+                # Cuidado: Todo lo de abajo debe tener sangría respecto a este "with"
                 with st.expander("🗑️ Zona de Peligro"):
-                st.warning("Esta acción eliminará el activo permanentemente.")
-                
-                # Botón de intento de borrado
-                if st.button("INTENTAR BORRADO", type="secondary", use_container_width=True, key=f"btn_check_del_{id_suffix}"):
+                    st.warning("Esta acción eliminará el activo permanentemente.")
                     
-                    # 1. VERIFICACIÓN DE DEPENDENCIAS (EL ESCÁNER)
-                    with st.spinner("Verificando dependencias..."):
-                        # Buscamos Planes
-                        res_planes = supabase.table("planes_mantenimiento").select("id").eq("activo_id", dat['id']).execute()
-                        ids_planes = [str(p['id']) for p in res_planes.data]
+                    # Botón de intento de borrado
+                    if st.button("INTENTAR BORRADO", type="secondary", use_container_width=True, key=f"btn_check_del_{id_suffix}"):
                         
-                        # Buscamos Órdenes
-                        res_ordenes = supabase.table("ordenes").select("id").eq("activo_id", dat['id']).execute()
-                        ids_ordenes = [str(o['id']) for o in res_ordenes.data]
-
-                        # Buscamos Solicitudes
-                        res_solic = supabase.table("solicitudes").select("id").eq("activo_id", dat['id']).execute()
-                        ids_solic = [str(s['id']) for s in res_solic.data]
-
-                    # 2. SI HAY DEPENDENCIAS, MOSTRAMOS EL AVISO VISUAL Y PARAMOS
-                    if ids_planes or ids_ordenes or ids_solic:
-                        st.markdown(f"""
-                        <div style="background-color: rgba(245, 158, 11, 0.1); border-left: 4px solid #F59E0B; padding: 15px; border-radius: 4px; margin-bottom: 10px;">
-                            <h4 style="color: #F59E0B; margin: 0 0 5px 0;">✋ Acción Requerida</h4>
-                            <p style="color: #E5E7EB; font-size: 0.9em; margin: 0;">
-                                No podemos eliminar <b>{dat['nombre']}</b> porque tiene historial asociado.<br>
-                                Por seguridad, primero debes gestionar (borrar o reasignar) los siguientes registros:
-                            </p>
-                        </div>
-                        """, unsafe_allow_html=True)
-                        
-                        c_dep1, c_dep2, c_dep3 = st.columns(3)
-                        
-                        if ids_planes:
-                            with c_dep1:
-                                st.error(f"📅 **{len(ids_planes)} Planes Prev.**")
-                                st.caption(f"IDs: {', '.join(ids_planes)}")
-                        
-                        if ids_ordenes:
-                            with c_dep2:
-                                st.error(f"🛠️ **{len(ids_ordenes)} Órdenes**")
-                                st.caption(f"IDs: {', '.join(ids_ordenes)}")
-                                
-                        if ids_solic:
-                            with c_dep3:
-                                st.error(f"📬 **{len(ids_solic)} Solicitudes**")
-                                st.caption(f"IDs: {', '.join(ids_solic)}")
-                                
-                    # 3. SI ESTÁ LIMPIO, PROCEDEMOS AL BORRADO REAL
-                    else:
-                        try:
-                            supabase.table("activos").delete().eq("id", dat['id']).execute()
+                        # 1. VERIFICACIÓN DE DEPENDENCIAS (EL ESCÁNER)
+                        with st.spinner("Verificando dependencias..."):
+                            # Buscamos Planes
+                            res_planes = supabase.table("planes_mantenimiento").select("id").eq("activo_id", dat['id']).execute()
+                            ids_planes = [str(p['id']) for p in res_planes.data]
                             
-                            st.cache_data.clear()
-                            agregar_notificacion("delete", f"Activo '{dat['nombre']}' eliminado correctamente.")
-                            time.sleep(1.5)
-                            st.rerun()
-                        except Exception as e:
-                            st.error(f"Error técnico al borrar: {e}")
+                            # Buscamos Órdenes
+                            res_ordenes = supabase.table("ordenes").select("id").eq("activo_id", dat['id']).execute()
+                            ids_ordenes = [str(o['id']) for o in res_ordenes.data]
+
+                            # Buscamos Solicitudes
+                            res_solic = supabase.table("solicitudes").select("id").eq("activo_id", dat['id']).execute()
+                            ids_solic = [str(s['id']) for s in res_solic.data]
+
+                        # 2. SI HAY DEPENDENCIAS, MOSTRAMOS EL AVISO VISUAL Y PARAMOS
+                        if ids_planes or ids_ordenes or ids_solic:
+                            st.markdown(f"""
+                            <div style="background-color: rgba(245, 158, 11, 0.1); border-left: 4px solid #F59E0B; padding: 15px; border-radius: 4px; margin-bottom: 10px;">
+                                <h4 style="color: #F59E0B; margin: 0 0 5px 0;">✋ Acción Requerida</h4>
+                                <p style="color: #E5E7EB; font-size: 0.9em; margin: 0;">
+                                    No podemos eliminar <b>{dat['nombre']}</b> porque tiene historial asociado.<br>
+                                    Por seguridad, primero debes gestionar (borrar o reasignar) los siguientes registros:
+                                </p>
+                            </div>
+                            """, unsafe_allow_html=True)
+                            
+                            c_dep1, c_dep2, c_dep3 = st.columns(3)
+                            
+                            if ids_planes:
+                                with c_dep1:
+                                    st.error(f"📅 **{len(ids_planes)} Planes Prev.**")
+                                    st.caption(f"IDs: {', '.join(ids_planes)}")
+                            
+                            if ids_ordenes:
+                                with c_dep2:
+                                    st.error(f"🛠️ **{len(ids_ordenes)} Órdenes**")
+                                    st.caption(f"IDs: {', '.join(ids_ordenes)}")
+                                    
+                            if ids_solic:
+                                with c_dep3:
+                                    st.error(f"📬 **{len(ids_solic)} Solicitudes**")
+                                    st.caption(f"IDs: {', '.join(ids_solic)}")
+                                    
+                        # 3. SI ESTÁ LIMPIO, PROCEDEMOS AL BORRADO REAL
+                        else:
+                            try:
+                                supabase.table("activos").delete().eq("id", dat['id']).execute()
+                                
+                                st.cache_data.clear()
+                                agregar_notificacion("delete", f"Activo '{dat['nombre']}' eliminado correctamente.")
+                                time.sleep(1.5)
+                                st.rerun()
+                            except Exception as e:
+                                st.error(f"Error técnico al borrar: {e}")
             st.markdown("---")
             if dat.get('qr_url'):
                 st.caption("Código QR del Activo")
@@ -2169,6 +2170,3 @@ elif choice == "Usuarios":
                             agregar_notificacion('error', f'Error al eliminar: {e}')
         else:
             st.info("No se encontraron usuarios en la base de datos. Use la pestaña 'CREAR USUARIO'.")
-
-
-
