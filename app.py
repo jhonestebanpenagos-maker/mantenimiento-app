@@ -1677,31 +1677,62 @@ elif choice == "Inventario Activos":
                             ids_solic = [str(s['id']) for s in res_solic.data]
 
 # 2. SI HAY DEPENDENCIAS, MOSTRAMOS EL AVISO VISUAL Y PARAMOS
+                    # 2. SI HAY DEPENDENCIAS, MOSTRAMOS EL AVISO INTERACTIVO
                     if ids_planes or ids_ordenes or ids_solic:
                         st.markdown(f"""
                         <div style="background-color: rgba(239, 68, 68, 0.1); border-left: 4px solid #EF4444; padding: 15px; border-radius: 4px; margin-bottom: 15px;">
-                            <h4 style="color: #EF4444; margin: 0 0 5px 0;">🛑 No se puede eliminar</h4>
+                            <h4 style="color: #EF4444; margin: 0 0 5px 0;">🛑 Bloqueo de Seguridad</h4>
                             <p style="color: #E5E7EB; font-size: 0.9em; margin: 0;">
-                                El activo <b>{dat['nombre']}</b> tiene registros vinculados. 
-                                Para evitar errores en la base de datos, primero debes eliminar o reasignar lo siguiente:
+                                El activo <b>{dat['nombre']}</b> no se puede borrar porque tiene historial.<br>
+                                👆 <b>Selecciona una fila abajo</b> para ir directamente a gestionar (borrar/editar) el registro conflictivo.
                             </p>
                         </div>
                         """, unsafe_allow_html=True)
                         
-                        # MOSTRAMOS LISTA VERTICAL (Mucho más legible)
+                        # --- TABLA INTERACTIVA DE PLANES ---
                         if ids_planes:
-                            st.warning(f"📅 Hay **{len(ids_planes)}** Planes de Mantenimiento asociados.")
-                            st.code(f"IDs de Planes: {', '.join(ids_planes)}", language="text")
-                            st.markdown("---")
-                        
-                        if ids_ordenes:
-                            st.warning(f"🛠️ Hay **{len(ids_ordenes)}** Órdenes de Trabajo asociadas.")
-                            st.code(f"IDs de Órdenes: {', '.join(ids_ordenes)}", language="text")
-                            st.markdown("---")
+                            st.warning(f"📅 {len(ids_planes)} Planes Preventivos asociados:")
+                            df_warn_planes = pd.DataFrame({'ID Plan': ids_planes, 'Acción': ['Ir a Gestionar' for _ in ids_planes]})
+                            
+                            sel_plan = st.dataframe(
+                                df_warn_planes, 
+                                selection_mode="single-row", 
+                                on_select="rerun", 
+                                use_container_width=True,
+                                hide_index=True
+                            )
+                            
+                            if len(sel_plan.selection.rows) > 0:
+                                # Magia de redirección
+                                idx = sel_plan.selection.rows[0]
+                                id_target = df_warn_planes.iloc[idx]['ID Plan']
+                                
+                                st.session_state.current_page = "Ordenes de Trabajo" # Cambiamos de página
+                                st.session_state.jump_target = "preventivo" # Le decimos a dónde ir
+                                st.session_state.jump_id = id_target # Le decimos qué ID buscar
+                                st.rerun() # Recargamos la app
 
-                        if ids_solic:
-                            st.warning(f"📬 Hay **{len(ids_solic)}** Solicitudes pendientes.")
-                            st.code(f"IDs de Solicitudes: {', '.join(ids_solic)}", language="text")
+                        # --- TABLA INTERACTIVA DE ÓRDENES ---
+                        if ids_ordenes:
+                            st.warning(f"🛠️ {len(ids_ordenes)} Órdenes de Trabajo asociadas:")
+                            df_warn_ots = pd.DataFrame({'ID Orden': ids_ordenes, 'Acción': ['Ir a Gestionar' for _ in ids_ordenes]})
+                            
+                            sel_ot = st.dataframe(
+                                df_warn_ots, 
+                                selection_mode="single-row", 
+                                on_select="rerun", 
+                                use_container_width=True,
+                                hide_index=True
+                            )
+
+                            if len(sel_ot.selection.rows) > 0:
+                                idx = sel_ot.selection.rows[0]
+                                id_target = df_warn_ots.iloc[idx]['ID Orden']
+                                
+                                st.session_state.current_page = "Ordenes de Trabajo"
+                                st.session_state.jump_target = "orden"
+                                st.session_state.jump_id = id_target
+                                st.rerun()
 
                     # 3. SI ESTÁ LIMPIO, PROCEDEMOS AL BORRADO REAL
                     else:
@@ -2168,4 +2199,5 @@ elif choice == "Usuarios":
                             agregar_notificacion('error', f'Error al eliminar: {e}')
         else:
             st.info("No se encontraron usuarios en la base de datos. Use la pestaña 'CREAR USUARIO'.")
+
 
