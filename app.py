@@ -1773,81 +1773,130 @@ elif choice == "Ordenes de Trabajo":
     st.title("GESTIÓN DE MANTENIMIENTO")
     mostrar_notificaciones()
 
-    # ==============================================================================
-    # 🚀 INTERCEPTOR DE NAVEGACIÓN (MODO ENFOQUE)
+# ==============================================================================
+    # 🚀 INTERCEPTOR 2.0: GESTIÓN COMPLETA VINCULADA
     # ==============================================================================
     if 'jump_target' in st.session_state and st.session_state.jump_target:
         target_type = st.session_state.jump_target
         target_id = st.session_state.jump_id
 
+        # --- 1. ENCABEZADO Y BOTÓN DE RETORNO INTELIGENTE ---
         st.markdown(f"""
-        <div style="background-color: #374151; padding: 20px; border-radius: 10px; border: 1px solid #F59E0B; margin-bottom: 20px;">
-            <h3 style="color: #F59E0B; margin: 0;">🎯 MODO ENFOQUE: Gestionando Dependencia</h3>
-            <p style="margin: 0; color: #D1D5DB;">Estás editando el registro <b>#{target_id}</b> que impide borrar un activo.</p>
+        <div style="background-color: #1F2937; padding: 15px; border-radius: 8px; border-left: 5px solid #3B82F6; margin-bottom: 20px; display: flex; align-items: center; justify-content: space-between;">
+            <div>
+                <h3 style="color: #60A5FA; margin: 0;">🛠️ Gestión de Dependencia #{target_id}</h3>
+                <p style="margin: 0; color: #9CA3AF; font-size: 0.9em;">Gestiona este registro para liberar el activo y poder borrarlo.</p>
+            </div>
         </div>
         """, unsafe_allow_html=True)
 
-        if st.button("⬅️ VOLVER A VISTA NORMAL", type="secondary"):
+        if st.button("⬅️ VOLVER A EDICIÓN DE ACTIVO", use_container_width=True):
+            st.session_state.current_page = "Inventario Activos" # <--- CLAVE: Te devuelve al inventario
             st.session_state.jump_target = None
             st.session_state.jump_id = None
             st.rerun()
 
-        # --- CASO 1: GESTIONAR UNA ORDEN DE TRABAJO ---
+        st.markdown("---")
+
+        # --- CASO 1: GESTIONAR UNA ORDEN DE TRABAJO (FULL EDICIÓN) ---
         if target_type == "orden":
             try:
-                # Traer datos de la orden específica
                 res = supabase.table("ordenes").select("*").eq("id", target_id).execute()
                 if res.data:
-                    orden_focus = res.data[0]
+                    orden_actual = res.data[0]
                     
-                    st.write("---")
-                    c1, c2 = st.columns([3, 1])
-                    c1.subheader(f"🛠️ Orden de Trabajo #{target_id}")
-                    c1.info(f"Falla reportada: {orden_focus['descripcion']}")
-                    
-                    with c2:
-                        st.markdown("### 🗑️ Eliminar")
-                        if st.button("BORRAR ORDEN AHORA", type="primary", use_container_width=True):
-                            supabase.table("ordenes").delete().eq("id", target_id).execute()
-                            st.success("Orden eliminada. Regresando...")
-                            st.session_state.jump_target = None
-                            time.sleep(1)
-                            st.rerun()
+                    # Formulario completo de Edición (Igual que en Gestión Global)
+                    with st.form(key=f"form_focus_orden_{target_id}"):
+                        c_edit1, c_edit2, c_edit3 = st.columns(3)
+                        
+                        est_opts = ["Abierta", "Por Validar", "Concluida", "Cancelada"]
+                        idx_est = est_opts.index(orden_actual['estado']) if orden_actual['estado'] in est_opts else 0
+                        nuevo_estado = c_edit1.selectbox("Estado (Marcar Concluida o Cancelada)", est_opts, index=idx_est)
+                        
+                        # Lógica de técnicos
+                        lista_tecnicos = df_users[df_users['rol'].isin(['Tecnico', 'Admin', 'Programador'])]
+                        tech_dict = dict(zip(lista_tecnicos['nombre'], lista_tecnicos['id']))
+                        tech_actual_id = str(orden_actual['tecnico_asignado'])
+                        nombre_tech = next((k for k, v in tech_dict.items() if str(v) == tech_actual_id), "Seleccionar...")
+                        nuevo_tec_nom = c_edit2.selectbox("Técnico Asignado", list(tech_dict.keys()), index=list(tech_dict.keys()).index(nombre_tech) if nombre_tech in tech_dict else 0)
+                        
+                        nueva_crit = c_edit3.select_slider("Criticidad", ["Baja", "Media", "Alta", "Crítica"], value=orden_actual['criticidad'])
+                        nueva_desc = st.text_area("Descripción / Reporte", value=orden_actual['descripcion'])
+                        
+                        st.markdown("<br>", unsafe_allow_html=True)
+                        c_save, c_del = st.columns([2, 1])
+                        
+                        # Botón Guardar
+                        with c_save:
+                            if st.form_submit_button("💾 GUARDAR CAMBIOS", type="primary", use_container_width=True):
+                                supabase.table("ordenes").update({
+                                    "estado": nuevo_estado, 
+                                    "tecnico_asignado": str(tech_dict[nuevo_tec_nom]), 
+                                    "criticidad": nueva_crit, 
+                                    "descripcion": nueva_desc
+                                }).eq("id", target_id).execute()
+                                st.success("✅ Orden actualizada correctamente.")
+                                time.sleep(1)
+                                st.rerun()
+                        
+                        # Botón Borrar (Dentro del form para alineación, pero con lógica separada si se prefiere)
+                        # Nota: En Streamlit forms, los botones secundarios no ejecutan lógica directa compleja a veces.
+                        # Sacamos el borrar fuera del form para mayor seguridad.
+
+                    st.markdown("### 🗑️ Zona de Eliminación")
+                    st.caption("Si esta orden fue un error, puedes eliminarla definitivamente aquí.")
+                    if st.button("ELIMINAR ORDEN DEFINITIVAMENTE", type="secondary", use_container_width=True, key="btn_focus_del"):
+                        supabase.table("ordenes").delete().eq("id", target_id).execute()
+                        st.success("🗑️ Orden eliminada.")
+                        # Al borrar, ya no hay nada que ver, así que volvemos al activo automáticamente
+                        st.session_state.current_page = "Inventario Activos"
+                        st.session_state.jump_target = None
+                        time.sleep(1.5)
+                        st.rerun()
 
                 else:
-                    st.error("La orden ya no existe o fue borrada.")
+                    st.error("La orden ya no existe.")
+
             except Exception as e:
                 st.error(f"Error cargando orden: {e}")
 
-        # --- CASO 2: GESTIONAR UN PLAN PREVENTIVO ---
+        # --- CASO 2: GESTIONAR UN PLAN PREVENTIVO (FULL EDICIÓN) ---
         elif target_type == "preventivo":
             try:
-                # Traer datos del plan específico
+                # Reutilizamos la lógica del render de preventivos pero enfocada
                 res = supabase.table("planes_mantenimiento").select("*").eq("id", target_id).execute()
                 if res.data:
                     plan_focus = res.data[0]
                     
-                    st.write("---")
-                    c1, c2 = st.columns([3, 1])
-                    c1.subheader(f"📅 Plan Preventivo #{target_id}")
-                    c1.info(f"Tarea: {plan_focus['descripcion']} (Frecuencia: {plan_focus['frecuencia_dias']} días)")
+                    st.info(f"Editando Plan Preventivo #{target_id}")
                     
-                    with c2:
-                        st.markdown("### 🗑️ Eliminar")
-                        if st.button("BORRAR PLAN AHORA", type="primary", use_container_width=True):
-                            supabase.table("planes_mantenimiento").delete().eq("id", target_id).execute()
-                            st.success("Plan eliminado. Regresando...")
-                            st.session_state.jump_target = None
-                            time.sleep(1)
-                            st.rerun()
-                else:
-                    st.error("El plan ya no existe o fue borrado.")
+                    with st.form("form_focus_prev"):
+                        desc_p = st.text_input("Tarea", value=plan_focus['descripcion'])
+                        dias_p = st.number_input("Frecuencia (Días)", value=plan_focus['frecuencia_dias'])
+                        
+                        if st.form_submit_button("💾 GUARDAR CAMBIOS", type="primary"):
+                             supabase.table("planes_mantenimiento").update({
+                                 "descripcion": desc_p,
+                                 "frecuencia_dias": dias_p
+                             }).eq("id", target_id).execute()
+                             st.success("Plan actualizado.")
+                             st.rerun()
+                    
+                    st.markdown("---")
+                    if st.button("🗑️ ELIMINAR PLAN DEFINITIVAMENTE", type="secondary", use_container_width=True):
+                        supabase.table("planes_mantenimiento").delete().eq("id", target_id).execute()
+                        st.success("🗑️ Plan eliminado.")
+                        st.session_state.current_page = "Inventario Activos"
+                        st.session_state.jump_target = None
+                        time.sleep(1.5)
+                        st.rerun()
+
             except Exception as e:
                 st.error(f"Error cargando plan: {e}")
 
-        # DETENER LA EJECUCIÓN AQUÍ PARA NO MOSTRAR LAS PESTAÑAS DE ABAJO
+        # 🛑 DETENER LA EJECUCIÓN DEL RESTO DE LA PÁGINA
         st.stop()
-
+        
     # Cargar datos necesarios
     df_act = run_query("activos")
     df_users = run_query("usuarios")
@@ -2305,4 +2354,3 @@ elif choice == "Usuarios":
                             agregar_notificacion('error', f'Error al eliminar: {e}')
         else:
             st.info("No se encontraron usuarios en la base de datos. Use la pestaña 'CREAR USUARIO'.")
-
