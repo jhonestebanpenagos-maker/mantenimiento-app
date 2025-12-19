@@ -1669,93 +1669,91 @@ elif choice == "Inventario Activos":
                         except Exception as e:
                             st.error(f"Error al actualizar: {e}")
             with bc2:
-                # Fíjate que esta línea tiene sangría respecto a "with bc2:"
-                with st.expander("🗑️ Zona de Peligro"):
-                    st.warning("Esta acción eliminará el activo permanentemente.")
+                with st.expander("🗑️ Zona de Peligro", expanded=True):
+                    st.warning("Acciones críticas para este activo.")
                     
-                    # Botón de intento de borrado
-                    if st.button("INTENTAR BORRADO", type="secondary", use_container_width=True, key=f"btn_check_del_{id_suffix}"):
+                    # 1. VERIFICACIÓN AUTOMÁTICA (Sin botón previo)
+                    # Al estar fuera de un botón, persiste entre recargas y permite el clic.
+                    ids_planes, ids_ordenes, ids_solic = [], [], []
+                    
+                    # Solo ejecutamos si hay un activo seleccionado
+                    if dat.get('id'):
+                        # Buscamos Planes
+                        res_planes = supabase.table("planes_mantenimiento").select("id").eq("activo_id", dat['id']).execute()
+                        ids_planes = [str(p['id']) for p in res_planes.data]
                         
-                        # 1. VERIFICACIÓN DE DEPENDENCIAS (Variables vacías por defecto)
-                        ids_planes, ids_ordenes, ids_solic = [], [], []
+                        # Buscamos Órdenes
+                        res_ordenes = supabase.table("ordenes").select("id").eq("activo_id", dat['id']).execute()
+                        ids_ordenes = [str(o['id']) for o in res_ordenes.data]
+
+                        # Buscamos Solicitudes
+                        res_solic = supabase.table("solicitudes").select("id").eq("activo_id", dat['id']).execute()
+                        ids_solic = [str(s['id']) for s in res_solic.data]
+
+                    # 2. SI HAY DEPENDENCIAS: MOSTRAMOS LAS TABLAS DE NAVEGACIÓN
+                    if ids_planes or ids_ordenes or ids_solic:
+                        st.markdown(f"""
+                        <div style="background-color: rgba(239, 68, 68, 0.1); border-left: 4px solid #EF4444; padding: 15px; border-radius: 4px; margin-bottom: 15px;">
+                            <h5 style="color: #EF4444; margin: 0;">🛑 No se puede eliminar</h5>
+                            <p style="color: #E5E7EB; font-size: 0.85em; margin: 5px 0 0 0;">
+                                Tiene historial vinculado. Selecciona un ítem abajo para ir a gestionarlo.
+                            </p>
+                        </div>
+                        """, unsafe_allow_html=True)
                         
-                        with st.spinner("Escaneando historial del activo..."):
-                            # Buscamos Planes
-                            res_planes = supabase.table("planes_mantenimiento").select("id").eq("activo_id", dat['id']).execute()
-                            ids_planes = [str(p['id']) for p in res_planes.data]
+                        # --- TABLA INTERACTIVA DE PLANES ---
+                        if ids_planes:
+                            st.caption(f"📅 Planes Preventivos ({len(ids_planes)})")
+                            df_warn_planes = pd.DataFrame({'ID': ids_planes, 'Ir': ['↗️ Ver' for _ in ids_planes]})
                             
-                            # Buscamos Órdenes
-                            res_ordenes = supabase.table("ordenes").select("id").eq("activo_id", dat['id']).execute()
-                            ids_ordenes = [str(o['id']) for o in res_ordenes.data]
-
-                            # Buscamos Solicitudes
-                            res_solic = supabase.table("solicitudes").select("id").eq("activo_id", dat['id']).execute()
-                            ids_solic = [str(s['id']) for s in res_solic.data]
-
-                        # 2. SI HAY DEPENDENCIAS, MOSTRAMOS EL AVISO INTERACTIVO
-                        if ids_planes or ids_ordenes or ids_solic:
-                            st.markdown(f"""
-                            <div style="background-color: rgba(239, 68, 68, 0.1); border-left: 4px solid #EF4444; padding: 15px; border-radius: 4px; margin-bottom: 15px;">
-                                <h4 style="color: #EF4444; margin: 0 0 5px 0;">🛑 Bloqueo de Seguridad</h4>
-                                <p style="color: #E5E7EB; font-size: 0.9em; margin: 0;">
-                                    El activo <b>{dat['nombre']}</b> tiene historial vinculado.<br>
-                                    👆 <b>Selecciona una fila abajo</b> para ir a borrar el registro que estorba.
-                                </p>
-                            </div>
-                            """, unsafe_allow_html=True)
+                            sel_plan = st.dataframe(
+                                df_warn_planes, 
+                                selection_mode="single-row", 
+                                on_select="rerun", 
+                                use_container_width=True,
+                                hide_index=True,
+                                key=f"sel_p_{id_suffix}" # Key única
+                            )
                             
-                            # --- TABLA INTERACTIVA DE PLANES ---
-                            if ids_planes:
-                                st.warning(f"📅 {len(ids_planes)} Planes Preventivos:")
-                                df_warn_planes = pd.DataFrame({'ID Plan': ids_planes, 'Acción': ['Ir a Gestionar' for _ in ids_planes]})
-                                
-                                sel_plan = st.dataframe(
-                                    df_warn_planes, 
-                                    selection_mode="single-row", 
-                                    on_select="rerun", 
-                                    use_container_width=True,
-                                    hide_index=True,
-                                    key=f"sel_p_{id_suffix}"
-                                )
-                                
-                                if len(sel_plan.selection.rows) > 0:
-                                    idx = sel_plan.selection.rows[0]
-                                    id_target = df_warn_planes.iloc[idx]['ID Plan']
-                                    st.session_state.current_page = "Ordenes de Trabajo" # Cambiamos de pestaña
-                                    st.session_state.jump_target = "preventivo" # Definimos destino
-                                    st.session_state.jump_id = id_target # Definimos ID
-                                    st.rerun()
+                            if len(sel_plan.selection.rows) > 0:
+                                idx = sel_plan.selection.rows[0]
+                                id_target = df_warn_planes.iloc[idx]['ID']
+                                st.session_state.current_page = "Ordenes de Trabajo" # Cambiamos de pestaña
+                                st.session_state.jump_target = "preventivo" # Definimos destino
+                                st.session_state.jump_id = id_target # Definimos ID
+                                st.rerun()
 
-                            # --- TABLA INTERACTIVA DE ÓRDENES ---
-                            if ids_ordenes:
-                                st.warning(f"🛠️ {len(ids_ordenes)} Órdenes de Trabajo:")
-                                df_warn_ots = pd.DataFrame({'ID Orden': ids_ordenes, 'Acción': ['Ir a Gestionar' for _ in ids_ordenes]})
+                        # --- TABLA INTERACTIVA DE ÓRDENES ---
+                        if ids_ordenes:
+                            st.caption(f"🛠️ Órdenes de Trabajo ({len(ids_ordenes)})")
+                            df_warn_ots = pd.DataFrame({'ID': ids_ordenes, 'Ir': ['↗️ Ver' for _ in ids_ordenes]})
+                            
+                            sel_ot = st.dataframe(
+                                df_warn_ots, 
+                                selection_mode="single-row", 
+                                on_select="rerun", 
+                                use_container_width=True,
+                                hide_index=True,
+                                key=f"sel_o_{id_suffix}" # Key única
+                            )
+
+                            if len(sel_ot.selection.rows) > 0:
+                                idx = sel_ot.selection.rows[0]
+                                id_target = df_warn_ots.iloc[idx]['ID']
+                                st.session_state.current_page = "Ordenes de Trabajo"
+                                st.session_state.jump_target = "orden"
+                                st.session_state.jump_id = id_target
+                                st.rerun()
                                 
-                                sel_ot = st.dataframe(
-                                    df_warn_ots, 
-                                    selection_mode="single-row", 
-                                    on_select="rerun", 
-                                    use_container_width=True,
-                                    hide_index=True,
-                                    key=f"sel_o_{id_suffix}"
-                                )
+                        # --- SOLICITUDES (Solo aviso, no redirección compleja) ---
+                        if ids_solic:
+                            st.caption(f"📬 Solicitudes ({len(ids_solic)})")
+                            st.code(f"IDs: {', '.join(ids_solic)}")
 
-                                if len(sel_ot.selection.rows) > 0:
-                                    idx = sel_ot.selection.rows[0]
-                                    id_target = df_warn_ots.iloc[idx]['ID Orden']
-                                    st.session_state.current_page = "Ordenes de Trabajo"
-                                    st.session_state.jump_target = "orden"
-                                    st.session_state.jump_id = id_target
-                                    st.rerun()
-                                    
-                            # --- TABLA INTERACTIVA DE SOLICITUDES ---
-                            if ids_solic:
-                                st.warning(f"📬 {len(ids_solic)} Solicitudes:")
-                                st.code(f"IDs: {', '.join(ids_solic)}")
-                                st.caption("Debes gestionar las solicitudes en el buzón.")
-
-                        # 3. SI ESTÁ LIMPIO, PROCEDEMOS AL BORRADO REAL
-                        else:
+                    # 3. SI ESTÁ LIMPIO: HABILITAMOS EL BOTÓN DE BORRAR
+                    else:
+                        st.success("✅ Activo sin dependencias.")
+                        if st.button("🗑️ ELIMINAR AHORA", type="secondary", use_container_width=True, key=f"btn_final_del_{id_suffix}"):
                             try:
                                 supabase.table("activos").delete().eq("id", dat['id']).execute()
                                 st.cache_data.clear()
@@ -1763,7 +1761,7 @@ elif choice == "Inventario Activos":
                                 time.sleep(1.5)
                                 st.rerun()
                             except Exception as e:
-                                st.error(f"Error técnico al borrar: {e}")
+                                st.error(f"Error técnico: {e}")
             st.markdown("---")
             if dat.get('qr_url'):
                 st.caption("Código QR del Activo")
@@ -2232,4 +2230,3 @@ elif choice == "Usuarios":
                             agregar_notificacion('error', f'Error al eliminar: {e}')
         else:
             st.info("No se encontraron usuarios en la base de datos. Use la pestaña 'CREAR USUARIO'.")
-
