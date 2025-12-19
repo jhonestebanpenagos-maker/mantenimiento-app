@@ -1070,28 +1070,46 @@ def logout():
 # 🔄 LÓGICA DE PERSISTENCIA (AUTO-LOGIN AL REFRESCAR)
 # ==============================================================================
 # Si no hay usuario en memoria, pero SÍ hay datos en la URL, intentamos recuperar la sesión
-if 'usuario' not in st.session_state or st.session_state['usuario'] is None:
+# ==============================================================================
+# 🚀 LOGIN & GESTIÓN DE SESIÓN
+# ==============================================================================
+
+# 1. Inicializar variables de estado
+if 'usuario' not in st.session_state: st.session_state['usuario'] = None
+if 'rol' not in st.session_state: st.session_state['rol'] = None
+
+# 2. Función Logout (Limpiando URL también)
+def logout():
+    st.session_state['usuario'] = None
+    st.session_state['rol'] = None
+    st.query_params.clear() # Limpia la URL para que no se vuelva a loguear solo
+    st.rerun()
+
+# 3. LÓGICA DE PERSISTENCIA (AUTO-LOGIN AL REFRESCAR)
+# Si no hay usuario logueado, miramos si la URL tiene el dato "session_id"
+if st.session_state['usuario'] is None:
     query_params = st.query_params
     if "session_id" in query_params:
         user_doc_url = query_params["session_id"]
         try:
-            # Buscamos al usuario por el documento guardado en la URL
+            # Buscamos al usuario automáticamente
             res = supabase.table("usuarios").select("*").eq("documento", user_doc_url).execute()
             if res.data:
                 user = res.data[0]
                 st.session_state['usuario'] = user['nombre']
                 st.session_state['rol'] = user['rol']
-                # Opcional: Recuperar la página donde estaba
+                
+                # Recuperar la página donde estaba (si existe)
                 if "last_page" in query_params:
                     st.session_state.current_page = query_params["last_page"]
+                
+                st.rerun() # Recargamos para entrar directo
         except Exception as e:
             st.error(f"Error recuperando sesión: {e}")
 
 # ==============================================================================
-# 🚀 LOGIN (Tu código existente empieza aquí abajo)
+# 🔒 PANTALLA DE ACCESO (LOGIN)
 # ==============================================================================
-if st.session_state['usuario'] is None:
-    # ... (El resto de tu código de login sigue igual)
 if st.session_state['usuario'] is None:
     c1, c2, c3 = st.columns([1,2,1])
     with c2:
@@ -2500,3 +2518,4 @@ elif choice == "Usuarios":
                             agregar_notificacion('error', f'Error al eliminar: {e}')
         else:
             st.info("No se encontraron usuarios en la base de datos. Use la pestaña 'CREAR USUARIO'.")
+
