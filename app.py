@@ -1676,37 +1676,35 @@ elif choice == "Inventario Activos":
                             res_solic = supabase.table("solicitudes").select("id").eq("activo_id", dat['id']).execute()
                             ids_solic = [str(s['id']) for s in res_solic.data]
 
-                        # 2. SI HAY DEPENDENCIAS, MOSTRAMOS EL AVISO VISUAL Y PARAMOS
-                        if ids_planes or ids_ordenes or ids_solic:
-                            st.markdown(f"""
-                            <div style="background-color: rgba(245, 158, 11, 0.1); border-left: 4px solid #F59E0B; padding: 15px; border-radius: 4px; margin-bottom: 10px;">
-                                <h4 style="color: #F59E0B; margin: 0 0 5px 0;">✋ Acción Requerida</h4>
-                                <p style="color: #E5E7EB; font-size: 0.9em; margin: 0;">
-                                    No podemos eliminar <b>{dat['nombre']}</b> porque tiene historial asociado.<br>
-                                    Por seguridad, primero debes gestionar (borrar o reasignar) los siguientes registros:
-                                </p>
-                            </div>
-                            """, unsafe_allow_html=True)
-                            
-                            c_dep1, c_dep2, c_dep3 = st.columns(3)
-                            
-                            if ids_planes:
-                                with c_dep1:
-                                    st.error(f"📅 **{len(ids_planes)} Planes Prev.**")
-                                    st.caption(f"IDs: {', '.join(ids_planes)}")
-                            
-                            if ids_ordenes:
-                                with c_dep2:
-                                    st.error(f"🛠️ **{len(ids_ordenes)} Órdenes**")
-                                    st.caption(f"IDs: {', '.join(ids_ordenes)}")
-                                    
-                            if ids_solic:
-                                with c_dep3:
-                                    st.error(f"📬 **{len(ids_solic)} Solicitudes**")
-                                    st.caption(f"IDs: {', '.join(ids_solic)}")
-                                    
-                        # 3. SI ESTÁ LIMPIO, PROCEDEMOS AL BORRADO REAL
-                        else:
+# 2. SI HAY DEPENDENCIAS, MOSTRAMOS EL AVISO VISUAL Y PARAMOS
+                    if ids_planes or ids_ordenes or ids_solic:
+                        st.markdown(f"""
+                        <div style="background-color: rgba(239, 68, 68, 0.1); border-left: 4px solid #EF4444; padding: 15px; border-radius: 4px; margin-bottom: 15px;">
+                            <h4 style="color: #EF4444; margin: 0 0 5px 0;">🛑 No se puede eliminar</h4>
+                            <p style="color: #E5E7EB; font-size: 0.9em; margin: 0;">
+                                El activo <b>{dat['nombre']}</b> tiene registros vinculados. 
+                                Para evitar errores en la base de datos, primero debes eliminar o reasignar lo siguiente:
+                            </p>
+                        </div>
+                        """, unsafe_allow_html=True)
+                        
+                        # MOSTRAMOS LISTA VERTICAL (Mucho más legible)
+                        if ids_planes:
+                            st.warning(f"📅 Hay **{len(ids_planes)}** Planes de Mantenimiento asociados.")
+                            st.code(f"IDs de Planes: {', '.join(ids_planes)}", language="text")
+                            st.markdown("---")
+                        
+                        if ids_ordenes:
+                            st.warning(f"🛠️ Hay **{len(ids_ordenes)}** Órdenes de Trabajo asociadas.")
+                            st.code(f"IDs de Órdenes: {', '.join(ids_ordenes)}", language="text")
+                            st.markdown("---")
+
+                        if ids_solic:
+                            st.warning(f"📬 Hay **{len(ids_solic)}** Solicitudes pendientes.")
+                            st.code(f"IDs de Solicitudes: {', '.join(ids_solic)}", language="text")
+
+                    # 3. SI ESTÁ LIMPIO, PROCEDEMOS AL BORRADO REAL
+                    else:
                             try:
                                 supabase.table("activos").delete().eq("id", dat['id']).execute()
                                 
@@ -2170,3 +2168,4 @@ elif choice == "Usuarios":
                             agregar_notificacion('error', f'Error al eliminar: {e}')
         else:
             st.info("No se encontraron usuarios en la base de datos. Use la pestaña 'CREAR USUARIO'.")
+
