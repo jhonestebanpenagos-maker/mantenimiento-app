@@ -1772,7 +1772,82 @@ elif choice == "Inventario Activos":
 elif choice == "Ordenes de Trabajo":
     st.title("GESTIÓN DE MANTENIMIENTO")
     mostrar_notificaciones()
-    
+
+    # ==============================================================================
+    # 🚀 INTERCEPTOR DE NAVEGACIÓN (MODO ENFOQUE)
+    # ==============================================================================
+    if 'jump_target' in st.session_state and st.session_state.jump_target:
+        target_type = st.session_state.jump_target
+        target_id = st.session_state.jump_id
+
+        st.markdown(f"""
+        <div style="background-color: #374151; padding: 20px; border-radius: 10px; border: 1px solid #F59E0B; margin-bottom: 20px;">
+            <h3 style="color: #F59E0B; margin: 0;">🎯 MODO ENFOQUE: Gestionando Dependencia</h3>
+            <p style="margin: 0; color: #D1D5DB;">Estás editando el registro <b>#{target_id}</b> que impide borrar un activo.</p>
+        </div>
+        """, unsafe_allow_html=True)
+
+        if st.button("⬅️ VOLVER A VISTA NORMAL", type="secondary"):
+            st.session_state.jump_target = None
+            st.session_state.jump_id = None
+            st.rerun()
+
+        # --- CASO 1: GESTIONAR UNA ORDEN DE TRABAJO ---
+        if target_type == "orden":
+            try:
+                # Traer datos de la orden específica
+                res = supabase.table("ordenes").select("*").eq("id", target_id).execute()
+                if res.data:
+                    orden_focus = res.data[0]
+                    
+                    st.write("---")
+                    c1, c2 = st.columns([3, 1])
+                    c1.subheader(f"🛠️ Orden de Trabajo #{target_id}")
+                    c1.info(f"Falla reportada: {orden_focus['descripcion']}")
+                    
+                    with c2:
+                        st.markdown("### 🗑️ Eliminar")
+                        if st.button("BORRAR ORDEN AHORA", type="primary", use_container_width=True):
+                            supabase.table("ordenes").delete().eq("id", target_id).execute()
+                            st.success("Orden eliminada. Regresando...")
+                            st.session_state.jump_target = None
+                            time.sleep(1)
+                            st.rerun()
+
+                else:
+                    st.error("La orden ya no existe o fue borrada.")
+            except Exception as e:
+                st.error(f"Error cargando orden: {e}")
+
+        # --- CASO 2: GESTIONAR UN PLAN PREVENTIVO ---
+        elif target_type == "preventivo":
+            try:
+                # Traer datos del plan específico
+                res = supabase.table("planes_mantenimiento").select("*").eq("id", target_id).execute()
+                if res.data:
+                    plan_focus = res.data[0]
+                    
+                    st.write("---")
+                    c1, c2 = st.columns([3, 1])
+                    c1.subheader(f"📅 Plan Preventivo #{target_id}")
+                    c1.info(f"Tarea: {plan_focus['descripcion']} (Frecuencia: {plan_focus['frecuencia_dias']} días)")
+                    
+                    with c2:
+                        st.markdown("### 🗑️ Eliminar")
+                        if st.button("BORRAR PLAN AHORA", type="primary", use_container_width=True):
+                            supabase.table("planes_mantenimiento").delete().eq("id", target_id).execute()
+                            st.success("Plan eliminado. Regresando...")
+                            st.session_state.jump_target = None
+                            time.sleep(1)
+                            st.rerun()
+                else:
+                    st.error("El plan ya no existe o fue borrado.")
+            except Exception as e:
+                st.error(f"Error cargando plan: {e}")
+
+        # DETENER LA EJECUCIÓN AQUÍ PARA NO MOSTRAR LAS PESTAÑAS DE ABAJO
+        st.stop()
+
     # Cargar datos necesarios
     df_act = run_query("activos")
     df_users = run_query("usuarios")
@@ -2230,3 +2305,4 @@ elif choice == "Usuarios":
                             agregar_notificacion('error', f'Error al eliminar: {e}')
         else:
             st.info("No se encontraron usuarios en la base de datos. Use la pestaña 'CREAR USUARIO'.")
+
