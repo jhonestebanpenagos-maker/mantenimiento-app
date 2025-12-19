@@ -1062,9 +1062,36 @@ if 'rol' not in st.session_state: st.session_state['rol'] = None
 def logout():
     st.session_state['usuario'] = None
     st.session_state['rol'] = None
-    st.query_params.clear()
+    # --- NUEVO: LIMPIAR URL ---
+    st.query_params.clear() 
+    # --------------------------
     st.rerun()
+# ==============================================================================
+# 🔄 LÓGICA DE PERSISTENCIA (AUTO-LOGIN AL REFRESCAR)
+# ==============================================================================
+# Si no hay usuario en memoria, pero SÍ hay datos en la URL, intentamos recuperar la sesión
+if 'usuario' not in st.session_state or st.session_state['usuario'] is None:
+    query_params = st.query_params
+    if "session_id" in query_params:
+        user_doc_url = query_params["session_id"]
+        try:
+            # Buscamos al usuario por el documento guardado en la URL
+            res = supabase.table("usuarios").select("*").eq("documento", user_doc_url).execute()
+            if res.data:
+                user = res.data[0]
+                st.session_state['usuario'] = user['nombre']
+                st.session_state['rol'] = user['rol']
+                # Opcional: Recuperar la página donde estaba
+                if "last_page" in query_params:
+                    st.session_state.current_page = query_params["last_page"]
+        except Exception as e:
+            st.error(f"Error recuperando sesión: {e}")
 
+# ==============================================================================
+# 🚀 LOGIN (Tu código existente empieza aquí abajo)
+# ==============================================================================
+if st.session_state['usuario'] is None:
+    # ... (El resto de tu código de login sigue igual)
 if st.session_state['usuario'] is None:
     c1, c2, c3 = st.columns([1,2,1])
     with c2:
@@ -1101,12 +1128,17 @@ if st.session_state['usuario'] is None:
                         user = response.data[0]
                         st.session_state['usuario'] = user['nombre']
                         st.session_state['rol'] = user['rol']
+                        
+                        # --- NUEVO: GUARDAR SESIÓN EN URL ---
+                        st.query_params["session_id"] = documento
+                        st.query_params["last_page"] = "Tablero de Mando"
+                        # ------------------------------------
+                        
                         st.rerun()
                     else: 
                         st.error("Acceso denegado. Usuario o contraseña incorrectos.")
                 except Exception as e: 
                     st.error(f"Error de conexión. Intente nuevamente. Detalles: {e}")
-
     st.stop()
 
 # ==============================================================================
@@ -1174,6 +1206,14 @@ with st.sidebar:
         
         if st.button(f"{icono} {texto}", key=f"menu_{valor}", use_container_width=True, type=tipo):
             st.session_state.current_page = valor
+            
+            # --- NUEVO: ACTUALIZAR PÁGINA EN URL ---
+            # Mantenemos la sesión pero cambiamos la página
+            doc_actual = st.query_params.get("session_id", "")
+            st.query_params["session_id"] = doc_actual
+            st.query_params["last_page"] = valor
+            # ---------------------------------------
+            
             st.rerun()
     
     choice = st.session_state.current_page
@@ -2460,4 +2500,3 @@ elif choice == "Usuarios":
                             agregar_notificacion('error', f'Error al eliminar: {e}')
         else:
             st.info("No se encontraron usuarios en la base de datos. Use la pestaña 'CREAR USUARIO'.")
-
