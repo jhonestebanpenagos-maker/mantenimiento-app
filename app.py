@@ -1724,94 +1724,118 @@ elif choice == "Inventario Activos":
                             st.error(f"Error al actualizar: {e}")
             with bc2:
                 with st.expander("🗑️ Zona de Peligro", expanded=True):
-                    st.warning("Acciones críticas para este activo.")
+                    st.warning("Acciones críticas.")
                     
-                    # 1. VERIFICACIÓN AUTOMÁTICA (Sin botón previo)
-                    # Al estar fuera de un botón, persiste entre recargas y permite el clic.
-                    ids_planes, ids_ordenes, ids_solic = [], [], []
+                    # 1. CLASIFICACIÓN INTELIGENTE (Separamos lo activo de lo viejo)
+                    ids_planes = []     # Bloqueante
+                    ids_solic = []      # Bloqueante
+                    ids_activas = []    # Bloqueante (Abiertas/Por Validar)
+                    ids_historial = []  # NO Bloqueante (Concluidas/Canceladas) - Solo advertencia
                     
-                    # Solo ejecutamos si hay un activo seleccionado
                     if dat.get('id'):
-                        # Buscamos Planes
-                        res_planes = supabase.table("planes_mantenimiento").select("id").eq("activo_id", dat['id']).execute()
-                        ids_planes = [str(p['id']) for p in res_planes.data]
+                        # Planes (Siempre bloquean si existen)
+                        res = supabase.table("planes_mantenimiento").select("id").eq("activo_id", dat['id']).execute()
+                        ids_planes = [str(x['id']) for x in res.data]
                         
-                        # Buscamos Órdenes
-                        res_ordenes = supabase.table("ordenes").select("id").eq("activo_id", dat['id']).execute()
-                        ids_ordenes = [str(o['id']) for o in res_ordenes.data]
+                        # Solicitudes (Siempre bloquean si existen)
+                        res = supabase.table("solicitudes").select("id").eq("activo_id", dat['id']).execute()
+                        ids_solic = [str(x['id']) for x in res.data]
+                        
+                        # Órdenes (Aquí está la clave: separamos vivas de muertas)
+                        res = supabase.table("ordenes").select("id, estado").eq("activo_id", dat['id']).execute()
+                        for o in res.data:
+                            if o['estado'] in ['Abierta', 'Por Validar']:
+                                ids_activas.append(str(o['id']))
+                            else:
+                                ids_historial.append(str(o['id']))
 
-                        # Buscamos Solicitudes
-                        res_solic = supabase.table("solicitudes").select("id").eq("activo_id", dat['id']).execute()
-                        ids_solic = [str(s['id']) for s in res_solic.data]
+                    # 2. LÓGICA DE BLOQUEO (ROJO) - SOLO SI HAY TAREAS PENDIENTES
+                    # Si hay Planes, Solicitudes u Órdenes ABIERTAS, no dejamos borrar.
+                    bloqueo_total = ids_planes or ids_activas or ids_solic
 
-                    # 2. SI HAY DEPENDENCIAS: MOSTRAMOS LAS TABLAS DE NAVEGACIÓN
-                    if ids_planes or ids_ordenes or ids_solic:
+                    if bloqueo_total:
                         st.markdown(f"""
-                        <div style="background-color: rgba(239, 68, 68, 0.1); border-left: 4px solid #EF4444; padding: 15px; border-radius: 4px; margin-bottom: 15px;">
-                            <h5 style="color: #EF4444; margin: 0;">🛑 No se puede eliminar</h5>
-                            <p style="color: #E5E7EB; font-size: 0.85em; margin: 5px 0 0 0;">
-                                Tiene historial vinculado. Selecciona un ítem abajo para ir a gestionarlo.
-                            </p>
+                        <div style="background-color: rgba(239, 68, 68, 0.1); border-left: 4px solid #EF4444; padding: 10px; margin-bottom: 10px;">
+                            <strong style="color: #EF4444;">🛑 NO SE PUEDE BORRAR</strong>
+                            <p style="font-size: 0.85em; margin:0;">Hay tareas pendientes activas. Debes gestionarlas primero.</p>
                         </div>
                         """, unsafe_allow_html=True)
                         
-                        # --- TABLA INTERACTIVA DE PLANES ---
+                        # Mostramos qué estorba y permitimos ir a arreglarlo
                         if ids_planes:
-                            st.caption(f"📅 Planes Preventivos ({len(ids_planes)})")
-                            df_warn_planes = pd.DataFrame({'ID': ids_planes, 'Ir': ['↗️ Ver' for _ in ids_planes]})
-                            
-                            sel_plan = st.dataframe(
-                                df_warn_planes, 
-                                selection_mode="single-row", 
-                                on_select="rerun", 
-                                use_container_width=True,
-                                hide_index=True,
-                                key=f"sel_p_{id_suffix}" # Key única
-                            )
-                            
-                            if len(sel_plan.selection.rows) > 0:
-                                idx = sel_plan.selection.rows[0]
-                                id_target = df_warn_planes.iloc[idx]['ID']
-                                st.session_state.current_page = "Ordenes de Trabajo" # Cambiamos de pestaña
-                                st.session_state.jump_target = "preventivo" # Definimos destino
-                                st.session_state.jump_id = id_target # Definimos ID
+                            st.caption(f"📅 Planes ({len(ids_planes)}) - ID: {', '.join(ids_planes)}")
+                            df_l = pd.DataFrame({'ID': ids_planes, 'Ir': ['Ver Plan' for _ in ids_planes]})
+                            sel = st.dataframe(df_l, selection_mode='single-row', on_select='rerun', use_container_width=True, hide_index=True, key=f"lk_p_{id_suffix}")
+                            if len(sel.selection.rows) > 0:
+                                st.session_state.current_page = "Ordenes de Trabajo"
+                                st.session_state.jump_target = "preventivo"
+                                st.session_state.jump_id = df_l.iloc[sel.selection.rows[0]]['ID']
                                 st.rerun()
 
-                        # --- TABLA INTERACTIVA DE ÓRDENES ---
-                        if ids_ordenes:
-                            st.caption(f"🛠️ Órdenes de Trabajo ({len(ids_ordenes)})")
-                            df_warn_ots = pd.DataFrame({'ID': ids_ordenes, 'Ir': ['↗️ Ver' for _ in ids_ordenes]})
-                            
-                            sel_ot = st.dataframe(
-                                df_warn_ots, 
-                                selection_mode="single-row", 
-                                on_select="rerun", 
-                                use_container_width=True,
-                                hide_index=True,
-                                key=f"sel_o_{id_suffix}" # Key única
-                            )
-
-                            if len(sel_ot.selection.rows) > 0:
-                                idx = sel_ot.selection.rows[0]
-                                id_target = df_warn_ots.iloc[idx]['ID']
+                        if ids_activas:
+                            st.caption(f"🛠️ Órdenes Activas ({len(ids_activas)})")
+                            df_l = pd.DataFrame({'ID': ids_activas, 'Ir': ['Ver Orden' for _ in ids_activas]})
+                            sel = st.dataframe(df_l, selection_mode='single-row', on_select='rerun', use_container_width=True, hide_index=True, key=f"lk_o_{id_suffix}")
+                            if len(sel.selection.rows) > 0:
                                 st.session_state.current_page = "Ordenes de Trabajo"
                                 st.session_state.jump_target = "orden"
-                                st.session_state.jump_id = id_target
+                                st.session_state.jump_id = df_l.iloc[sel.selection.rows[0]]['ID']
                                 st.rerun()
-                                
-                        # --- SOLICITUDES (Solo aviso, no redirección compleja) ---
+                        
                         if ids_solic:
-                            st.caption(f"📬 Solicitudes ({len(ids_solic)})")
-                            st.code(f"IDs: {', '.join(ids_solic)}")
+                             st.caption(f"📬 Solicitudes ({len(ids_solic)}) - Gestionar en Buzón")
 
-                    # 3. SI ESTÁ LIMPIO: HABILITAMOS EL BOTÓN DE BORRAR
+                    # 3. LÓGICA DE ADVERTENCIA (NARANJA/VERDE) - AQUÍ APARECE EL PDF
                     else:
-                        st.success("✅ Activo sin dependencias.")
-                        if st.button("🗑️ ELIMINAR AHORA", type="secondary", use_container_width=True, key=f"btn_final_del_{id_suffix}"):
+                        # Si llegamos aquí, NO hay pendientes. Pero puede haber historial viejo.
+                        if ids_historial:
+                            st.markdown(f"""
+                            <div style="background-color: rgba(245, 158, 11, 0.1); border-left: 4px solid #F59E0B; padding: 10px; margin-bottom: 10px;">
+                                <strong style="color: #F59E0B;">⚠️ TIENE HISTORIAL</strong>
+                                <p style="font-size: 0.85em; margin:0;">
+                                    Este equipo tiene <b>{len(ids_historial)}</b> órdenes cerradas.<br>
+                                    Se recomienda descargar la Hoja de Vida antes de borrar.
+                                </p>
+                            </div>
+                            """, unsafe_allow_html=True)
+                            
+                            # --- GENERAR PDF DE RESPALDO ---
                             try:
+                                if 'df_users_cache' not in st.session_state: st.session_state.df_users_cache = run_query("usuarios")
+                                # Traemos los datos completos del historial
+                                data_hist = supabase.table("ordenes").select("*").in_("id", ids_historial).order("fecha_creacion", desc=True).execute()
+                                
+                                if data_hist.data:
+                                    # Llamamos a la función que ya definiste arriba
+                                    pdf_bytes = generar_hoja_vida_pdf(dat, data_hist.data, st.session_state.df_users_cache)
+                                    
+                                    st.download_button(
+                                        label="📄 DESCARGAR HOJA DE VIDA (PDF)", 
+                                        data=pdf_bytes, 
+                                        file_name=f"Hoja_Vida_{dat['nombre']}.pdf", 
+                                        mime="application/pdf", 
+                                        use_container_width=True
+                                    )
+                            except Exception as e:
+                                st.error(f"Error generando PDF: {e}")
+                        
+                        else:
+                            st.success("✅ Equipo limpio (Sin historial).")
+
+                        st.markdown("---")
+                        
+                        # BOTÓN FINAL DE BORRADO
+                        if st.button("🗑️ CONFIRMAR ELIMINACIÓN", type="secondary", use_container_width=True, key=f"fin_del_{id_suffix}"):
+                            try:
+                                # 1. Borrar historial viejo (silenciosamente) para evitar error de Foreign Key
+                                if ids_historial:
+                                    supabase.table("ordenes").delete().in_("id", ids_historial).execute()
+                                
+                                # 2. Borrar activo
                                 supabase.table("activos").delete().eq("id", dat['id']).execute()
+                                
                                 st.cache_data.clear()
-                                agregar_notificacion("delete", f"Activo '{dat['nombre']}' eliminado correctamente.")
+                                agregar_notificacion("delete", "Activo eliminado correctamente.")
                                 time.sleep(1.5)
                                 st.rerun()
                             except Exception as e:
@@ -2436,5 +2460,4 @@ elif choice == "Usuarios":
                             agregar_notificacion('error', f'Error al eliminar: {e}')
         else:
             st.info("No se encontraron usuarios en la base de datos. Use la pestaña 'CREAR USUARIO'.")
-
 
