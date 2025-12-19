@@ -1134,6 +1134,15 @@ def render_tab_preventivos(df_act, df_users):
     """Interfaz para gestionar y ejecutar planes de mantenimiento"""
     
     st.markdown("### 🗓️ Planes de Mantenimiento Recurrente")
+       
+    # --- 🔵 LÓGICA DE RECEPCIÓN DE SALTO (NUEVO) ---
+    filtro_id_externo = None
+    if st.session_state.get('jump_target') == 'preventivo' and st.session_state.get('jump_id'):
+        filtro_id_externo = st.session_state.jump_id
+        st.info(f"📍 Has sido redirigido al Plan #{filtro_id_externo}. Puedes editarlo o borrarlo abajo.")
+        # Limpiamos para que no se quede pegado el filtro si recarga
+        st.session_state.jump_target = None 
+        st.session_state.jump_id = None
     st.info("Aquí configuras las tareas que se repiten (ej: Limpieza mensual).")
 
     # 1. FORMULARIO PARA CREAR NUEVO PLAN
@@ -1177,6 +1186,11 @@ def render_tab_preventivos(df_act, df_users):
     # 2. LISTADO Y EJECUCIÓN
     df_planes = run_query("planes_mantenimiento")
     
+    # --- 🔵 APLICAR FILTRO SI VENIMOS DE UN SALTO ---
+    if filtro_id_externo:
+        # Convertimos a string por seguridad al comparar
+        df_planes = df_planes[df_planes['id'].astype(str) == str(filtro_id_externo)]
+        
     if df_planes.empty:
         st.warning("No hay planes configurados.")
         return
@@ -2000,10 +2014,24 @@ elif choice == "Ordenes de Trabajo":
         # 3. GESTIÓN GLOBAL (CON PDF)
         with tab_gestion:
             st.markdown("### 🎛️ Control Central de Órdenes")
+            # --- 🔵 LÓGICA DE RECEPCIÓN (Órdenes) ---
+            filtro_ot_externo = None
+            if st.session_state.get('jump_target') == 'orden' and st.session_state.get('jump_id'):
+                filtro_ot_externo = st.session_state.jump_id
+                st.toast(f"📍 Filtrando Orden #{filtro_ot_externo}", icon="🔍")
+                # Limpiamos variables de sesión
+                st.session_state.jump_target = None
+                st.session_state.jump_id = None
             col_filtros = st.columns(3)
             filtro_estado = col_filtros[0].selectbox("Filtrar Estado", ["Todas", "Abierta", "Por Validar", "Concluida"], index=0)
             
             df_display = df_ordenes.copy()
+            if filtro_estado != "Todas":
+                df_display = df_display[df_display['estado'] == filtro_estado]
+            
+            # --- 🔵 APLICAR FILTRO ID EXTERNO ---
+            if filtro_ot_externo:
+                df_display = df_display[df_display['id'].astype(str) == str(filtro_ot_externo)]
             if filtro_estado != "Todas": df_display = df_display[df_display['estado'] == filtro_estado]
             
             if not df_display.empty:
@@ -2199,5 +2227,3 @@ elif choice == "Usuarios":
                             agregar_notificacion('error', f'Error al eliminar: {e}')
         else:
             st.info("No se encontraron usuarios en la base de datos. Use la pestaña 'CREAR USUARIO'.")
-
-
