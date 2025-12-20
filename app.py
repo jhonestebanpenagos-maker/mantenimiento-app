@@ -44,7 +44,7 @@ except KeyError:
 except Exception as e:
     st.error(f"Error configurando Cloudinary: {e}")
 # ==============================================================================
-# 🎨 TEMA: "ORIÓN COMFORT UI" (CORREGIDO: SIDEBAR LIMPIO / RECHAZAR NEGRO)
+# 🎨 TEMA: "ORIÓN COMFORT UI" (CORREGIDO: RECHAZAR CON LETRAS NEGRAS)
 # ==============================================================================
 
 PRO_ORANGE = "#F59E0B" 
@@ -142,7 +142,7 @@ st.markdown(f"""
         font-weight: 600 !important;
     }}
     
-    /* 7. BOTONES PRIMARIOS (Verde/Naranja) */
+    /* 7. BOTONES PRIMARIOS */
     div.stButton > button:first-child {{
         background: linear-gradient(90deg, {PRO_ORANGE} 0%, {PRO_GREEN} 100%) !important;
         color: white !important;
@@ -186,48 +186,43 @@ st.markdown(f"""
 
     /* 11. BOTONES SECUNDARIOS (CORREGIDO) */
 
-    /* A) MENÚ LATERAL (SIDEBAR) - Se queda TRANSPARENTE y ROSA (Original) */
-    section[data-testid="stSidebar"] button[kind="secondary"] {{
+    /* A) BOTONES NORMALES (Como 'Salir' en el menú) - Estilo sutil por defecto */
+    div.stButton > button[kind="secondary"] {{
         background-color: transparent !important;
-        color: #fca5a5 !important;
-        border: 1px solid #ef4444 !important;
-        font-weight: 500 !important;
+        color: #EF4444 !important; /* Rojo estándar */
+        border: 1px solid #EF4444 !important;
     }}
-    section[data-testid="stSidebar"] button[kind="secondary"] p {{
-        color: #fca5a5 !important; /* Asegurar texto rosa */
-    }}
-    section[data-testid="stSidebar"] button[kind="secondary"]:hover {{
-        background-color: rgba(239, 68, 68, 0.15) !important;
-        border-color: #f87171 !important;
+    div.stButton > button[kind="secondary"]:hover {{
+        background-color: rgba(239, 68, 68, 0.1) !important;
     }}
 
-    /* B) ÁREA PRINCIPAL (DONDE ESTÁ RECHAZAR) - Se pone ROSA con LETRAS NEGRAS */
-    section[data-testid="stMain"] button[kind="secondary"] {{
-        background-color: #fca5a5 !important; /* Fondo Rosado */
+    /* B) BOTONES DE FORMULARIO (Como 'Rechazar') - ESTILO ESPECÍFICO */
+    /* Aquí es donde forzamos el NEGRO */
+    div.stFormSubmitButton > button[kind="secondary"] {{
+        background-color: #fee2e2 !important; /* Fondo Rojo muy claro */
         border: 1px solid #ef4444 !important;
-        font-weight: 700 !important;
     }}
     
-    /* FORZAR NEGRO SOLO EN EL ÁREA PRINCIPAL */
-    section[data-testid="stMain"] button[kind="secondary"] *,
-    section[data-testid="stMain"] button[kind="secondary"] p {{
+    /* Forzar letras negras en el botón de rechazar */
+    div.stFormSubmitButton > button[kind="secondary"] * {{
         color: #000000 !important; /* NEGRO PURO */
+        font-weight: 800 !important; /* Negrita fuerte */
     }}
 
-    /* Hover en Área Principal */
-    section[data-testid="stMain"] button[kind="secondary"]:hover {{
-        background-color: #f87171 !important;
+    /* Hover para el botón de rechazar */
+    div.stFormSubmitButton > button[kind="secondary"]:hover {{
+        background-color: #fca5a5 !important; /* Fondo un poco más oscuro al pasar mouse */
         border-color: #dc2626 !important;
         transform: scale(1.02);
     }}
 
-    /* 12. HACK: OCULTAR CONTENEDORES VACÍOS */
+    /* 12. HACK: OCULTAR VACÍOS */
     div[data-testid="stVerticalBlock"] > div:empty {{
         height: 0 !important;
         margin: 0 !important;
     }}
     
-    /* 13. MEJORAS NAVEGACIÓN COLAPSADA */
+    /* 13. NAV COLAPSADA */
     [data-testid="stSidebarNav"] {{
         padding-top: 10px !important;
     }}
@@ -238,7 +233,6 @@ st.markdown(f"""
     
     </style>
 """, unsafe_allow_html=True)
-
 # --- 2. CONEXIÓN A SUPABASE ---
 @st.cache_resource
 def init_supabase():
@@ -2605,6 +2599,7 @@ elif choice == "Usuarios":
                             agregar_notificacion('error', f'Error al eliminar: {e}')
         else:
             st.info("No se encontraron usuarios en la base de datos. Use la pestaña 'CREAR USUARIO'.")
+
 
 
 
