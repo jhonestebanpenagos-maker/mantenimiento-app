@@ -43,9 +43,8 @@ except KeyError:
     st.warning("⚠️ ADVERTENCIA: No se encontraron las credenciales de Cloudinary en secrets.toml. La subida de imágenes fallará.")
 except Exception as e:
     st.error(f"Error configurando Cloudinary: {e}")
-
 # ==============================================================================
-# 🎨 TEMA: "ORIÓN COMFORT UI" (SOLUCIÓN DEFINITIVA BOTÓN RECHAZAR)
+# 🎨 TEMA: "ORIÓN COMFORT UI" (CORREGIDO: SIDEBAR LIMPIO / RECHAZAR NEGRO)
 # ==============================================================================
 
 PRO_ORANGE = "#F59E0B" 
@@ -185,34 +184,41 @@ st.markdown(f"""
         text-align: center;
     }}
 
-    /* 11. BOTÓN SECUNDARIO (FUERZA BRUTA - RECHAZAR) */
-    
-    /* Atacamos directamente al atributo kind="secondary" en cualquier etiqueta button */
-    button[kind="secondary"] {{
-        background-color: #fca5a5 !important; /* Fondo Rosado */
+    /* 11. BOTONES SECUNDARIOS (CORREGIDO) */
+
+    /* A) MENÚ LATERAL (SIDEBAR) - Se queda TRANSPARENTE y ROSA (Original) */
+    section[data-testid="stSidebar"] button[kind="secondary"] {{
+        background-color: transparent !important;
+        color: #fca5a5 !important;
         border: 1px solid #ef4444 !important;
-        transition: all 0.2s ease;
+        font-weight: 500 !important;
     }}
-    
-    /* ESTO ES LO IMPORTANTE: Forzamos NEGRO en todo lo que esté dentro del botón */
-    button[kind="secondary"] *, 
-    button[kind="secondary"] p, 
-    button[kind="secondary"] div,
-    button[kind="secondary"] span {{
-        color: #000000 !important; /* NEGRO PURO */
-        font-weight: 800 !important; /* EXTRA NEGRITA */
+    section[data-testid="stSidebar"] button[kind="secondary"] p {{
+        color: #fca5a5 !important; /* Asegurar texto rosa */
+    }}
+    section[data-testid="stSidebar"] button[kind="secondary"]:hover {{
+        background-color: rgba(239, 68, 68, 0.15) !important;
+        border-color: #f87171 !important;
     }}
 
-    /* Estado Hover (Mouse encima) */
-    button[kind="secondary"]:hover {{
-        background-color: #f87171 !important; /* Rojo un poco más intenso */
-        border-color: #b91c1c !important;
-        transform: scale(1.02);
+    /* B) ÁREA PRINCIPAL (DONDE ESTÁ RECHAZAR) - Se pone ROSA con LETRAS NEGRAS */
+    section[data-testid="stMain"] button[kind="secondary"] {{
+        background-color: #fca5a5 !important; /* Fondo Rosado */
+        border: 1px solid #ef4444 !important;
+        font-weight: 700 !important;
     }}
     
-    /* Aseguramos que el hover mantenga el texto negro */
-    button[kind="secondary"]:hover * {{
-        color: #000000 !important;
+    /* FORZAR NEGRO SOLO EN EL ÁREA PRINCIPAL */
+    section[data-testid="stMain"] button[kind="secondary"] *,
+    section[data-testid="stMain"] button[kind="secondary"] p {{
+        color: #000000 !important; /* NEGRO PURO */
+    }}
+
+    /* Hover en Área Principal */
+    section[data-testid="stMain"] button[kind="secondary"]:hover {{
+        background-color: #f87171 !important;
+        border-color: #dc2626 !important;
+        transform: scale(1.02);
     }}
 
     /* 12. HACK: OCULTAR CONTENEDORES VACÍOS */
@@ -2599,5 +2605,6 @@ elif choice == "Usuarios":
                             agregar_notificacion('error', f'Error al eliminar: {e}')
         else:
             st.info("No se encontraron usuarios en la base de datos. Use la pestaña 'CREAR USUARIO'.")
+
 
 
