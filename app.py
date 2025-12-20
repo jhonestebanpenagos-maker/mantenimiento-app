@@ -44,7 +44,7 @@ except KeyError:
 except Exception as e:
     st.error(f"Error configurando Cloudinary: {e}")
 # ==============================================================================
-# 🎨 TEMA: "ORIÓN COMFORT UI" (SOLUCIÓN QUIRÚRGICA: SALIR VS RECHAZAR)
+# 🎨 TEMA: "ORIÓN COMFORT UI" (SOLUCIÓN FINAL POR UBICACIÓN)
 # ==============================================================================
 
 PRO_ORANGE = "#F59E0B" 
@@ -56,40 +56,90 @@ TEXT_WHITE = "#E5E7EB"
 
 st.markdown(f"""
     <style>
-    /* 1. FONDO GENERAL */
+    /* =========================================
+       1. ESTILOS GENERALES
+       ========================================= */
     .stApp {{
         background-color: {BG_DARK_CLEAN};
         color: {TEXT_WHITE};
     }}
 
-    /* 2. BARRA LATERAL (Con letras blancas como te gustó) */
+    /* =========================================
+       2. BARRA LATERAL (SIDEBAR)
+       ========================================= */
     [data-testid="stSidebar"] {{
         background-color: {BG_SIDEBAR};
         border-right: 1px solid #30363d;
     }}
     
-    /* Texto del menú lateral en blanco/gris claro */
+    /* A) TEXTO DEL MENÚ DE NAVEGACIÓN -> BLANCO (Como te gustó) */
     [data-testid="stSidebarNav"] span {{
-        color: #E5E7EB !important; 
+        color: #E5E7EB !important;
         font-weight: 500;
     }}
     
+    /* Elemento seleccionado en el menú */
     [data-testid="stSidebarNav"] a[aria-current="page"] {{
         background-color: rgba(245, 158, 11, 0.1);
         border-left: 3px solid {PRO_ORANGE};
     }}
 
-    /* 3. TÍTULOS */
+    /* B) BOTÓN 'SALIR' (Solo los botones secundarios DENTRO del Sidebar) */
+    section[data-testid="stSidebar"] button[kind="secondary"] {{
+        background-color: transparent !important;
+        border: 1px solid #fca5a5 !important;
+    }}
+    
+    /* Texto del botón Salir -> ROSA */
+    section[data-testid="stSidebar"] button[kind="secondary"] p {{
+        color: #fca5a5 !important;
+    }}
+
+    /* Hover del botón Salir */
+    section[data-testid="stSidebar"] button[kind="secondary"]:hover {{
+        background-color: rgba(239, 68, 68, 0.15) !important;
+    }}
+
+    /* =========================================
+       3. ÁREA PRINCIPAL (MAIN)
+       ========================================= */
+    
+    /* C) BOTÓN 'RECHAZAR' / 'ELIMINAR' (Cualquier botón secundario en el centro) */
+    section[data-testid="stMain"] button[kind="secondary"] {{
+        background-color: #fca5a5 !important; /* FONDO ROSADO SÓLIDO */
+        border: 1px solid #ef4444 !important;
+        transition: transform 0.1s;
+    }}
+
+    /* Texto del botón Rechazar -> NEGRO (Forzado con fuerza bruta) */
+    section[data-testid="stMain"] button[kind="secondary"] * {{
+        color: #000000 !important; /* NEGRO PURO */
+        font-weight: 800 !important; /* NEGRITA */
+    }}
+    
+    /* Aseguramos que el párrafo interno también sea negro */
+    section[data-testid="stMain"] button[kind="secondary"] p {{
+        color: #000000 !important;
+    }}
+
+    /* Hover del botón Rechazar */
+    section[data-testid="stMain"] button[kind="secondary"]:hover {{
+        background-color: #f87171 !important; /* Rojo un poco más intenso */
+        transform: scale(1.02);
+        border-color: #b91c1c !important;
+    }}
+
+    /* =========================================
+       4. RESTO DE ESTILOS (Títulos, Inputs, etc)
+       ========================================= */
     h1, h2, h3 {{
         background: linear-gradient(90deg, {PRO_ORANGE}, {PRO_GREEN});
         -webkit-background-clip: text;
         -webkit-text-fill-color: transparent;
         font-weight: 800 !important;
         text-transform: uppercase;
-        letter-spacing: 0.5px;
     }}
 
-    /* 4. TARJETAS */
     .card-style {{
         background: {BG_CARD};
         backdrop-filter: blur(12px);
@@ -99,13 +149,7 @@ st.markdown(f"""
         box-shadow: 0 4px 6px rgba(0, 0, 0, 0.2);
         margin-bottom: 20px;
     }}
-    .login-container {{
-        border-radius: 12px;
-        padding: 30px;
-        margin-top: 20px;
-    }}
 
-    /* 5. TÍTULOS DE GRÁFICAS */
     .chart-header {{
         font-size: 1.1rem;
         font-weight: 700;
@@ -116,7 +160,6 @@ st.markdown(f"""
         display: block;
     }}
 
-    /* 6. INPUTS Y MENÚS */
     .stTextInput input, .stTextArea textarea, .stSelectbox > div > div {{
         background-color: #0d1117 !important; 
         color: #e6edf3 !important;
@@ -128,121 +171,42 @@ st.markdown(f"""
         border-color: {PRO_ORANGE} !important;
         box-shadow: 0 0 0 1px {PRO_ORANGE} !important;
     }}
-
-    div[data-baseweb="popover"], div[data-baseweb="menu"] {{
-        background-color: #161b22 !important;
-        border: 1px solid #30363d;
-    }}
-    div[data-baseweb="menu"] li:hover {{
-        background-color: {PRO_ORANGE} !important;
-        color: white !important;
-    }}
     
     .stTextInput label, .stSelectbox label, .stTextArea label {{
         color: #E5E7EB !important;
         font-weight: 600 !important;
     }}
-    
-    /* 7. BOTONES PRIMARIOS (Verde/Naranja) */
+
     div.stButton > button:first-child {{
         background: linear-gradient(90deg, {PRO_ORANGE} 0%, {PRO_GREEN} 100%) !important;
         color: white !important;
         border: none;
         font-weight: 600;
         border-radius: 6px;
-        padding: 0.6rem 1.2rem;
-        transition: transform 0.2s;
     }}
     div.stButton > button:first-child:hover {{
         transform: translateY(-2px);
         opacity: 0.9;
     }}
 
-    /* 8. MÉTRICAS */
     [data-testid="stMetric"] {{
         background: rgba(30, 41, 59, 0.5);
-        padding: 15px;
-        border-radius: 8px;
         border-left: 4px solid {PRO_GREEN};
-        border-top: 1px solid rgba(255,255,255,0.05);
-        border-right: 1px solid rgba(255,255,255,0.05);
-        border-bottom: 1px solid rgba(255,255,255,0.05);
+        border-radius: 8px;
+        padding: 15px;
     }}
     [data-testid="stMetricLabel"] {{ color: #9CA3AF !important; }}
     [data-testid="stMetricValue"] {{ color: #F3F4F6 !important; }}
 
-    /* 9. PESTAÑAS (TABS) */
     .stTabs [data-baseweb="tab"] {{ color: #9CA3AF; font-weight: 600; }}
     .stTabs [aria-selected="true"] {{ color: {PRO_ORANGE} !important; background-color: transparent !important; border-bottom-color: {PRO_ORANGE} !important; }}
-    
-    /* 10. ZONA PELIGRO */
-    .danger-zone {{
-        background: rgba(220, 38, 38, 0.1);
-        border: 1px solid rgba(220, 38, 38, 0.3);
-        color: #f87171;
-        padding: 15px;
-        border-radius: 8px;
-        text-align: center;
-    }}
 
-    /* ==========================================================
-       11. SOLUCIÓN DEFINITIVA DE BOTONES
-       ========================================================== */
-
-    /* A) BOTÓN SALIR (Sidebar) - stButton normal */
-    /* Lo mantenemos transparente con letras rojas/rosadas */
-    div.stButton button[kind="secondary"] {{
-        background-color: transparent !important;
-        color: #fca5a5 !important;
-        border: 1px solid #ef4444 !important;
-    }}
-    div.stButton button[kind="secondary"]:hover {{
-        background-color: rgba(239, 68, 68, 0.15) !important;
-    }}
-    div.stButton button[kind="secondary"] p {{
-        color: #fca5a5 !important;
-    }}
-
-    /* B) BOTÓN RECHAZAR (Formulario) - stFormSubmitButton */
-    /* Atacamos específicamente la clase de botones de envío de formulario */
-    
-    div.stFormSubmitButton button[kind="secondary"] {{
-        background-color: #fca5a5 !important; /* FONDO ROSADO */
-        border: 1px solid #fca5a5 !important;
-    }}
-    
-    /* AQUÍ ESTÁ EL TRUCO: Forzamos el color NEGRO al párrafo <p> interno */
-    div.stFormSubmitButton button[kind="secondary"] p {{
-        color: #000000 !important; /* NEGRO PURO */
-        font-weight: 800 !important; /* NEGRITA */
-    }}
-    
-    /* Efecto Hover para Rechazar */
-    div.stFormSubmitButton button[kind="secondary"]:hover {{
-        background-color: #f87171 !important; /* Rojo un poco más intenso */
-        transform: scale(1.02);
-    }}
-    
-    /* Aseguramos que el hover mantenga el texto negro */
-    div.stFormSubmitButton button[kind="secondary"]:hover p {{
-        color: #000000 !important;
-    }}
-
-    /* 12. HACK: OCULTAR VACÍOS */
-    div[data-testid="stVerticalBlock"] > div:empty {{
-        height: 0 !important;
-        margin: 0 !important;
-    }}
-    
-    /* 13. NAV COLAPSADA */
-    [data-testid="stSidebarNav"] {{
-        padding-top: 10px !important;
-    }}
+    div[data-testid="stVerticalBlock"] > div:empty {{ height: 0 !important; margin: 0 !important; }}
+    [data-testid="stSidebarNav"] {{ padding-top: 10px !important; }}
     
     @media (max-width: 768px) {{
         [data-testid="stSidebarNavItems"] .nav-link span {{ display: none; }}
     }}
-    
     </style>
 """, unsafe_allow_html=True)
 # --- 2. CONEXIÓN A SUPABASE ---
@@ -2611,4 +2575,5 @@ elif choice == "Usuarios":
                             agregar_notificacion('error', f'Error al eliminar: {e}')
         else:
             st.info("No se encontraron usuarios en la base de datos. Use la pestaña 'CREAR USUARIO'.")
+
 
