@@ -45,7 +45,7 @@ except Exception as e:
     st.error(f"Error configurando Cloudinary: {e}")
 
 # ==============================================================================
-# 🎨 TEMA: "ORIÓN COMFORT UI" (CORREGIDO BOTÓN RECHAZAR EN FORMULARIOS)
+# 🎨 TEMA: "ORIÓN COMFORT UI" (SOLUCIÓN DEFINITIVA BOTÓN RECHAZAR)
 # ==============================================================================
 
 PRO_ORANGE = "#F59E0B" 
@@ -69,13 +69,11 @@ st.markdown(f"""
         border-right: 1px solid #30363d;
     }}
     
-    /* Texto de navegación más legible */
     [data-testid="stSidebarNav"] span {{
         color: #9CA3AF !important;
         font-weight: 500;
     }}
     
-    /* Elemento seleccionado en el menú */
     [data-testid="stSidebarNav"] a[aria-current="page"] {{
         background-color: rgba(245, 158, 11, 0.1);
         border-left: 3px solid {PRO_ORANGE};
@@ -118,7 +116,7 @@ st.markdown(f"""
         display: block;
     }}
 
-    /* 6. INPUTS Y MENÚS (Estilo unificado) */
+    /* 6. INPUTS Y MENÚS */
     .stTextInput input, .stTextArea textarea, .stSelectbox > div > div {{
         background-color: #0d1117 !important; 
         color: #e6edf3 !important;
@@ -126,7 +124,6 @@ st.markdown(f"""
         border-radius: 6px;
     }}
     
-    /* Focus en inputs */
     .stTextInput input:focus, .stTextArea textarea:focus {{
         border-color: {PRO_ORANGE} !important;
         box-shadow: 0 0 0 1px {PRO_ORANGE} !important;
@@ -141,13 +138,12 @@ st.markdown(f"""
         color: white !important;
     }}
     
-    /* Etiquetas de inputs */
     .stTextInput label, .stSelectbox label, .stTextArea label {{
         color: #E5E7EB !important;
         font-weight: 600 !important;
     }}
     
-    /* 7. BOTONES PRIMARIOS */
+    /* 7. BOTONES PRIMARIOS (Verde/Naranja) */
     div.stButton > button:first-child {{
         background: linear-gradient(90deg, {PRO_ORANGE} 0%, {PRO_GREEN} 100%) !important;
         color: white !important;
@@ -189,28 +185,33 @@ st.markdown(f"""
         text-align: center;
     }}
 
-    /* 11. BOTÓN SECUNDARIO (RECHAZAR) - CORREGIDO PARA FORMULARIOS */
-    /* Apuntamos tanto a botones normales como a botones de submit en forms */
-    div.stButton > button[kind="secondary"], 
-    div.stFormSubmitButton > button[kind="secondary"] {{
-        background-color: #fca5a5 !important; /* Fondo Rosado Sólido */
-        color: #000000 !important; /* LETRAS NEGRAS */
+    /* 11. BOTÓN SECUNDARIO (FUERZA BRUTA - RECHAZAR) */
+    
+    /* Atacamos directamente al atributo kind="secondary" en cualquier etiqueta button */
+    button[kind="secondary"] {{
+        background-color: #fca5a5 !important; /* Fondo Rosado */
         border: 1px solid #ef4444 !important;
-        font-weight: 700 !important;
+        transition: all 0.2s ease;
+    }}
+    
+    /* ESTO ES LO IMPORTANTE: Forzamos NEGRO en todo lo que esté dentro del botón */
+    button[kind="secondary"] *, 
+    button[kind="secondary"] p, 
+    button[kind="secondary"] div,
+    button[kind="secondary"] span {{
+        color: #000000 !important; /* NEGRO PURO */
+        font-weight: 800 !important; /* EXTRA NEGRITA */
     }}
 
-    /* Efecto Hover para ambos tipos */
-    div.stButton > button[kind="secondary"]:hover,
-    div.stFormSubmitButton > button[kind="secondary"]:hover {{
-        background-color: #f87171 !important;
-        color: #000000 !important; 
-        border-color: #dc2626 !important;
+    /* Estado Hover (Mouse encima) */
+    button[kind="secondary"]:hover {{
+        background-color: #f87171 !important; /* Rojo un poco más intenso */
+        border-color: #b91c1c !important;
         transform: scale(1.02);
     }}
-
-    /* Forzar negro en el texto interno para ambos tipos */
-    div.stButton > button[kind="secondary"] p,
-    div.stFormSubmitButton > button[kind="secondary"] p {{
+    
+    /* Aseguramos que el hover mantenga el texto negro */
+    button[kind="secondary"]:hover * {{
         color: #000000 !important;
     }}
 
@@ -225,7 +226,6 @@ st.markdown(f"""
         padding-top: 10px !important;
     }}
     
-    /* Tooltip personalizado en CSS para menú colapsado */
     @media (max-width: 768px) {{
         [data-testid="stSidebarNavItems"] .nav-link span {{ display: none; }}
     }}
@@ -2599,4 +2599,5 @@ elif choice == "Usuarios":
                             agregar_notificacion('error', f'Error al eliminar: {e}')
         else:
             st.info("No se encontraron usuarios en la base de datos. Use la pestaña 'CREAR USUARIO'.")
+
 
