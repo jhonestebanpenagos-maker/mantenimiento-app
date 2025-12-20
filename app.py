@@ -44,7 +44,7 @@ except KeyError:
 except Exception as e:
     st.error(f"Error configurando Cloudinary: {e}")
 # ==============================================================================
-# 🎨 TEMA: "ORIÓN COMFORT UI" (SOLUCIÓN FINAL: SELECTOR POR FORMULARIO)
+# 🎨 TEMA: "ORIÓN COMFORT UI" (SOLUCIÓN QUIRÚRGICA: SALIR VS RECHAZAR)
 # ==============================================================================
 
 PRO_ORANGE = "#F59E0B" 
@@ -62,14 +62,15 @@ st.markdown(f"""
         color: {TEXT_WHITE};
     }}
 
-    /* 2. BARRA LATERAL AJUSTADA */
+    /* 2. BARRA LATERAL (Con letras blancas como te gustó) */
     [data-testid="stSidebar"] {{
         background-color: {BG_SIDEBAR};
         border-right: 1px solid #30363d;
     }}
     
+    /* Texto del menú lateral en blanco/gris claro */
     [data-testid="stSidebarNav"] span {{
-        color: #9CA3AF !important;
+        color: #E5E7EB !important; 
         font-weight: 500;
     }}
     
@@ -142,7 +143,7 @@ st.markdown(f"""
         font-weight: 600 !important;
     }}
     
-    /* 7. BOTONES PRIMARIOS */
+    /* 7. BOTONES PRIMARIOS (Verde/Naranja) */
     div.stButton > button:first-child {{
         background: linear-gradient(90deg, {PRO_ORANGE} 0%, {PRO_GREEN} 100%) !important;
         color: white !important;
@@ -184,49 +185,46 @@ st.markdown(f"""
         text-align: center;
     }}
 
-    /* 11. GESTIÓN INTELIGENTE DE BOTONES SECUNDARIOS */
+    /* ==========================================================
+       11. SOLUCIÓN DEFINITIVA DE BOTONES
+       ========================================================== */
 
-    /* A) REGLA GENERAL (Para botón SALIR y otros fuera de formularios) */
-    button[kind="secondary"] {{
+    /* A) BOTÓN SALIR (Sidebar) - stButton normal */
+    /* Lo mantenemos transparente con letras rojas/rosadas */
+    div.stButton button[kind="secondary"] {{
         background-color: transparent !important;
-        border: 1px solid #ef4444 !important;
-        color: #ef4444 !important;
-        transition: all 0.3s ease;
-    }}
-    
-    /* Ajuste específico para el Sidebar (Salir) para que se vea bien */
-    [data-testid="stSidebar"] button[kind="secondary"] {{
         color: #fca5a5 !important;
-        border-color: #fca5a5 !important;
-    }}
-    [data-testid="stSidebar"] button[kind="secondary"]:hover {{
-        background-color: rgba(239, 68, 68, 0.2) !important;
-    }}
-
-    /* B) REGLA ESPECÍFICA PARA FORMULARIOS (Botón RECHAZAR) */
-    /* Usamos [data-testid="stForm"] para atacar SOLO los botones dentro de formularios */
-    
-    [data-testid="stForm"] button[kind="secondary"] {{
-        background-color: #fca5a5 !important; /* FONDO ROSADO */
         border: 1px solid #ef4444 !important;
-        color: black !important; /* LETRA NEGRA (Fallback) */
+    }}
+    div.stButton button[kind="secondary"]:hover {{
+        background-color: rgba(239, 68, 68, 0.15) !important;
+    }}
+    div.stButton button[kind="secondary"] p {{
+        color: #fca5a5 !important;
     }}
 
-    /* FORZAR NEGRO EN LOS ELEMENTOS INTERNOS DEL BOTÓN DE RECHAZAR */
-    [data-testid="stForm"] button[kind="secondary"] *, 
-    [data-testid="stForm"] button[kind="secondary"] p {{
+    /* B) BOTÓN RECHAZAR (Formulario) - stFormSubmitButton */
+    /* Atacamos específicamente la clase de botones de envío de formulario */
+    
+    div.stFormSubmitButton button[kind="secondary"] {{
+        background-color: #fca5a5 !important; /* FONDO ROSADO */
+        border: 1px solid #fca5a5 !important;
+    }}
+    
+    /* AQUÍ ESTÁ EL TRUCO: Forzamos el color NEGRO al párrafo <p> interno */
+    div.stFormSubmitButton button[kind="secondary"] p {{
         color: #000000 !important; /* NEGRO PURO */
-        font-weight: 800 !important;
+        font-weight: 800 !important; /* NEGRITA */
     }}
-
-    /* Hover para Rechazar */
-    [data-testid="stForm"] button[kind="secondary"]:hover {{
-        background-color: #f87171 !important;
+    
+    /* Efecto Hover para Rechazar */
+    div.stFormSubmitButton button[kind="secondary"]:hover {{
+        background-color: #f87171 !important; /* Rojo un poco más intenso */
         transform: scale(1.02);
     }}
     
-    /* Asegurar que al pasar el mouse el texto siga negro */
-    [data-testid="stForm"] button[kind="secondary"]:hover * {{
+    /* Aseguramos que el hover mantenga el texto negro */
+    div.stFormSubmitButton button[kind="secondary"]:hover p {{
         color: #000000 !important;
     }}
 
@@ -2613,8 +2611,4 @@ elif choice == "Usuarios":
                             agregar_notificacion('error', f'Error al eliminar: {e}')
         else:
             st.info("No se encontraron usuarios en la base de datos. Use la pestaña 'CREAR USUARIO'.")
-
-
-
-
 
