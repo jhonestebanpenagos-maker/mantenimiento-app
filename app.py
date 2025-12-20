@@ -377,7 +377,54 @@ def convertir_tipos_python(data_dict):
         else:
             converted[key] = value
     return converted
+# ==============================================================================
+# 🛡️ FUNCIONES DE VALIDACIÓN DE USUARIOS (FALTABAN ESTAS)
+# ==============================================================================
+
+def validar_usuario_unico(nuevo_documento, id_ignorar=None):
+    """
+    Verifica si el documento ya existe en la base de datos.
+    Si id_ignorar se pasa (al editar), permite que el documento sea el mismo del usuario actual.
+    Retorna True si es único (válido), False si ya existe (inválido).
+    """
+    try:
+        # Buscamos si existe alguien con ese documento
+        res = supabase.table("usuarios").select("*").eq("documento", nuevo_documento).execute()
         
+        if res.data:
+            usuario_existente = res.data[0]
+            # Si estamos editando y el ID encontrado es el mismo que estamos editando, todo bien.
+            if id_ignorar and str(usuario_existente['id']) == str(id_ignorar):
+                return True
+            
+            # Si encontramos a alguien y no somos nosotros mismos, es un duplicado.
+            return False
+            
+        # Si no hay datos, el documento está libre.
+        return True
+    except Exception as e:
+        st.error(f"Error validando usuario: {e}")
+        return False
+
+def check_open_orders(user_id):
+    """
+    Revisa si un usuario (técnico) tiene órdenes pendientes (Abierta o Por Validar).
+    Retorna True si tiene pendientes (Bloquea borrado), False si está libre.
+    """
+    try:
+        # Buscamos órdenes activas asignadas a este ID
+        res = supabase.table("ordenes").select("id")\
+            .eq("tecnico_asignado", user_id)\
+            .in_("estado", ["Abierta", "Por Validar"])\
+            .execute()
+            
+        if res.data and len(res.data) > 0:
+            return True # Tiene órdenes pendientes
+        return False # Está libre
+    except Exception as e:
+        print(f"Error checking orders: {e}")
+        return False
+
 # ==========================================
 # 🔔 FUNCIÓN CORREGIDA (SOLO 1 ENVÍO)
 # ==========================================
@@ -2518,4 +2565,5 @@ elif choice == "Usuarios":
                             agregar_notificacion('error', f'Error al eliminar: {e}')
         else:
             st.info("No se encontraron usuarios en la base de datos. Use la pestaña 'CREAR USUARIO'.")
+
 
