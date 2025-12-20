@@ -45,15 +45,15 @@ except Exception as e:
     st.error(f"Error configurando Cloudinary: {e}")
 
 # ==============================================================================
-# 🎨 TEMA: "ORIÓN COMFORT UI" (Con Botón Rechazar en Letras Negras)
+# 🎨 TEMA: "ORIÓN COMFORT UI" (Original + Botón Rechazar Negro)
 # ==============================================================================
 
 PRO_ORANGE = "#F59E0B" 
 PRO_GREEN = "#10B981"  
-BG_DARK_CLEAN = "#0e1117"  # Fondo principal más profundo (Gris casi negro)
-BG_SIDEBAR = "#161b22"     # Barra lateral: Gris azulado oscuro (tipo GitHub Dark)
-BG_CARD = "rgba(30, 41, 59, 0.7)" # Tarjetas semitransparentes
-TEXT_WHITE = "#E5E7EB"     # Blanco humo (menos agresivo que #FFFFFF)
+BG_DARK_CLEAN = "#0e1117"  
+BG_SIDEBAR = "#161b22"     
+BG_CARD = "rgba(30, 41, 59, 0.7)" 
+TEXT_WHITE = "#E5E7EB"     
 
 st.markdown(f"""
     <style>
@@ -189,18 +189,17 @@ st.markdown(f"""
         text-align: center;
     }}
 
-    /* 11. BOTÓN SECUNDARIO (ROJO/BORRAR) - LETRAS NEGRAS */
+    /* 11. BOTÓN SECUNDARIO (ROJO/BORRAR) - MODIFICADO */
     div.stButton > button[kind="secondary"] {{
-        background-color: #fca5a5 !important; /* Rojo claro para que resalte el negro */
+        background-color: #fca5a5 !important; /* Fondo Rosado Sólido */
         color: #000000 !important; /* LETRAS NEGRAS */
         border: 1px solid #ef4444 !important;
         font-weight: 700 !important;
     }}
     div.stButton > button[kind="secondary"]:hover {{
-        background-color: #f87171 !important; /* Rojo un poco más intenso al pasar mouse */
-        color: #000000 !important;
-        border-color: #dc2626 !important;
-        transform: scale(1.02);
+        background-color: #f87171 !important;
+        color: #000000 !important; /* Letras negras en hover también */
+        border-color: #f87171 !important;
     }}
     /* Forzar negro en el texto interno */
     div.stButton > button[kind="secondary"] p {{
@@ -2592,5 +2591,6 @@ elif choice == "Usuarios":
                             agregar_notificacion('error', f'Error al eliminar: {e}')
         else:
             st.info("No se encontraron usuarios en la base de datos. Use la pestaña 'CREAR USUARIO'.")
+
 
 
