@@ -2228,7 +2228,7 @@ elif choice == "Ordenes de Trabajo":
             "📅 PREVENTIVOS" # <--- Nueva Pestaña
         ])
 
- # 1. BUZÓN DE VALIDACIÓN
+# 1. BUZÓN DE VALIDACIÓN
         with tab_buzon:
             if df_solicitudes.empty:
                 st.markdown("<div style='text-align: center; padding: 40px; color: #6B7280;'><h3>✨ Todo limpio</h3><p>No hay solicitudes pendientes.</p></div>", unsafe_allow_html=True)
@@ -2236,11 +2236,11 @@ elif choice == "Ordenes de Trabajo":
                 st.markdown(f"### 📥 Solicitudes Pendientes ({len(df_solicitudes)})")
                 if not df_act.empty:
                     act_map_nombre_id = dict(zip(df_act['nombre'], df_act['id']))
-                    # Ordenamos nombres para facilitar búsqueda
                     lista_nombres_activos = sorted(list(act_map_nombre_id.keys()))
                     
                     for idx, sol in df_solicitudes.iterrows():
-                        with st.container():
+                        # --- INICIO DEL FORMULARIO (Evita el refresco al mover el slider) ---
+                        with st.form(key=f"form_sol_{sol['id']}"):
                             st.markdown(f"""
                             <div style="border: 1px solid #374151; border-radius: 8px; padding: 15px; margin-bottom: 15px; background-color: #1F2937;">
                                 <div style="display:flex; justify-content:space-between;"><h4 style="color: #F59E0B; margin: 0;">Solicitud #{sol['id']}</h4><span style="color: #6B7280; font-size: 0.8em;">📅 {sol['fecha_solicitud'][:10]}</span></div>
@@ -2255,21 +2255,18 @@ elif choice == "Ordenes de Trabajo":
                                 else: st.caption("Sin foto")
                             
                             with cols_val[1]:
-                                # --- CAMBIO: index=None para que aparezca vacío ---
                                 activo_final_nombre = st.selectbox(
                                     "Vincular Activo", 
                                     lista_nombres_activos, 
                                     index=None, 
-                                    placeholder="🔍 Buscar activo...",
-                                    key=f"act_sel_{sol['id']}"
+                                    placeholder="🔍 Buscar activo..."
                                 )
                                 
                                 tipo_ot = st.selectbox(
                                     "Tipo Mant.", 
                                     ["Correctivo", "Preventivo", "Mejora"], 
                                     index=None,
-                                    placeholder="Seleccionar tipo...",
-                                    key=f"tipo_{sol['id']}"
+                                    placeholder="Seleccionar tipo..."
                                 )
                             
                             with cols_val[2]:
@@ -2279,46 +2276,52 @@ elif choice == "Ordenes de Trabajo":
                                     "Asignar a", 
                                     list(tech_options.keys()), 
                                     index=None,
-                                    placeholder="Seleccionar técnico...",
-                                    key=f"tech_{sol['id']}"
+                                    placeholder="Seleccionar técnico..."
                                 )
                                 
                                 sug = sol['prioridad_sugerida']
                                 val_defecto = sug if sug in ["Baja", "Media", "Alta", "Crítica"] else "Media"
-                                criticidad_final = st.select_slider("Definir Criticidad", options=["Baja", "Media", "Alta", "Crítica"], value=val_defecto, key=f"crit_man_{sol['id']}")
+                                # Al estar dentro de st.form, este slider YA NO refrescará la página
+                                criticidad_final = st.select_slider("Definir Criticidad", options=["Baja", "Media", "Alta", "Crítica"], value=val_defecto)
                             
                             with cols_val[3]:
                                 st.markdown("<br>", unsafe_allow_html=True)
-                                if st.button("✅ CREAR", key=f"btn_ap_{sol['id']}", type="primary"):
-                                    # --- VALIDACIÓN: Evita errores si no se selecciona nada ---
-                                    if not activo_final_nombre or not tipo_ot or not asignar_a:
-                                        st.error("⚠️ Falta seleccionar: Activo, Tipo o Técnico.")
-                                    else:
-                                        try:
-                                            res_orden = supabase.table("ordenes").insert({
-                                                    "activo_id": int(act_map_nombre_id[activo_final_nombre]),
-                                                    "chat_id": sol.get('chat_id'),
-                                                    "descripcion": f"[Solicitud #{sol['id']}] {sol['descripcion']}",
-                                                    "criticidad": criticidad_final,
-                                                    "tipo_mantenimiento": tipo_ot,
-                                                    "estado": "Abierta",
-                                                    "tecnico_asignado": str(tech_options[asignar_a]),
-                                                    "fecha_creacion": datetime.now().isoformat(),
-                                            }).execute()
-                                            
-                                            nuevo_id = res_orden.data[0]['id'] if res_orden.data else "##"
-                                            msj_ok = f"✅ **¡Solicitud Aprobada!**\n\nOrden **#{nuevo_id}** ({tipo_ot}). Prioridad: {criticidad_final}."
-                                            notificar_telegram(sol.get('chat_id'), msj_ok)
-                                            supabase.table("solicitudes").update({"estado": "Aprobada"}).eq("id", sol['id']).execute()
-                                            st.success("Orden creada.")
-                                            st.rerun()
-                                        except Exception as e: st.error(f"Error: {e}")
-                                
-                                if st.button("❌ RECHAZAR", key=f"btn_rej_{sol['id']}", type="secondary"):
-                                    supabase.table("solicitudes").update({"estado": "Rechazada"}).eq("id", sol['id']).execute()
-                                    notificar_telegram(sol.get('chat_id'), "🚫 Solicitud Rechazada.")
-                                    st.warning("Rechazada.")
-                                    st.rerun()
+                                # Usamos form_submit_button para ambos casos
+                                btn_crear = st.form_submit_button("✅ CREAR", type="primary", use_container_width=True)
+                                btn_rechazar = st.form_submit_button("❌ RECHAZAR", type="secondary", use_container_width=True)
+
+                            # --- LÓGICA DE BOTONES ---
+                            if btn_crear:
+                                # Validación: Solo exigimos datos si se va a CREAR
+                                if not activo_final_nombre or not tipo_ot or not asignar_a:
+                                    st.error("⚠️ Falta seleccionar: Activo, Tipo o Técnico.")
+                                else:
+                                    try:
+                                        res_orden = supabase.table("ordenes").insert({
+                                                "activo_id": int(act_map_nombre_id[activo_final_nombre]),
+                                                "chat_id": sol.get('chat_id'),
+                                                "descripcion": f"[Solicitud #{sol['id']}] {sol['descripcion']}",
+                                                "criticidad": criticidad_final,
+                                                "tipo_mantenimiento": tipo_ot,
+                                                "estado": "Abierta",
+                                                "tecnico_asignado": str(tech_options[asignar_a]),
+                                                "fecha_creacion": datetime.now().isoformat(),
+                                        }).execute()
+                                        
+                                        nuevo_id = res_orden.data[0]['id'] if res_orden.data else "##"
+                                        msj_ok = f"✅ **¡Solicitud Aprobada!**\n\nOrden **#{nuevo_id}** ({tipo_ot}). Prioridad: {criticidad_final}."
+                                        notificar_telegram(sol.get('chat_id'), msj_ok)
+                                        supabase.table("solicitudes").update({"estado": "Aprobada"}).eq("id", sol['id']).execute()
+                                        st.success("Orden creada.")
+                                        st.rerun()
+                                    except Exception as e: st.error(f"Error: {e}")
+                            
+                            if btn_rechazar:
+                                # Si rechaza, no importan los selectboxes vacíos
+                                supabase.table("solicitudes").update({"estado": "Rechazada"}).eq("id", sol['id']).execute()
+                                notificar_telegram(sol.get('chat_id'), "🚫 Solicitud Rechazada.")
+                                st.warning("Rechazada.")
+                                st.rerun()
 
         # 2. CONTROL DE CALIDAD
         with tab_calidad:
@@ -2583,3 +2586,4 @@ elif choice == "Usuarios":
                             agregar_notificacion('error', f'Error al eliminar: {e}')
         else:
             st.info("No se encontraron usuarios en la base de datos. Use la pestaña 'CREAR USUARIO'.")
+
