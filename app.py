@@ -45,15 +45,15 @@ except Exception as e:
     st.error(f"Error configurando Cloudinary: {e}")
 
 # ==============================================================================
-# 🎨 TEMA: "ORIÓN COMFORT UI" (Original + Corrección de Botón Rechazar)
+# 🎨 TEMA: "ORIÓN COMFORT UI" (Con Botón Rechazar en Letras Negras)
 # ==============================================================================
 
 PRO_ORANGE = "#F59E0B" 
 PRO_GREEN = "#10B981"  
-BG_DARK_CLEAN = "#0e1117"
-BG_SIDEBAR = "#161b22"
-BG_CARD = "rgba(30, 41, 59, 0.7)"
-TEXT_WHITE = "#E5E7EB"
+BG_DARK_CLEAN = "#0e1117"  # Fondo principal más profundo (Gris casi negro)
+BG_SIDEBAR = "#161b22"     # Barra lateral: Gris azulado oscuro (tipo GitHub Dark)
+BG_CARD = "rgba(30, 41, 59, 0.7)" # Tarjetas semitransparentes
+TEXT_WHITE = "#E5E7EB"     # Blanco humo (menos agresivo que #FFFFFF)
 
 st.markdown(f"""
     <style>
@@ -69,11 +69,13 @@ st.markdown(f"""
         border-right: 1px solid #30363d;
     }}
     
+    /* Texto de navegación más legible */
     [data-testid="stSidebarNav"] span {{
         color: #9CA3AF !important;
         font-weight: 500;
     }}
     
+    /* Elemento seleccionado en el menú */
     [data-testid="stSidebarNav"] a[aria-current="page"] {{
         background-color: rgba(245, 158, 11, 0.1);
         border-left: 3px solid {PRO_ORANGE};
@@ -116,7 +118,7 @@ st.markdown(f"""
         display: block;
     }}
 
-    /* 6. INPUTS Y MENÚS */
+    /* 6. INPUTS Y MENÚS (Estilo unificado) */
     .stTextInput input, .stTextArea textarea, .stSelectbox > div > div {{
         background-color: #0d1117 !important; 
         color: #e6edf3 !important;
@@ -124,6 +126,7 @@ st.markdown(f"""
         border-radius: 6px;
     }}
     
+    /* Focus en inputs */
     .stTextInput input:focus, .stTextArea textarea:focus {{
         border-color: {PRO_ORANGE} !important;
         box-shadow: 0 0 0 1px {PRO_ORANGE} !important;
@@ -138,12 +141,13 @@ st.markdown(f"""
         color: white !important;
     }}
     
+    /* Etiquetas de inputs */
     .stTextInput label, .stSelectbox label, .stTextArea label {{
         color: #E5E7EB !important;
         font-weight: 600 !important;
     }}
     
-    /* 7. BOTONES PRIMARIOS (Verde/Naranja) */
+    /* 7. BOTONES */
     div.stButton > button:first-child {{
         background: linear-gradient(90deg, {PRO_ORANGE} 0%, {PRO_GREEN} 100%) !important;
         color: white !important;
@@ -185,38 +189,36 @@ st.markdown(f"""
         text-align: center;
     }}
 
-    /* 11. BOTÓN SECUNDARIO (SOLUCIÓN CONTRASTE) */
-    /* Usamos un fondo rojo más oscuro para que el texto blanco se lea perfecto */
+    /* 11. BOTÓN SECUNDARIO (ROJO/BORRAR) - LETRAS NEGRAS */
     div.stButton > button[kind="secondary"] {{
-        background-color: rgba(127, 29, 29, 0.6) !important; /* Rojo oscuro semitransparente */
-        color: #FFFFFF !important; /* BLANCO PURO */
-        border: 1px solid #ef4444 !important; /* Borde rojo brillante */
+        background-color: #fca5a5 !important; /* Rojo claro para que resalte el negro */
+        color: #000000 !important; /* LETRAS NEGRAS */
+        border: 1px solid #ef4444 !important;
         font-weight: 700 !important;
     }}
-    
-    /* Efecto Hover */
     div.stButton > button[kind="secondary"]:hover {{
-        background-color: #DC2626 !important; /* Rojo sólido fuerte al pasar mouse */
-        color: white !important;
-        border-color: white !important;
+        background-color: #f87171 !important; /* Rojo un poco más intenso al pasar mouse */
+        color: #000000 !important;
+        border-color: #dc2626 !important;
+        transform: scale(1.02);
     }}
-    
-    /* Forzamos que el texto interno (p) sea blanco */
+    /* Forzar negro en el texto interno */
     div.stButton > button[kind="secondary"] p {{
-        color: #FFFFFF !important;
+        color: #000000 !important;
     }}
 
-    /* 12. HACK OCULTAR VACÍOS */
+    /* 12. HACK: OCULTAR CONTENEDORES VACÍOS */
     div[data-testid="stVerticalBlock"] > div:empty {{
         height: 0 !important;
         margin: 0 !important;
     }}
     
-    /* 13. NAV COLAPSADA */
+    /* 13. MEJORAS NAVEGACIÓN COLAPSADA */
     [data-testid="stSidebarNav"] {{
         padding-top: 10px !important;
     }}
     
+    /* Tooltip personalizado en CSS para menú colapsado */
     @media (max-width: 768px) {{
         [data-testid="stSidebarNavItems"] .nav-link span {{ display: none; }}
     }}
@@ -2590,4 +2592,5 @@ elif choice == "Usuarios":
                             agregar_notificacion('error', f'Error al eliminar: {e}')
         else:
             st.info("No se encontraron usuarios en la base de datos. Use la pestaña 'CREAR USUARIO'.")
+
 
