@@ -44,7 +44,7 @@ except KeyError:
 except Exception as e:
     st.error(f"Error configurando Cloudinary: {e}")
 # ==============================================================================
-# 🎨 TEMA: "ORIÓN COMFORT UI" (CORREGIDO: RECHAZAR CON LETRAS NEGRAS)
+# 🎨 TEMA: "ORIÓN COMFORT UI" (SOLUCIÓN FINAL: SELECTOR POR FORMULARIO)
 # ==============================================================================
 
 PRO_ORANGE = "#F59E0B" 
@@ -184,36 +184,50 @@ st.markdown(f"""
         text-align: center;
     }}
 
-    /* 11. BOTONES SECUNDARIOS (CORREGIDO) */
+    /* 11. GESTIÓN INTELIGENTE DE BOTONES SECUNDARIOS */
 
-    /* A) BOTONES NORMALES (Como 'Salir' en el menú) - Estilo sutil por defecto */
-    div.stButton > button[kind="secondary"] {{
+    /* A) REGLA GENERAL (Para botón SALIR y otros fuera de formularios) */
+    button[kind="secondary"] {{
         background-color: transparent !important;
-        color: #EF4444 !important; /* Rojo estándar */
-        border: 1px solid #EF4444 !important;
-    }}
-    div.stButton > button[kind="secondary"]:hover {{
-        background-color: rgba(239, 68, 68, 0.1) !important;
-    }}
-
-    /* B) BOTONES DE FORMULARIO (Como 'Rechazar') - ESTILO ESPECÍFICO */
-    /* Aquí es donde forzamos el NEGRO */
-    div.stFormSubmitButton > button[kind="secondary"] {{
-        background-color: #fee2e2 !important; /* Fondo Rojo muy claro */
         border: 1px solid #ef4444 !important;
+        color: #ef4444 !important;
+        transition: all 0.3s ease;
     }}
     
-    /* Forzar letras negras en el botón de rechazar */
-    div.stFormSubmitButton > button[kind="secondary"] * {{
-        color: #000000 !important; /* NEGRO PURO */
-        font-weight: 800 !important; /* Negrita fuerte */
+    /* Ajuste específico para el Sidebar (Salir) para que se vea bien */
+    [data-testid="stSidebar"] button[kind="secondary"] {{
+        color: #fca5a5 !important;
+        border-color: #fca5a5 !important;
+    }}
+    [data-testid="stSidebar"] button[kind="secondary"]:hover {{
+        background-color: rgba(239, 68, 68, 0.2) !important;
     }}
 
-    /* Hover para el botón de rechazar */
-    div.stFormSubmitButton > button[kind="secondary"]:hover {{
-        background-color: #fca5a5 !important; /* Fondo un poco más oscuro al pasar mouse */
-        border-color: #dc2626 !important;
+    /* B) REGLA ESPECÍFICA PARA FORMULARIOS (Botón RECHAZAR) */
+    /* Usamos [data-testid="stForm"] para atacar SOLO los botones dentro de formularios */
+    
+    [data-testid="stForm"] button[kind="secondary"] {{
+        background-color: #fca5a5 !important; /* FONDO ROSADO */
+        border: 1px solid #ef4444 !important;
+        color: black !important; /* LETRA NEGRA (Fallback) */
+    }}
+
+    /* FORZAR NEGRO EN LOS ELEMENTOS INTERNOS DEL BOTÓN DE RECHAZAR */
+    [data-testid="stForm"] button[kind="secondary"] *, 
+    [data-testid="stForm"] button[kind="secondary"] p {{
+        color: #000000 !important; /* NEGRO PURO */
+        font-weight: 800 !important;
+    }}
+
+    /* Hover para Rechazar */
+    [data-testid="stForm"] button[kind="secondary"]:hover {{
+        background-color: #f87171 !important;
         transform: scale(1.02);
+    }}
+    
+    /* Asegurar que al pasar el mouse el texto siga negro */
+    [data-testid="stForm"] button[kind="secondary"]:hover * {{
+        color: #000000 !important;
     }}
 
     /* 12. HACK: OCULTAR VACÍOS */
@@ -2599,6 +2613,7 @@ elif choice == "Usuarios":
                             agregar_notificacion('error', f'Error al eliminar: {e}')
         else:
             st.info("No se encontraron usuarios en la base de datos. Use la pestaña 'CREAR USUARIO'.")
+
 
 
 
