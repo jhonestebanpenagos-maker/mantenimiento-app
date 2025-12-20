@@ -45,7 +45,7 @@ except Exception as e:
     st.error(f"Error configurando Cloudinary: {e}")
 
 # ==============================================================================
-# 🎨 TEMA: "ORIÓN COMFORT UI" (Original + Botón Rechazar Negro)
+# 🎨 TEMA: "ORIÓN COMFORT UI" (CORREGIDO BOTÓN RECHAZAR EN FORMULARIOS)
 # ==============================================================================
 
 PRO_ORANGE = "#F59E0B" 
@@ -147,7 +147,7 @@ st.markdown(f"""
         font-weight: 600 !important;
     }}
     
-    /* 7. BOTONES */
+    /* 7. BOTONES PRIMARIOS */
     div.stButton > button:first-child {{
         background: linear-gradient(90deg, {PRO_ORANGE} 0%, {PRO_GREEN} 100%) !important;
         color: white !important;
@@ -189,29 +189,30 @@ st.markdown(f"""
         text-align: center;
     }}
 
-    /* 11. BOTÓN SECUNDARIO (ROJO/BORRAR) - CORREGIDO PARA FORMULARIOS */
-    /* Apuntamos tanto a stButton como a stFormSubmitButton */
+    /* 11. BOTÓN SECUNDARIO (RECHAZAR) - CORREGIDO PARA FORMULARIOS */
+    /* Apuntamos tanto a botones normales como a botones de submit en forms */
     div.stButton > button[kind="secondary"], 
-    div.stFormSubmitButton > button[kind="secondary"] {
+    div.stFormSubmitButton > button[kind="secondary"] {{
         background-color: #fca5a5 !important; /* Fondo Rosado Sólido */
         color: #000000 !important; /* LETRAS NEGRAS */
         border: 1px solid #ef4444 !important;
         font-weight: 700 !important;
-    }
+    }}
 
     /* Efecto Hover para ambos tipos */
     div.stButton > button[kind="secondary"]:hover,
-    div.stFormSubmitButton > button[kind="secondary"]:hover {
+    div.stFormSubmitButton > button[kind="secondary"]:hover {{
         background-color: #f87171 !important;
         color: #000000 !important; 
-        border-color: #f87171 !important;
-    }
+        border-color: #dc2626 !important;
+        transform: scale(1.02);
+    }}
 
     /* Forzar negro en el texto interno para ambos tipos */
     div.stButton > button[kind="secondary"] p,
-    div.stFormSubmitButton > button[kind="secondary"] p {
+    div.stFormSubmitButton > button[kind="secondary"] p {{
         color: #000000 !important;
-    }
+    }}
 
     /* 12. HACK: OCULTAR CONTENEDORES VACÍOS */
     div[data-testid="stVerticalBlock"] > div:empty {{
@@ -2598,3 +2599,4 @@ elif choice == "Usuarios":
                             agregar_notificacion('error', f'Error al eliminar: {e}')
         else:
             st.info("No se encontraron usuarios en la base de datos. Use la pestaña 'CREAR USUARIO'.")
+
