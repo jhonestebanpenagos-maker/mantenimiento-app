@@ -189,22 +189,29 @@ st.markdown(f"""
         text-align: center;
     }}
 
-    /* 11. BOTÓN SECUNDARIO (ROJO/BORRAR) - MODIFICADO */
-    div.stButton > button[kind="secondary"] {{
+    /* 11. BOTÓN SECUNDARIO (ROJO/BORRAR) - CORREGIDO PARA FORMULARIOS */
+    /* Apuntamos tanto a stButton como a stFormSubmitButton */
+    div.stButton > button[kind="secondary"], 
+    div.stFormSubmitButton > button[kind="secondary"] {
         background-color: #fca5a5 !important; /* Fondo Rosado Sólido */
         color: #000000 !important; /* LETRAS NEGRAS */
         border: 1px solid #ef4444 !important;
         font-weight: 700 !important;
-    }}
-    div.stButton > button[kind="secondary"]:hover {{
+    }
+
+    /* Efecto Hover para ambos tipos */
+    div.stButton > button[kind="secondary"]:hover,
+    div.stFormSubmitButton > button[kind="secondary"]:hover {
         background-color: #f87171 !important;
-        color: #000000 !important; /* Letras negras en hover también */
+        color: #000000 !important; 
         border-color: #f87171 !important;
-    }}
-    /* Forzar negro en el texto interno */
-    div.stButton > button[kind="secondary"] p {{
+    }
+
+    /* Forzar negro en el texto interno para ambos tipos */
+    div.stButton > button[kind="secondary"] p,
+    div.stFormSubmitButton > button[kind="secondary"] p {
         color: #000000 !important;
-    }}
+    }
 
     /* 12. HACK: OCULTAR CONTENEDORES VACÍOS */
     div[data-testid="stVerticalBlock"] > div:empty {{
@@ -2591,6 +2598,3 @@ elif choice == "Usuarios":
                             agregar_notificacion('error', f'Error al eliminar: {e}')
         else:
             st.info("No se encontraron usuarios en la base de datos. Use la pestaña 'CREAR USUARIO'.")
-
-
-
