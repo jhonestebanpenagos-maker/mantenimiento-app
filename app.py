@@ -189,18 +189,28 @@ st.markdown(f"""
         text-align: center;
     }}
 
-    /* 11. BOTÓN SECUNDARIO (ROJO/BORRAR) */
-    div.stButton > button[kind="secondary"] {{
-        background: rgba(220, 38, 38, 0.15) !important;
-        color: #fca5a5 !important;
-        border: 1px solid #ef4444 !important;
-        font-weight: 600 !important;
-    }}
-    div.stButton > button[kind="secondary"]:hover {{
-        background: rgba(220, 38, 38, 0.3) !important;
-        border-color: #f87171 !important;
-    }}
+   /* 11. BOTÓN SECUNDARIO (ROJO/BORRAR) - ALTO CONTRASTE */
+    div.stButton > button[kind="secondary"] {
+        background-color: rgba(239, 68, 68, 0.2) !important; /* Fondo rojo sutil */
+        color: #FFFFFF !important; /* TEXTO BLANCO (Para que se lea bien) */
+        border: 1px solid #EF4444 !important; /* Borde rojo visible */
+        font-weight: 700 !important; /* Letra negrita */
+        transition: all 0.2s ease-in-out;
+    }
+    
+    /* Efecto al poner el mouse encima (Hover) */
+    div.stButton > button[kind="secondary"]:hover {
+        background-color: #DC2626 !important; /* Rojo sólido fuerte */
+        color: #FFFFFF !important; /* Texto blanco */
+        border-color: #B91C1C !important;
+        box-shadow: 0 4px 12px rgba(220, 38, 38, 0.4); /* Resplandor rojo */
+        transform: scale(1.02); /* Efecto leve de crecimiento */
+    }
 
+    /* Asegurar que el texto interno también sea blanco */
+    div.stButton > button[kind="secondary"] p {
+        color: #FFFFFF !important;
+    }
     /* 12. HACK: OCULTAR CONTENEDORES VACÍOS */
     div[data-testid="stVerticalBlock"] > div:empty {{
         height: 0 !important;
@@ -2586,4 +2596,5 @@ elif choice == "Usuarios":
                             agregar_notificacion('error', f'Error al eliminar: {e}')
         else:
             st.info("No se encontraron usuarios en la base de datos. Use la pestaña 'CREAR USUARIO'.")
+
 
