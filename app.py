@@ -258,7 +258,7 @@ def mostrar_notificaciones():
 
 def subir_archivo_generico(archivo):
     """
-    Sube archivos a Cloudinary asegurando que conserven su extensión (.msg, .pdf).
+    Sube archivos forzando acceso PÚBLICO para evitar el error 401.
     """
     if archivo:
         try:
@@ -271,32 +271,36 @@ def subir_archivo_generico(archivo):
             if es_imagen_visual:
                 tipo_recurso = "image"
                 carpeta = "orion_evidencias"
-                public_id_manual = None # Dejamos que Cloudinary nombre las fotos
+                public_id_manual = None 
                 use_unique = True
             else:
-                # 2. TRUCO PARA DOCUMENTOS (PDF, MSG, DOCX)
-                # Generamos nosotros el nombre único para OBLIGAR a mantener la extensión
+                # 2. DOCUMENTOS (PDF, MSG, DOCX) - MODO RAW
                 tipo_recurso = "raw"
                 carpeta = "orion_documentos"
                 
-                # Limpiamos el nombre de caracteres raros
+                # Limpieza de nombre
                 nombre_base, extension = os.path.splitext(archivo.name)
-                nombre_limpio = "".join(c for c in nombre_base if c.isalnum() or c in (' ', '_', '-')).strip()
+                # Quitamos caracteres raros y espacios
+                nombre_limpio = "".join(c for c in nombre_base if c.isalnum() or c in ('_', '-')).strip()
                 timestamp = int(time.time())
                 
-                # Ej: "Cotizacion_17099232.msg"
+                # Forzamos nombre único manual
                 public_id_manual = f"{nombre_limpio}_{timestamp}{extension}"
-                use_unique = False # Apagamos el random de Cloudinary para usar el nuestro
+                use_unique = False 
 
-            # 3. Subir
+            # 3. Subir con permisos EXPLÍCITOS
             respuesta = cloudinary.uploader.upload(
                 archivo.getvalue(),
                 folder=carpeta,
                 resource_type=tipo_recurso,
-                public_id=public_id_manual, # <-- Aquí forzamos el nombre con extensión
+                public_id=public_id_manual,
                 use_filename=True,
-                unique_filename=use_unique, 
-                resource_type_in_post=None
+                unique_filename=use_unique,
+                
+                # --- ESTAS DOS LÍNEAS SOLUCIONAN EL 401 EN CÓDIGO ---
+                type="upload",        # Tipo 'upload' significa PÚBLICO (vs 'private' o 'authenticated')
+                access_mode="public"  # Refuerzo para asegurar que sea accesible
+                # ---------------------------------------------------
             )
             return respuesta.get("secure_url")
         except Exception as e:
@@ -2858,6 +2862,7 @@ elif choice == "Usuarios":
                             agregar_notificacion('error', f'Error al eliminar: {e}')
         else:
             st.info("No se encontraron usuarios en la base de datos. Use la pestaña 'CREAR USUARIO'.")
+
 
 
 
