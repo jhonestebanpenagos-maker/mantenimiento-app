@@ -2296,43 +2296,72 @@ elif choice == "Ordenes de Trabajo":
 # ... Dentro de tab_mis_gestiones ...
                             # ... Dentro de with st.expander(...): ...
 
-                            # ==========================================
-                            # 1. DEFINICIÓN DEL DIÁLOGO DE EDICIÓN
+                           # ==========================================
+                            # 1. DEFINICIÓN DEL DIÁLOGO DE EDICIÓN (MEJORADO)
                             # ==========================================
                             @st.dialog("✏️ Editar Avance")
-                            def editar_avance_dialog(item_id, texto_actual):
+                            def editar_avance_dialog(item_id, texto_actual, url_actual):
                                 st.write(f"Editando registro #{item_id}")
-                                nuevo_texto = st.text_area("Corrección", value=texto_actual, height=150)
+                                
+                                # A) Editar Texto
+                                nuevo_texto = st.text_area("Corrección", value=texto_actual, height=100)
+                                
+                                st.markdown("---")
+                                st.caption("📎 Gestión de Archivos")
+
+                                # B) Lógica de Archivo
+                                borrar_archivo = False
+                                
+                                # Si ya existe un archivo, mostramos opción de borrar
+                                if url_actual:
+                                    st.markdown(f"**Archivo actual:** [Ver documento]({url_actual})")
+                                    borrar_archivo = st.checkbox("🗑️ Borrar archivo actual", value=False)
+                                
+                                # Opción para reemplazar (o agregar si no había)
+                                archivo_nuevo = st.file_uploader("Cambiar archivo (Opcional)", type=["pdf", "docx", "xlsx", "jpg", "png", "msg"])
                                 
                                 if st.button("💾 GUARDAR CAMBIOS", type="primary"):
-                                    try:
-                                        supabase.table("bitacora").update({
-                                            "mensaje": nuevo_texto
-                                        }).eq("id", item_id).execute()
-                                        st.success("Actualizado.")
-                                        st.rerun()
-                                    except Exception as e:
-                                        st.error(f"Error: {e}")
+                                    with st.spinner("Procesando..."):
+                                        try:
+                                            # Preparar datos a actualizar
+                                            datos_update = {"mensaje": nuevo_texto}
+                                            
+                                            # 1. Si marcó borrar, ponemos NULL en la base de datos
+                                            if borrar_archivo:
+                                                datos_update["archivo_url"] = None
+                                            
+                                            # 2. Si subió uno nuevo, lo procesamos (esto sobreescribe el borrado si marcó ambos)
+                                            if archivo_nuevo:
+                                                url_subida = subir_archivo_generico(archivo_nuevo)
+                                                if url_subida:
+                                                    datos_update["archivo_url"] = url_subida
+                                            
+                                            # Ejecutar actualización
+                                            supabase.table("bitacora").update(datos_update).eq("id", item_id).execute()
+                                            
+                                            st.success("Registro actualizado.")
+                                            st.rerun()
+                                        except Exception as e:
+                                            st.error(f"Error al guardar: {e}")
 
                             # ==========================================
-                            # 2. LISTADO INTERACTIVO (CON BOTONES)
+                            # 2. LISTADO INTERACTIVO
                             # ==========================================
                             st.markdown("##### 📜 Historial de Gestión")
                             
                             try:
-                                # Traemos el historial
                                 bitacora = supabase.table("bitacora").select("*").eq("orden_id", row['id']).order("fecha", desc=True).execute()
                                 
                                 if bitacora.data:
                                     for b in bitacora.data:
-                                        # Contenedor visual para cada item
                                         with st.container():
                                             c_info, c_actions = st.columns([5, 1])
                                             
-                                            # --- COLUMNA IZQUIERDA: INFORMACIÓN ---
+                                            # Columna Info
                                             with c_info:
                                                 fecha_fmt = b['fecha'][:10] + " " + b['fecha'][11:16]
-                                                icono_adj = "📎" if b['archivo_url'] else ""
+                                                # Icono condicional
+                                                icono = "📎" if b['archivo_url'] else ""
                                                 
                                                 st.markdown(f"""
                                                 <div style="background-color: rgba(255,255,255,0.05); border-left: 3px solid #F59E0B; padding: 10px; border-radius: 0 5px 5px 0; margin-bottom: 5px;">
@@ -2345,22 +2374,21 @@ elif choice == "Ordenes de Trabajo":
                                                 """, unsafe_allow_html=True)
                                                 
                                                 if b['archivo_url']:
-                                                    st.markdown(f"&nbsp;&nbsp;&nbsp;{icono_adj} [**Descargar Adjunto**]({b['archivo_url']})")
+                                                    st.markdown(f"&nbsp;&nbsp;&nbsp;{icono} [**Abrir Adjunto**]({b['archivo_url']})")
 
-                                            # --- COLUMNA DERECHA: ACCIONES ---
+                                            # Columna Botones
                                             with c_actions:
-                                                # Botón Editar
-                                                if st.button("✏️", key=f"btn_edit_{b['id']}", help="Editar texto"):
-                                                    editar_avance_dialog(b['id'], b['mensaje'])
+                                                # AQUI ESTÁ EL CAMBIO EN EL BOTÓN: Pasamos b['archivo_url']
+                                                if st.button("✏️", key=f"btn_edit_{b['id']}", help="Editar"):
+                                                    editar_avance_dialog(b['id'], b['mensaje'], b['archivo_url'])
                                                 
-                                                # Botón Eliminar
-                                                if st.button("🗑️", key=f"btn_del_{b['id']}", help="Eliminar este registro"):
+                                                if st.button("🗑️", key=f"btn_del_{b['id']}", help="Eliminar"):
                                                     supabase.table("bitacora").delete().eq("id", b['id']).execute()
-                                                    st.toast("Registro eliminado", icon="🗑️")
-                                                    time.sleep(0.5) # Pequeña pausa para ver el efecto
+                                                    st.toast("Eliminado")
+                                                    time.sleep(0.5)
                                                     st.rerun()
                                             
-                                            st.write("") # Espacio separador
+                                            st.write("") 
                                 else:
                                     st.caption("No hay avances registrados aún.")
                                     
@@ -2804,6 +2832,7 @@ elif choice == "Usuarios":
                             agregar_notificacion('error', f'Error al eliminar: {e}')
         else:
             st.info("No se encontraron usuarios en la base de datos. Use la pestaña 'CREAR USUARIO'.")
+
 
 
 
