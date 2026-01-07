@@ -2293,28 +2293,85 @@ elif choice == "Ordenes de Trabajo":
                         with st.expander(f"📂 {nombre_activo} | {row['descripcion'][:50]}... (ID: {row['id']})", expanded=False):
                             
                             # A) Mostrar Bitácora (Historial de avances)
+# ... Dentro de tab_mis_gestiones ...
+                            # ... Dentro de with st.expander(...): ...
+
+                            # ==========================================
+                            # 1. DEFINICIÓN DEL DIÁLOGO DE EDICIÓN
+                            # ==========================================
+                            @st.dialog("✏️ Editar Avance")
+                            def editar_avance_dialog(item_id, texto_actual):
+                                st.write(f"Editando registro #{item_id}")
+                                nuevo_texto = st.text_area("Corrección", value=texto_actual, height=150)
+                                
+                                if st.button("💾 GUARDAR CAMBIOS", type="primary"):
+                                    try:
+                                        supabase.table("bitacora").update({
+                                            "mensaje": nuevo_texto
+                                        }).eq("id", item_id).execute()
+                                        st.success("Actualizado.")
+                                        st.rerun()
+                                    except Exception as e:
+                                        st.error(f"Error: {e}")
+
+                            # ==========================================
+                            # 2. LISTADO INTERACTIVO (CON BOTONES)
+                            # ==========================================
                             st.markdown("##### 📜 Historial de Gestión")
+                            
                             try:
-                                # Consultamos la tabla 'bitacora' (Asegúrate de haber creado la tabla en Supabase como indicamos en el PASO 1)
+                                # Traemos el historial
                                 bitacora = supabase.table("bitacora").select("*").eq("orden_id", row['id']).order("fecha", desc=True).execute()
+                                
                                 if bitacora.data:
                                     for b in bitacora.data:
-                                        fecha_fmt = b['fecha'][:10] + " " + b['fecha'][11:16]
-                                        icono = "📎" if b['archivo_url'] else "💬"
-                                        st.markdown(f"""
-                                        <div style="border-left: 2px solid #F59E0B; padding-left: 10px; margin-bottom: 10px;">
-                                            <small style="color: #9CA3AF;">{fecha_fmt} - <b>{b['usuario_text']}</b></small><br>
-                                            {b['mensaje']}
-                                        </div>
-                                        """, unsafe_allow_html=True)
-                                        if b['archivo_url']:
-                                            st.markdown(f"&nbsp;&nbsp;&nbsp;&nbsp;{icono} [Ver Archivo Adjunto]({b['archivo_url']})")
+                                        # Contenedor visual para cada item
+                                        with st.container():
+                                            c_info, c_actions = st.columns([5, 1])
+                                            
+                                            # --- COLUMNA IZQUIERDA: INFORMACIÓN ---
+                                            with c_info:
+                                                fecha_fmt = b['fecha'][:10] + " " + b['fecha'][11:16]
+                                                icono_adj = "📎" if b['archivo_url'] else ""
+                                                
+                                                st.markdown(f"""
+                                                <div style="background-color: rgba(255,255,255,0.05); border-left: 3px solid #F59E0B; padding: 10px; border-radius: 0 5px 5px 0; margin-bottom: 5px;">
+                                                    <div style="display:flex; justify-content:space-between; color: #9CA3AF; font-size: 0.85em;">
+                                                        <span>📅 {fecha_fmt}</span>
+                                                        <span>👤 <b>{b['usuario_text']}</b></span>
+                                                    </div>
+                                                    <div style="margin-top: 5px; color: #E5E7EB; white-space: pre-wrap;">{b['mensaje']}</div>
+                                                </div>
+                                                """, unsafe_allow_html=True)
+                                                
+                                                if b['archivo_url']:
+                                                    st.markdown(f"&nbsp;&nbsp;&nbsp;{icono_adj} [**Descargar Adjunto**]({b['archivo_url']})")
+
+                                            # --- COLUMNA DERECHA: ACCIONES ---
+                                            with c_actions:
+                                                # Botón Editar
+                                                if st.button("✏️", key=f"btn_edit_{b['id']}", help="Editar texto"):
+                                                    editar_avance_dialog(b['id'], b['mensaje'])
+                                                
+                                                # Botón Eliminar
+                                                if st.button("🗑️", key=f"btn_del_{b['id']}", help="Eliminar este registro"):
+                                                    supabase.table("bitacora").delete().eq("id", b['id']).execute()
+                                                    st.toast("Registro eliminado", icon="🗑️")
+                                                    time.sleep(0.5) # Pequeña pausa para ver el efecto
+                                                    st.rerun()
+                                            
+                                            st.write("") # Espacio separador
                                 else:
                                     st.caption("No hay avances registrados aún.")
+                                    
                             except Exception as e:
-                                st.caption(f"Error cargando historial: {e}")
+                                st.error(f"Error cargando historial: {e}")
 
-                            st.divider()
+                            # ==========================================
+                            # FIN DEL LISTADO
+                            # ==========================================
+
+                            st.divider() # Aquí sigue tu código del formulario de "Registrar Nuevo Avance"...
 
                             # B) Formulario para NUEVO AVANCE
                             # Importante: clear_on_submit=True limpia el texto después de enviar
@@ -2747,5 +2804,6 @@ elif choice == "Usuarios":
                             agregar_notificacion('error', f'Error al eliminar: {e}')
         else:
             st.info("No se encontraron usuarios en la base de datos. Use la pestaña 'CREAR USUARIO'.")
+
 
 
