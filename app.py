@@ -259,26 +259,37 @@ def mostrar_notificaciones():
 def subir_archivo_generico(archivo):
     """
     Sube archivos a Cloudinary. 
-    Detecta .msg para forzar 'raw', lo demás en 'auto'.
+    Lógica Mejorada:
+    - FOTOS (jpg, png, etc) -> resource_type="image" (Para poder verlas en la app)
+    - DOCUMENTOS (pdf, doc, msg) -> resource_type="raw" (Para forzar descarga intacta y evitar errores de conversión)
     """
     if archivo:
         try:
-            # 1. Detectar si es imagen para la carpeta
-            es_imagen = archivo.type.startswith('image')
-            carpeta = "orion_evidencias" if es_imagen else "orion_documentos"
-            
-            # 2. Configurar el tipo de recurso
-            # Los .msg son archivos binarios complejos, Cloudinary los prefiere como 'raw'
             nombre_archivo = archivo.name.lower()
-            tipo_recurso = "raw" if nombre_archivo.endswith(".msg") else "auto"
+            
+            # 1. Definir extensiones visuales (Imágenes)
+            ext_imagenes = ('.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp')
+            es_imagen_visual = nombre_archivo.endswith(ext_imagenes)
+            
+            # 2. Configurar parámetros según tipo
+            if es_imagen_visual:
+                tipo_recurso = "image"
+                carpeta = "orion_evidencias"
+            else:
+                # TRUCO: Para PDF, DOC, MSG, usamos 'raw'. 
+                # Esto evita que Cloudinary intente convertirlos a imagen (error del PDF)
+                # y garantiza que la URL final termine en .pdf o .msg (error de extensión)
+                tipo_recurso = "raw" 
+                carpeta = "orion_documentos"
 
             # 3. Subir
             respuesta = cloudinary.uploader.upload(
                 archivo.getvalue(),
                 folder=carpeta,
-                resource_type=tipo_recurso, # <--- Aquí está el cambio clave
-                use_filename=True,
-                unique_filename=True
+                resource_type=tipo_recurso, 
+                use_filename=True,      # Usa el nombre original del archivo
+                unique_filename=True,   # Agrega caracteres al azar PERO mantiene la extensión
+                resource_type_in_post=None # Evita conflictos automáticos
             )
             return respuesta.get("secure_url")
         except Exception as e:
@@ -2736,4 +2747,5 @@ elif choice == "Usuarios":
                             agregar_notificacion('error', f'Error al eliminar: {e}')
         else:
             st.info("No se encontraron usuarios en la base de datos. Use la pestaña 'CREAR USUARIO'.")
+
 
