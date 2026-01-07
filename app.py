@@ -2253,7 +2253,7 @@ elif choice == "Ordenes de Trabajo":
                                 
                                 tipo_ot = st.selectbox(
                                     "Tipo Mant.", 
-                                    ["Correctivo", "Preventivo", "Mejora"], 
+                                    ["Correctivo", "Preventivo", "Predictivo", "Mejora"], 
                                     index=None,
                                     placeholder="Seleccionar tipo..."
                                 )
@@ -2431,6 +2431,7 @@ elif choice == "Ordenes de Trabajo":
             else: st.info("Sin datos.")
 
         # 4. CREAR DIRECTA
+        
         with tab_crear_directa:
             st.info("Creación rápida sin validación.")
             if not df_act.empty:
@@ -2439,16 +2440,26 @@ elif choice == "Ordenes de Trabajo":
                 
                 with st.form("ot_directa"):
                     c1, c2 = st.columns(2)
-                    tipo_d = c1.selectbox("Tipo", ["Correctivo", "Preventivo"])
-                    crit_d = c2.select_slider("Criticidad", ["Baja", "Media", "Alta"])
+                    # --- AQUÍ AGREGAMOS "Predictivo" A LA LISTA ---
+                    tipo_d = c1.selectbox("Tipo", ["Correctivo", "Preventivo", "Predictivo", "Mejora"]) 
+                    # ----------------------------------------------
+                    
+                    # Agregué "Crítica" también por si acaso lo necesitas, ya que en directa solo tenías hasta Alta
+                    crit_d = c2.select_slider("Criticidad", ["Baja", "Media", "Alta", "Crítica"]) 
+                    
                     desc_d = st.text_area("Descripción")
                     tech_opts_d = {u['nombre']: u['id'] for i, u in df_users.iterrows()}
                     asig_d = st.selectbox("Asignar", list(tech_opts_d.keys()))
                     
                     if st.form_submit_button("CREAR ORDEN"):
                         supabase.table("ordenes").insert({
-                            "activo_id": int(act_dict[sel_act_dir]), "descripcion": desc_d, "criticidad": crit_d, "tipo_mantenimiento": tipo_d,
-                            "estado": "Abierta", "tecnico_asignado": str(tech_opts_d[asig_d]), "fecha_creacion": datetime.now().isoformat()
+                            "activo_id": int(act_dict[sel_act_dir]), 
+                            "descripcion": desc_d, 
+                            "criticidad": crit_d, 
+                            "tipo_mantenimiento": tipo_d,
+                            "estado": "Abierta", 
+                            "tecnico_asignado": str(tech_opts_d[asig_d]), 
+                            "fecha_creacion": datetime.now().isoformat()
                         }).execute()
                         st.success("Creada."); st.rerun()
 
@@ -2575,5 +2586,6 @@ elif choice == "Usuarios":
                             agregar_notificacion('error', f'Error al eliminar: {e}')
         else:
             st.info("No se encontraron usuarios en la base de datos. Use la pestaña 'CREAR USUARIO'.")
+
 
 
