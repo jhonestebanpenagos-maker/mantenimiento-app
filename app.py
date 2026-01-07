@@ -256,6 +256,31 @@ def mostrar_notificaciones():
     
 # --- 3. FUNCIONES AUXILIARES MEJORADAS ---
 
+def subir_archivo_generico(archivo):
+    """
+    Sube cualquier tipo de archivo (PDF, DOCX, IMG) a Cloudinary.
+    Usa resource_type='auto' para detectar si es imagen o documento raw.
+    """
+    if archivo:
+        try:
+            # 1. Detectar tipo para organizar carpeta (opcional)
+            es_imagen = archivo.type.startswith('image')
+            carpeta = "orion_evidencias" if es_imagen else "orion_documentos"
+            
+            # 2. Subir
+            respuesta = cloudinary.uploader.upload(
+                archivo.getvalue(),
+                folder=carpeta,
+                resource_type="auto", # ¡Clave! Deja que Cloudinary decida si es PDF o IMG
+                use_filename=True,
+                unique_filename=True
+            )
+            return respuesta.get("secure_url")
+        except Exception as e:
+            st.error(f"Error subiendo archivo: {e}")
+            return None
+    return None
+
 @st.cache_data(ttl=1)  # Cache de 1 segundo para datos en tiempo real
 def run_query(table_name, filters=None, order_by="id"):
     """Función optimizada para consultas con cache de 1 segundo"""
@@ -2208,14 +2233,120 @@ elif choice == "Ordenes de Trabajo":
         n_pendientes = len(df_solicitudes)
         titulo_buzon = f"👮 VALIDAR ({n_pendientes})" if n_pendientes > 0 else "👮 VALIDAR"
         
-        # ✅ AQUÍ DEFINIMOS LAS 5 PESTAÑAS (INCLUYENDO LA NUEVA DE PREVENTIVOS)
-        tab_buzon, tab_calidad, tab_gestion, tab_crear_directa, tab_preventivos = st.tabs([
+        # ==============================================================================
+        # 🟢 AQUI EMPIEZA LA PARTE 3 (MODIFICADA)
+        # Reemplazamos la definición anterior de st.tabs por esta nueva lista de 6 pestañas
+        # ==============================================================================
+        
+        tab_mis_gestiones, tab_buzon, tab_calidad, tab_gestion, tab_crear_directa, tab_preventivos = st.tabs([
+            "📂 MIS GESTIONES",  # <--- NUEVA PESTAÑA
             titulo_buzon, 
             "💎 CALIDAD", 
             "📊 GESTIÓN GLOBAL", 
             "⚡ CREAR DIRECTA", 
-            "📅 PREVENTIVOS" # <--- Nueva Pestaña
+            "📅 PREVENTIVOS"
         ])
+        
+        # ------------------------------------------------------------------
+        # 1. PESTAÑA DE GESTIÓN ADMINISTRATIVA (NUEVA LÓGICA)
+        # ------------------------------------------------------------------
+        with tab_mis_gestiones:
+            st.info("Aquí administras las órdenes asignadas a ti (Cotizaciones, Compras, Trámites).")
+            
+            # 1. Buscar mi ID de usuario
+            mi_id_admin = None
+            if not df_users.empty:
+                user_match = df_users[df_users['nombre'] == usuario]
+                if not user_match.empty:
+                    mi_id_admin = user_match.iloc[0]['id']
+            
+            if mi_id_admin:
+                # 2. Filtrar órdenes asignadas a MÍ y que NO estén concluidas
+                mis_gestiones = df_ordenes[
+                    (df_ordenes['tecnico_asignado'] == str(mi_id_admin)) & 
+                    (df_ordenes['estado'] != 'Concluida')
+                ]
+                
+                if mis_gestiones.empty:
+                    st.success("🎉 No tienes gestiones administrativas pendientes.")
+                else:
+                    for idx, row in mis_gestiones.iterrows():
+                        nombre_activo = df_act[df_act['id'] == row['activo_id']].iloc[0]['nombre'] if not df_act.empty else "Activo"
+                        
+                        # Usamos un expander para cada orden
+                        with st.expander(f"📂 {nombre_activo} | {row['descripcion'][:50]}... (ID: {row['id']})", expanded=False):
+                            
+                            # A) Mostrar Bitácora (Historial de avances)
+                            st.markdown("##### 📜 Historial de Gestión")
+                            try:
+                                # Consultamos la tabla 'bitacora' (Asegúrate de haber creado la tabla en Supabase como indicamos en el PASO 1)
+                                bitacora = supabase.table("bitacora").select("*").eq("orden_id", row['id']).order("fecha", desc=True).execute()
+                                if bitacora.data:
+                                    for b in bitacora.data:
+                                        fecha_fmt = b['fecha'][:10] + " " + b['fecha'][11:16]
+                                        icono = "📎" if b['archivo_url'] else "💬"
+                                        st.markdown(f"""
+                                        <div style="border-left: 2px solid #F59E0B; padding-left: 10px; margin-bottom: 10px;">
+                                            <small style="color: #9CA3AF;">{fecha_fmt} - <b>{b['usuario_text']}</b></small><br>
+                                            {b['mensaje']}
+                                        </div>
+                                        """, unsafe_allow_html=True)
+                                        if b['archivo_url']:
+                                            st.markdown(f"&nbsp;&nbsp;&nbsp;&nbsp;{icono} [Ver Archivo Adjunto]({b['archivo_url']})")
+                                else:
+                                    st.caption("No hay avances registrados aún.")
+                            except Exception as e:
+                                st.caption(f"Error cargando historial: {e}")
+
+                            st.divider()
+
+                            # B) Formulario para NUEVO AVANCE
+                            # Importante: clear_on_submit=True limpia el texto después de enviar
+                            with st.form(key=f"form_bitacora_{row['id']}", clear_on_submit=True):
+                                st.markdown("##### ➕ Registrar Nuevo Avance")
+                                c_msg, c_file = st.columns([2, 1])
+                                nuevo_mensaje = c_msg.text_area("Detalle de la gestión", placeholder="Ej: Recibí la cotización del proveedor X...", height=100)
+                                archivo_gestion = c_file.file_uploader("Adjuntar (PDF, Word, Foto)", type=["pdf", "docx", "xlsx", "jpg", "png"])
+                                
+                                col_btns = st.columns([1, 1])
+                                btn_avanzar = col_btns[0].form_submit_button("💾 REGISTRAR AVANCE", type="primary")
+                                btn_cerrar_admin = col_btns[1].form_submit_button("✅ FINALIZAR GESTIÓN (CERRAR ORDEN)")
+
+                                if btn_avanzar:
+                                    if not nuevo_mensaje:
+                                        st.error("Escribe un detalle.")
+                                    else:
+                                        url_doc = None
+                                        if archivo_gestion:
+                                            with st.spinner("Subiendo documento..."):
+                                                # Usamos la función nueva que creamos en el PASO 2
+                                                url_doc = subir_archivo_generico(archivo_gestion)
+                                        
+                                        try:
+                                            supabase.table("bitacora").insert({
+                                                "orden_id": row['id'],
+                                                "usuario_text": usuario,
+                                                "mensaje": nuevo_mensaje,
+                                                "archivo_url": url_doc
+                                            }).execute()
+                                            st.success("Avance registrado.")
+                                            st.rerun()
+                                        except Exception as e:
+                                            st.error(f"Error guardando bitácora: {e}")
+
+                                if btn_cerrar_admin:
+                                    try:
+                                        supabase.table("ordenes").update({
+                                            "estado": "Concluida",
+                                            "comentarios_cierre": f"[CIERRE ADMINISTRATIVO] {nuevo_mensaje if nuevo_mensaje else 'Gestión finalizada.'}",
+                                            "fecha_cierre": datetime.now().isoformat()
+                                        }).eq("id", row['id']).execute()
+                                        st.success("Gestión finalizada y orden cerrada.")
+                                        st.rerun()
+                                    except Exception as e:
+                                        st.error(f"Error cerrando orden: {e}")
+            else:
+                st.warning("No se pudo identificar tu usuario Admin en la base de datos.")
 
 # 1. BUZÓN DE VALIDACIÓN
         with tab_buzon:
@@ -2599,6 +2730,7 @@ elif choice == "Usuarios":
                             agregar_notificacion('error', f'Error al eliminar: {e}')
         else:
             st.info("No se encontraron usuarios en la base de datos. Use la pestaña 'CREAR USUARIO'.")
+
 
 
 
