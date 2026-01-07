@@ -258,20 +258,25 @@ def mostrar_notificaciones():
 
 def subir_archivo_generico(archivo):
     """
-    Sube cualquier tipo de archivo (PDF, DOCX, IMG) a Cloudinary.
-    Usa resource_type='auto' para detectar si es imagen o documento raw.
+    Sube archivos a Cloudinary. 
+    Detecta .msg para forzar 'raw', lo demás en 'auto'.
     """
     if archivo:
         try:
-            # 1. Detectar tipo para organizar carpeta (opcional)
+            # 1. Detectar si es imagen para la carpeta
             es_imagen = archivo.type.startswith('image')
             carpeta = "orion_evidencias" if es_imagen else "orion_documentos"
             
-            # 2. Subir
+            # 2. Configurar el tipo de recurso
+            # Los .msg son archivos binarios complejos, Cloudinary los prefiere como 'raw'
+            nombre_archivo = archivo.name.lower()
+            tipo_recurso = "raw" if nombre_archivo.endswith(".msg") else "auto"
+
+            # 3. Subir
             respuesta = cloudinary.uploader.upload(
                 archivo.getvalue(),
                 folder=carpeta,
-                resource_type="auto", # ¡Clave! Deja que Cloudinary decida si es PDF o IMG
+                resource_type=tipo_recurso, # <--- Aquí está el cambio clave
                 use_filename=True,
                 unique_filename=True
             )
@@ -2306,7 +2311,8 @@ elif choice == "Ordenes de Trabajo":
                                 st.markdown("##### ➕ Registrar Nuevo Avance")
                                 c_msg, c_file = st.columns([2, 1])
                                 nuevo_mensaje = c_msg.text_area("Detalle de la gestión", placeholder="Ej: Recibí la cotización del proveedor X...", height=100)
-                                archivo_gestion = c_file.file_uploader("Adjuntar (PDF, Word, Foto)", type=["pdf", "docx", "xlsx", "jpg", "png"])
+
+                                archivo_gestion = c_file.file_uploader("Adjuntar (PDF, Word, Foto, Email .msg)", type=["pdf", "docx", "xlsx", "jpg", "png", "msg"])
                                 
                                 col_btns = st.columns([1, 1])
                                 btn_avanzar = col_btns[0].form_submit_button("💾 REGISTRAR AVANCE", type="primary")
@@ -2730,8 +2736,4 @@ elif choice == "Usuarios":
                             agregar_notificacion('error', f'Error al eliminar: {e}')
         else:
             st.info("No se encontraron usuarios en la base de datos. Use la pestaña 'CREAR USUARIO'.")
-
-
-
-
 
