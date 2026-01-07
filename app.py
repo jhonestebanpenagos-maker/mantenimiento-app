@@ -2433,35 +2433,48 @@ elif choice == "Ordenes de Trabajo":
         # 4. CREAR DIRECTA
         
         with tab_crear_directa:
-            st.info("Creación rápida sin validación.")
+            st.info("Creación rápida: Los campos se limpiarán automáticamente al guardar.")
+            
             if not df_act.empty:
                 act_dict = dict(zip(df_act['nombre'], df_act['id']))
-                sel_act_dir = st.selectbox("Activo", sorted(act_dict.keys()), key="direct_act")
                 
-                with st.form("ot_directa"):
-                    c1, c2 = st.columns(2)
-                    # --- AQUÍ AGREGAMOS "Predictivo" A LA LISTA ---
-                    tipo_d = c1.selectbox("Tipo", ["Correctivo", "Preventivo", "Predictivo", "Mejora"]) 
-                    # ----------------------------------------------
+                # --- CAMBIO 1: Agregamos clear_on_submit=True ---
+                with st.form("ot_directa", clear_on_submit=True):
                     
-                    # Agregué "Crítica" también por si acaso lo necesitas, ya que en directa solo tenías hasta Alta
-                    crit_d = c2.select_slider("Criticidad", ["Baja", "Media", "Alta", "Crítica"]) 
+                    # --- CAMBIO 2: Movimos el Activo ADENTRO del form para que se limpie también ---
+                    sel_act_dir = st.selectbox("Activo", sorted(act_dict.keys())) 
+                    
+                    c1, c2 = st.columns(2)
+                    # Mantenemos tu cambio de "Predictivo"
+                    tipo_d = c1.selectbox("Tipo", ["Correctivo", "Preventivo", "Predictivo", "Mejora"])
+                    crit_d = c2.select_slider("Criticidad", ["Baja", "Media", "Alta", "Crítica"])
                     
                     desc_d = st.text_area("Descripción")
+                    
                     tech_opts_d = {u['nombre']: u['id'] for i, u in df_users.iterrows()}
                     asig_d = st.selectbox("Asignar", list(tech_opts_d.keys()))
                     
                     if st.form_submit_button("CREAR ORDEN"):
-                        supabase.table("ordenes").insert({
-                            "activo_id": int(act_dict[sel_act_dir]), 
-                            "descripcion": desc_d, 
-                            "criticidad": crit_d, 
-                            "tipo_mantenimiento": tipo_d,
-                            "estado": "Abierta", 
-                            "tecnico_asignado": str(tech_opts_d[asig_d]), 
-                            "fecha_creacion": datetime.now().isoformat()
-                        }).execute()
-                        st.success("Creada."); st.rerun()
+                        # Validamos que no se vaya vacío (opcional, pero recomendado)
+                        if not desc_d:
+                            st.error("La descripción es obligatoria.")
+                        else:
+                            try:
+                                supabase.table("ordenes").insert({
+                                    "activo_id": int(act_dict[sel_act_dir]), 
+                                    "descripcion": desc_d, 
+                                    "criticidad": crit_d, 
+                                    "tipo_mantenimiento": tipo_d,
+                                    "estado": "Abierta", 
+                                    "tecnico_asignado": str(tech_opts_d[asig_d]), 
+                                    "fecha_creacion": datetime.now().isoformat()
+                                }).execute()
+                                st.success("✅ Orden creada correctamente.")
+                                # El st.rerun() es necesario para actualizar las tablas, 
+                                # y el clear_on_submit se encargará de limpiar los campos.
+                                st.rerun()
+                            except Exception as e:
+                                st.error(f"Error al crear: {e}")
 
         # 5. ✅ MÓDULO NUEVO: MANTENIMIENTO PREVENTIVO
         with tab_preventivos:
@@ -2586,6 +2599,7 @@ elif choice == "Usuarios":
                             agregar_notificacion('error', f'Error al eliminar: {e}')
         else:
             st.info("No se encontraron usuarios en la base de datos. Use la pestaña 'CREAR USUARIO'.")
+
 
 
 
