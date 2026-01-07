@@ -258,38 +258,45 @@ def mostrar_notificaciones():
 
 def subir_archivo_generico(archivo):
     """
-    Sube archivos a Cloudinary. 
-    Lógica Mejorada:
-    - FOTOS (jpg, png, etc) -> resource_type="image" (Para poder verlas en la app)
-    - DOCUMENTOS (pdf, doc, msg) -> resource_type="raw" (Para forzar descarga intacta y evitar errores de conversión)
+    Sube archivos a Cloudinary asegurando que conserven su extensión (.msg, .pdf).
     """
     if archivo:
         try:
-            nombre_archivo = archivo.name.lower()
+            nombre_original = archivo.name.lower()
             
-            # 1. Definir extensiones visuales (Imágenes)
+            # 1. Detectar si es Imagen (Para visor) o Documento (Para descarga)
             ext_imagenes = ('.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp')
-            es_imagen_visual = nombre_archivo.endswith(ext_imagenes)
+            es_imagen_visual = nombre_original.endswith(ext_imagenes)
             
-            # 2. Configurar parámetros según tipo
             if es_imagen_visual:
                 tipo_recurso = "image"
                 carpeta = "orion_evidencias"
+                public_id_manual = None # Dejamos que Cloudinary nombre las fotos
+                use_unique = True
             else:
-                # TRUCO: Para PDF, DOC, MSG, usamos 'raw'. 
-                # Esto evita que Cloudinary intente convertirlos a imagen (error del PDF)
-                # y garantiza que la URL final termine en .pdf o .msg (error de extensión)
-                tipo_recurso = "raw" 
+                # 2. TRUCO PARA DOCUMENTOS (PDF, MSG, DOCX)
+                # Generamos nosotros el nombre único para OBLIGAR a mantener la extensión
+                tipo_recurso = "raw"
                 carpeta = "orion_documentos"
+                
+                # Limpiamos el nombre de caracteres raros
+                nombre_base, extension = os.path.splitext(archivo.name)
+                nombre_limpio = "".join(c for c in nombre_base if c.isalnum() or c in (' ', '_', '-')).strip()
+                timestamp = int(time.time())
+                
+                # Ej: "Cotizacion_17099232.msg"
+                public_id_manual = f"{nombre_limpio}_{timestamp}{extension}"
+                use_unique = False # Apagamos el random de Cloudinary para usar el nuestro
 
             # 3. Subir
             respuesta = cloudinary.uploader.upload(
                 archivo.getvalue(),
                 folder=carpeta,
-                resource_type=tipo_recurso, 
-                use_filename=True,      # Usa el nombre original del archivo
-                unique_filename=True,   # Agrega caracteres al azar PERO mantiene la extensión
-                resource_type_in_post=None # Evita conflictos automáticos
+                resource_type=tipo_recurso,
+                public_id=public_id_manual, # <-- Aquí forzamos el nombre con extensión
+                use_filename=True,
+                unique_filename=use_unique, 
+                resource_type_in_post=None
             )
             return respuesta.get("secure_url")
         except Exception as e:
@@ -2344,8 +2351,10 @@ elif choice == "Ordenes de Trabajo":
                                         except Exception as e:
                                             st.error(f"Error al guardar: {e}")
 
+                           # ... (Código anterior del diálogo de edición se mantiene igual) ...
+
                             # ==========================================
-                            # 2. LISTADO INTERACTIVO
+                            # 2. LISTADO INTERACTIVO (MEJORADO)
                             # ==========================================
                             st.markdown("##### 📜 Historial de Gestión")
                             
@@ -2357,12 +2366,33 @@ elif choice == "Ordenes de Trabajo":
                                         with st.container():
                                             c_info, c_actions = st.columns([5, 1])
                                             
-                                            # Columna Info
+                                            # --- COLUMNA IZQUIERDA: INFORMACIÓN ---
                                             with c_info:
                                                 fecha_fmt = b['fecha'][:10] + " " + b['fecha'][11:16]
-                                                # Icono condicional
-                                                icono = "📎" if b['archivo_url'] else ""
+                                                url = b['archivo_url']
                                                 
+                                                # Lógica de Iconos y Formatos
+                                                adjunto_html = ""
+                                                if url:
+                                                    url_lower = url.lower()
+                                                    nombre_archivo = "Ver Adjunto"
+                                                    
+                                                    # Detectar tipo de archivo por extensión
+                                                    if url_lower.endswith(('.jpg', '.jpeg', '.png', '.webp')):
+                                                        adjunto_html = f"""<br><a href="{url}" target="_blank" style="text-decoration:none; color: #10B981;">🖼️ <b>Ver Imagen</b></a>"""
+                                                    elif url_lower.endswith('.pdf'):
+                                                        adjunto_html = f"""<br><a href="{url}" target="_blank" style="text-decoration:none; color: #EF4444;">📄 <b>Descargar PDF</b></a>"""
+                                                    elif url_lower.endswith('.msg'):
+                                                        adjunto_html = f"""<br><a href="{url}" target="_blank" style="text-decoration:none; color: #3B82F6;">📧 <b>Descargar Correo (.msg)</b></a>"""
+                                                    elif url_lower.endswith(('.doc', '.docx')):
+                                                        adjunto_html = f"""<br><a href="{url}" target="_blank" style="text-decoration:none; color: #2563EB;">📝 <b>Descargar Word</b></a>"""
+                                                    elif url_lower.endswith(('.xls', '.xlsx')):
+                                                        adjunto_html = f"""<br><a href="{url}" target="_blank" style="text-decoration:none; color: #16A34A;">📊 <b>Descargar Excel</b></a>"""
+                                                    else:
+                                                        # Archivo genérico
+                                                        adjunto_html = f"""<br><a href="{url}" target="_blank" style="text-decoration:none; color: #F59E0B;">📎 <b>Descargar Archivo</b></a>"""
+
+                                                # Renderizar tarjeta
                                                 st.markdown(f"""
                                                 <div style="background-color: rgba(255,255,255,0.05); border-left: 3px solid #F59E0B; padding: 10px; border-radius: 0 5px 5px 0; margin-bottom: 5px;">
                                                     <div style="display:flex; justify-content:space-between; color: #9CA3AF; font-size: 0.85em;">
@@ -2370,15 +2400,12 @@ elif choice == "Ordenes de Trabajo":
                                                         <span>👤 <b>{b['usuario_text']}</b></span>
                                                     </div>
                                                     <div style="margin-top: 5px; color: #E5E7EB; white-space: pre-wrap;">{b['mensaje']}</div>
+                                                    {adjunto_html}
                                                 </div>
                                                 """, unsafe_allow_html=True)
-                                                
-                                                if b['archivo_url']:
-                                                    st.markdown(f"&nbsp;&nbsp;&nbsp;{icono} [**Abrir Adjunto**]({b['archivo_url']})")
 
-                                            # Columna Botones
+                                            # --- COLUMNA DERECHA: BOTONES ---
                                             with c_actions:
-                                                # AQUI ESTÁ EL CAMBIO EN EL BOTÓN: Pasamos b['archivo_url']
                                                 if st.button("✏️", key=f"btn_edit_{b['id']}", help="Editar"):
                                                     editar_avance_dialog(b['id'], b['mensaje'], b['archivo_url'])
                                                 
@@ -2394,7 +2421,6 @@ elif choice == "Ordenes de Trabajo":
                                     
                             except Exception as e:
                                 st.error(f"Error cargando historial: {e}")
-
                             # ==========================================
                             # FIN DEL LISTADO
                             # ==========================================
@@ -2832,6 +2858,7 @@ elif choice == "Usuarios":
                             agregar_notificacion('error', f'Error al eliminar: {e}')
         else:
             st.info("No se encontraron usuarios en la base de datos. Use la pestaña 'CREAR USUARIO'.")
+
 
 
 
