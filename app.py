@@ -2542,13 +2542,15 @@ elif choice == "Ordenes de Trabajo":
                                 btn_crear = st.form_submit_button("✅ CREAR", type="primary", use_container_width=True)
                                 btn_rechazar = st.form_submit_button("❌ RECHAZAR", type="secondary", use_container_width=True)
 
-                            # --- LÓGICA DE BOTONES ---
+                            
+                           # --- LÓGICA DE BOTONES ---
                             if btn_crear:
                                 # Validación: Solo exigimos datos si se va a CREAR
                                 if not activo_final_nombre or not tipo_ot or not asignar_a:
                                     st.error("⚠️ Falta seleccionar: Activo, Tipo o Técnico.")
                                 else:
                                     try:
+                                        # 1. CREAR LA ORDEN
                                         res_orden = supabase.table("ordenes").insert({
                                                 "activo_id": int(act_map_nombre_id[activo_final_nombre]),
                                                 "chat_id": sol.get('chat_id'),
@@ -2560,12 +2562,39 @@ elif choice == "Ordenes de Trabajo":
                                                 "fecha_creacion": datetime.now().isoformat(),
                                         }).execute()
                                         
-                                        nuevo_id = res_orden.data[0]['id'] if res_orden.data else "##"
-                                        msj_ok = f"✅ **¡Solicitud Aprobada!**\n\nOrden **#{nuevo_id}** ({tipo_ot}). Prioridad: {criticidad_final}."
-                                        notificar_telegram(sol.get('chat_id'), msj_ok)
-                                        supabase.table("solicitudes").update({"estado": "Aprobada"}).eq("id", sol['id']).execute()
-                                        st.success("Orden creada.")
-                                        st.rerun()
+                                        if res_orden.data:
+                                            nuevo_id = res_orden.data[0]['id']
+                                            
+                                            # =================================================================
+                                            # 🔥 LO NUEVO: PASAR LA EVIDENCIA DE TELEGRAM A LA BITÁCORA
+                                            # =================================================================
+                                            if sol.get('foto_url'):
+                                                # Detectamos si es archivo o foto para el mensaje
+                                                es_imagen = sol['foto_url'].lower().endswith(('.png', '.jpg', '.jpeg', '.webp'))
+                                                icono_msg = "📸" if es_imagen else "📎"
+                                                texto_msg = "Evidencia original del reporte (Telegram/Solicitud)."
+                                                
+                                                supabase.table("bitacora").insert({
+                                                    "orden_id": nuevo_id,
+                                                    "usuario_text": f"Solicitante: {sol['solicitante_id']}",
+                                                    "mensaje": f"{icono_msg} {texto_msg}",
+                                                    "archivo_url": sol['foto_url'],
+                                                    "fecha": datetime.now().isoformat()
+                                                }).execute()
+                                            # =================================================================
+
+                                            # Notificación y cierre de solicitud
+                                            msj_ok = f"✅ **¡Solicitud Aprobada!**\n\nOrden **#{nuevo_id}** ({tipo_ot}). Prioridad: {criticidad_final}."
+                                            notificar_telegram(sol.get('chat_id'), msj_ok)
+                                            
+                                            supabase.table("solicitudes").update({"estado": "Aprobada"}).eq("id", sol['id']).execute()
+                                            
+                                            st.success(f"✅ Orden #{nuevo_id} creada y evidencia adjuntada.")
+                                            time.sleep(1)
+                                            st.rerun()
+                                        else:
+                                            st.error("Error: No se generó el ID de la orden.")
+
                                     except Exception as e: st.error(f"Error: {e}")
                             
                             if btn_rechazar:
@@ -2985,4 +3014,5 @@ elif choice == "Usuarios":
                             agregar_notificacion('error', f'Error al eliminar: {e}')
         else:
             st.info("No se encontraron usuarios en la base de datos. Use la pestaña 'CREAR USUARIO'.")
+
 
