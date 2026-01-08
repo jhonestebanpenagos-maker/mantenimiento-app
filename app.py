@@ -2277,10 +2277,52 @@ elif choice == "Ordenes de Trabajo":
         # ------------------------------------------------------------------
         # 1. PESTAÑA DE GESTIÓN ADMINISTRATIVA (NUEVA LÓGICA)
         # ------------------------------------------------------------------
+# ------------------------------------------------------------------
+        # 1. PESTAÑA DE GESTIÓN ADMINISTRATIVA (CÓDIGO COMPLETO)
+        # ------------------------------------------------------------------
         with tab_mis_gestiones:
             st.info("Aquí administras las órdenes asignadas a ti (Cotizaciones, Compras, Trámites).")
             
-            # 1. Buscar mi ID de usuario
+            # --- A. DEFINICIÓN DEL DIÁLOGO (Se define una sola vez al inicio) ---
+            @st.dialog("✏️ Editar Avance")
+            def editar_avance_dialog(item_id, texto_actual, url_actual):
+                st.write(f"Editando registro #{item_id}")
+                
+                # Editar Texto
+                nuevo_texto = st.text_area("Corrección", value=texto_actual, height=100)
+                st.markdown("---")
+                st.caption("📎 Gestión de Archivos")
+
+                # Lógica de Archivo
+                borrar_archivo = False
+                if url_actual:
+                    st.markdown(f"**Archivo actual:** [Ver documento]({url_actual})")
+                    borrar_archivo = st.checkbox("🗑️ Borrar archivo actual", value=False)
+                
+                archivo_nuevo = st.file_uploader("Cambiar archivo (Opcional)", type=["pdf", "docx", "xlsx", "jpg", "png", "msg"])
+                
+                if st.button("💾 GUARDAR CAMBIOS", type="primary"):
+                    with st.spinner("Procesando..."):
+                        try:
+                            datos_update = {"mensaje": nuevo_texto}
+                            
+                            # Si marcó borrar
+                            if borrar_archivo:
+                                datos_update["archivo_url"] = None
+                            
+                            # Si subió uno nuevo (sobrescribe)
+                            if archivo_nuevo:
+                                url_subida = subir_archivo_generico(archivo_nuevo)
+                                if url_subida:
+                                    datos_update["archivo_url"] = url_subida
+                            
+                            supabase.table("bitacora").update(datos_update).eq("id", item_id).execute()
+                            st.success("Registro actualizado.")
+                            st.rerun()
+                        except Exception as e:
+                            st.error(f"Error al guardar: {e}")
+
+            # --- B. LÓGICA DE USUARIO Y FILTRO ---
             mi_id_admin = None
             if not df_users.empty:
                 user_match = df_users[df_users['nombre'] == usuario]
@@ -2288,7 +2330,7 @@ elif choice == "Ordenes de Trabajo":
                     mi_id_admin = user_match.iloc[0]['id']
             
             if mi_id_admin:
-                # 2. Filtrar órdenes asignadas a MÍ y que NO estén concluidas
+                # Filtrar órdenes asignadas a MÍ y NO concluidas
                 mis_gestiones = df_ordenes[
                     (df_ordenes['tecnico_asignado'] == str(mi_id_admin)) & 
                     (df_ordenes['estado'] != 'Concluida')
@@ -2297,71 +2339,38 @@ elif choice == "Ordenes de Trabajo":
                 if mis_gestiones.empty:
                     st.success("🎉 No tienes gestiones administrativas pendientes.")
                 else:
+                    # --- C. BUCLE DE ÓRDENES ---
                     for idx, row in mis_gestiones.iterrows():
                         nombre_activo = df_act[df_act['id'] == row['activo_id']].iloc[0]['nombre'] if not df_act.empty else "Activo"
                         
-                        # Usamos un expander para cada orden
+                        # USAMOS EL EXPANDER
                         with st.expander(f"📂 {nombre_activo} | {row['descripcion'][:50]}... (ID: {row['id']})", expanded=False):
                             
-                            # A) Mostrar Bitácora (Historial de avances)
-# ... Dentro de tab_mis_gestiones ...
-                            # ... Dentro de with st.expander(...): ...
-
-                           # ==========================================
-                            # 1. DEFINICIÓN DEL DIÁLOGO DE EDICIÓN (MEJORADO)
                             # ==========================================
-                            @st.dialog("✏️ Editar Avance")
-                            def editar_avance_dialog(item_id, texto_actual, url_actual):
-                                st.write(f"Editando registro #{item_id}")
-                                
-                                # A) Editar Texto
-                                nuevo_texto = st.text_area("Corrección", value=texto_actual, height=100)
-                                
-                                st.markdown("---")
-                                st.caption("📎 Gestión de Archivos")
+                            # 1. TARJETA DE CONTEXTO (NUEVA)
+                            # ==========================================
+                            color_borde = "#3B82F6" # Azul por defecto
+                            if row['criticidad'] == 'Alta': color_borde = "#F59E0B" # Naranja
+                            if row['criticidad'] == 'Crítica': color_borde = "#EF4444" # Rojo
 
-                                # B) Lógica de Archivo
-                                borrar_archivo = False
-                                
-                                # Si ya existe un archivo, mostramos opción de borrar
-                                if url_actual:
-                                    st.markdown(f"**Archivo actual:** [Ver documento]({url_actual})")
-                                    borrar_archivo = st.checkbox("🗑️ Borrar archivo actual", value=False)
-                                
-                                # Opción para reemplazar (o agregar si no había)
-                                archivo_nuevo = st.file_uploader("Cambiar archivo (Opcional)", type=["pdf", "docx", "xlsx", "jpg", "png", "msg"])
-                                
-                                if st.button("💾 GUARDAR CAMBIOS", type="primary"):
-                                    with st.spinner("Procesando..."):
-                                        try:
-                                            # Preparar datos a actualizar
-                                            datos_update = {"mensaje": nuevo_texto}
-                                            
-                                            # 1. Si marcó borrar, ponemos NULL en la base de datos
-                                            if borrar_archivo:
-                                                datos_update["archivo_url"] = None
-                                            
-                                            # 2. Si subió uno nuevo, lo procesamos (esto sobreescribe el borrado si marcó ambos)
-                                            if archivo_nuevo:
-                                                url_subida = subir_archivo_generico(archivo_nuevo)
-                                                if url_subida:
-                                                    datos_update["archivo_url"] = url_subida
-                                            
-                                            # Ejecutar actualización
-                                            supabase.table("bitacora").update(datos_update).eq("id", item_id).execute()
-                                            
-                                            st.success("Registro actualizado.")
-                                            st.rerun()
-                                        except Exception as e:
-                                            st.error(f"Error al guardar: {e}")
-
-                           # ... (Código anterior del diálogo de edición se mantiene igual) ...
+                            st.markdown(f"""
+                            <div style="background-color: #1F2937; border-left: 4px solid {color_borde}; padding: 15px; border-radius: 4px; margin-bottom: 20px;">
+                                <h5 style="color: #9CA3AF; margin:0; font-size: 0.9em; text-transform: uppercase;">📋 Detalle del Requerimiento</h5>
+                                <p style="color: #F3F4F6; font-size: 1.1em; margin: 8px 0; font-weight: 500;">
+                                    "{row['descripcion']}"
+                                </p>
+                                <div style="display: flex; gap: 20px; font-size: 0.85em; color: #9CA3AF; border-top: 1px solid #374151; padding-top: 8px; margin-top: 10px;">
+                                    <span>📅 <b>Creada:</b> {row['fecha_creacion'][:10]}</span>
+                                    <span>🚨 <b>Criticidad:</b> {row['criticidad']}</span>
+                                    <span>🔧 <b>Tipo:</b> {row['tipo_mantenimiento']}</span>
+                                </div>
+                            </div>
+                            """, unsafe_allow_html=True)
 
                             # ==========================================
-                            # 2. LISTADO INTERACTIVO (MEJORADO)
+                            # 2. HISTORIAL / BITÁCORA (VISUALIZADOR)
                             # ==========================================
                             st.markdown("##### 📜 Historial de Gestión")
-                            
                             try:
                                 bitacora = supabase.table("bitacora").select("*").eq("orden_id", row['id']).order("fecha", desc=True).execute()
                                 
@@ -2373,42 +2382,36 @@ elif choice == "Ordenes de Trabajo":
                                             # --- COLUMNA IZQUIERDA: INFORMACIÓN ---
                                             with c_info:
                                                 fecha_fmt = b['fecha'][:10] + " " + b['fecha'][11:16]
+                                                usuario_log = b.get('usuario_text', 'Usuario')
                                                 url = b['archivo_url']
                                                 
-                                                # Lógica de Iconos y Formatos
+                                                # Lógica de Iconos Inteligentes
                                                 adjunto_html = ""
                                                 if url:
                                                     url_lower = url.lower()
-                                                    nombre_archivo = "Ver Adjunto"
-                                                    
-                                                    # Detectar tipo de archivo por extensión
                                                     if url_lower.endswith(('.jpg', '.jpeg', '.png', '.webp')):
                                                         adjunto_html = f"""<br><a href="{url}" target="_blank" style="text-decoration:none; color: #10B981;">🖼️ <b>Ver Imagen</b></a>"""
                                                     elif url_lower.endswith('.pdf'):
                                                         adjunto_html = f"""<br><a href="{url}" target="_blank" style="text-decoration:none; color: #EF4444;">📄 <b>Descargar PDF</b></a>"""
                                                     elif url_lower.endswith('.msg'):
-                                                        adjunto_html = f"""<br><a href="{url}" target="_blank" style="text-decoration:none; color: #3B82F6;">📧 <b>Descargar Correo (.msg)</b></a>"""
-                                                    elif url_lower.endswith(('.doc', '.docx')):
-                                                        adjunto_html = f"""<br><a href="{url}" target="_blank" style="text-decoration:none; color: #2563EB;">📝 <b>Descargar Word</b></a>"""
+                                                        adjunto_html = f"""<br><a href="{url}" target="_blank" style="text-decoration:none; color: #3B82F6;">📧 <b>Descargar Correo</b></a>"""
                                                     elif url_lower.endswith(('.xls', '.xlsx')):
                                                         adjunto_html = f"""<br><a href="{url}" target="_blank" style="text-decoration:none; color: #16A34A;">📊 <b>Descargar Excel</b></a>"""
                                                     else:
-                                                        # Archivo genérico
                                                         adjunto_html = f"""<br><a href="{url}" target="_blank" style="text-decoration:none; color: #F59E0B;">📎 <b>Descargar Archivo</b></a>"""
 
-                                                # Renderizar tarjeta
                                                 st.markdown(f"""
                                                 <div style="background-color: rgba(255,255,255,0.05); border-left: 3px solid #F59E0B; padding: 10px; border-radius: 0 5px 5px 0; margin-bottom: 5px;">
                                                     <div style="display:flex; justify-content:space-between; color: #9CA3AF; font-size: 0.85em;">
                                                         <span>📅 {fecha_fmt}</span>
-                                                        <span>👤 <b>{b['usuario_text']}</b></span>
+                                                        <span>👤 <b>{usuario_log}</b></span>
                                                     </div>
                                                     <div style="margin-top: 5px; color: #E5E7EB; white-space: pre-wrap;">{b['mensaje']}</div>
                                                     {adjunto_html}
                                                 </div>
                                                 """, unsafe_allow_html=True)
 
-                                            # --- COLUMNA DERECHA: BOTONES ---
+                                            # --- COLUMNA DERECHA: BOTONES DE ACCIÓN ---
                                             with c_actions:
                                                 if st.button("✏️", key=f"btn_edit_{b['id']}", help="Editar"):
                                                     editar_avance_dialog(b['id'], b['mensaje'], b['archivo_url'])
@@ -2418,13 +2421,55 @@ elif choice == "Ordenes de Trabajo":
                                                     st.toast("Eliminado")
                                                     time.sleep(0.5)
                                                     st.rerun()
-                                            
-                                            st.write("") 
                                 else:
                                     st.caption("No hay avances registrados aún.")
-                                    
                             except Exception as e:
                                 st.error(f"Error cargando historial: {e}")
+
+                            st.divider()
+
+                            # ==========================================
+                            # 3. FORMULARIO NUEVO AVANCE
+                            # ==========================================
+                            with st.form(key=f"form_bitacora_{row['id']}", clear_on_submit=True):
+                                st.markdown("##### ➕ Registrar Nuevo Avance")
+                                c_msg, c_file = st.columns([2, 1])
+                                nuevo_mensaje = c_msg.text_area("Detalle de la gestión", placeholder="Ej: Recibí la cotización...", height=100)
+                                archivo_gestion = c_file.file_uploader("Adjuntar", type=["pdf", "docx", "xlsx", "jpg", "png", "msg"], key=f"file_{row['id']}")
+                                
+                                col_btns = st.columns([1, 1])
+                                btn_avanzar = col_btns[0].form_submit_button("💾 REGISTRAR AVANCE", type="primary")
+                                btn_cerrar_admin = col_btns[1].form_submit_button("✅ FINALIZAR GESTIÓN")
+
+                                if btn_avanzar:
+                                    if not nuevo_mensaje:
+                                        st.error("Escribe un detalle.")
+                                    else:
+                                        url_doc = None
+                                        if archivo_gestion:
+                                            with st.spinner("Subiendo..."):
+                                                url_doc = subir_archivo_generico(archivo_gestion)
+                                        
+                                        supabase.table("bitacora").insert({
+                                            "orden_id": row['id'],
+                                            "usuario_text": usuario,
+                                            "mensaje": nuevo_mensaje,
+                                            "archivo_url": url_doc,
+                                            "fecha": datetime.now().isoformat()
+                                        }).execute()
+                                        st.success("Registrado.")
+                                        st.rerun()
+
+                                if btn_cerrar_admin:
+                                    supabase.table("ordenes").update({
+                                        "estado": "Concluida",
+                                        "comentarios_cierre": f"[CIERRE ADMIN] {nuevo_mensaje}",
+                                        "fecha_cierre": datetime.now().isoformat()
+                                    }).eq("id", row['id']).execute()
+                                    st.success("Orden cerrada.")
+                                    st.rerun()
+            else:
+                st.warning("No se pudo identificar tu usuario en la base de datos.")
                             # ==========================================
                             # FIN DEL LISTADO
                             # ==========================================
@@ -3014,5 +3059,6 @@ elif choice == "Usuarios":
                             agregar_notificacion('error', f'Error al eliminar: {e}')
         else:
             st.info("No se encontraron usuarios en la base de datos. Use la pestaña 'CREAR USUARIO'.")
+
 
 
