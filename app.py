@@ -2695,20 +2695,19 @@ elif choice == "Ordenes de Trabajo":
 
         # 4. CREAR DIRECTA
         
+        # 4. CREAR DIRECTA
         with tab_crear_directa:
             st.info("Creación rápida: Los campos se limpiarán automáticamente al guardar.")
             
             if not df_act.empty:
                 act_dict = dict(zip(df_act['nombre'], df_act['id']))
                 
-                # --- CAMBIO 1: Agregamos clear_on_submit=True ---
+                # Usamos clear_on_submit=True para limpiar todo al terminar
                 with st.form("ot_directa", clear_on_submit=True):
                     
-                    # --- CAMBIO 2: Movimos el Activo ADENTRO del form para que se limpie también ---
                     sel_act_dir = st.selectbox("Activo", sorted(act_dict.keys())) 
                     
                     c1, c2 = st.columns(2)
-                    # Mantenemos tu cambio de "Predictivo"
                     tipo_d = c1.selectbox("Tipo", ["Correctivo", "Preventivo", "Predictivo", "Mejora"])
                     crit_d = c2.select_slider("Criticidad", ["Baja", "Media", "Alta", "Crítica"])
                     
@@ -2717,13 +2716,21 @@ elif choice == "Ordenes de Trabajo":
                     tech_opts_d = {u['nombre']: u['id'] for i, u in df_users.iterrows()}
                     asig_d = st.selectbox("Asignar", list(tech_opts_d.keys()))
                     
-                    if st.form_submit_button("CREAR ORDEN"):
-                        # Validamos que no se vaya vacío (opcional, pero recomendado)
+                    st.markdown("---")
+                    st.markdown("##### 📎 Adjuntos Iniciales")
+                    archivo_inicial = st.file_uploader("Soporte (PDF, Excel, Foto, Correo)", 
+                                                     type=["pdf", "docx", "xlsx", "jpg", "png", "msg"],
+                                                     help="Este archivo se guardará automáticamente en la bitácora de la orden.")
+
+                    st.markdown("<br>", unsafe_allow_html=True)
+                    
+                    if st.form_submit_button("CREAR ORDEN", type="primary", use_container_width=True):
                         if not desc_d:
                             st.error("La descripción es obligatoria.")
                         else:
                             try:
-                                supabase.table("ordenes").insert({
+                                # 1. CREAR LA ORDEN PRIMERO
+                                res_orden = supabase.table("ordenes").insert({
                                     "activo_id": int(act_dict[sel_act_dir]), 
                                     "descripcion": desc_d, 
                                     "criticidad": crit_d, 
@@ -2732,10 +2739,33 @@ elif choice == "Ordenes de Trabajo":
                                     "tecnico_asignado": str(tech_opts_d[asig_d]), 
                                     "fecha_creacion": datetime.now().isoformat()
                                 }).execute()
-                                st.success("✅ Orden creada correctamente.")
-                                # El st.rerun() es necesario para actualizar las tablas, 
-                                # y el clear_on_submit se encargará de limpiar los campos.
-                                st.rerun()
+                                
+                                if res_orden.data:
+                                    nuevo_id_ot = res_orden.data[0]['id']
+                                    st.success(f"✅ Orden #{nuevo_id_ot} creada correctamente.")
+                                    
+                                    # 2. SI HAY ARCHIVO, SUBIRLO A LA BITÁCORA DE ESA ORDEN
+                                    if archivo_inicial:
+                                        with st.spinner("Subiendo archivo adjunto..."):
+                                            url_doc = subir_archivo_generico(archivo_inicial)
+                                            
+                                            if url_doc:
+                                                supabase.table("bitacora").insert({
+                                                    "orden_id": nuevo_id_ot,
+                                                    "usuario_text": usuario, # Variable global del usuario logueado
+                                                    "mensaje": "📎 Documento inicial adjunto al crear la orden.",
+                                                    "archivo_url": url_doc,
+                                                    "fecha": datetime.now().isoformat()
+                                                }).execute()
+                                                st.toast("Documento vinculado a la bitácora")
+                                            else:
+                                                st.error("La orden se creó, pero falló la subida del archivo.")
+
+                                    time.sleep(1.5)
+                                    st.rerun()
+                                else:
+                                    st.error("No se pudo obtener el ID de la nueva orden.")
+
                             except Exception as e:
                                 st.error(f"Error al crear: {e}")
 
@@ -2862,9 +2892,6 @@ elif choice == "Usuarios":
                             agregar_notificacion('error', f'Error al eliminar: {e}')
         else:
             st.info("No se encontraron usuarios en la base de datos. Use la pestaña 'CREAR USUARIO'.")
-
-
-
 
 
 
