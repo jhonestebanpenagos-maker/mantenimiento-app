@@ -1,7 +1,7 @@
 # ==============================================================================
 # PROYECTO: ORIÓN - Mantenimiento Inteligente
-# AUTOR: [JHON ESTEBN PENAGOS]
-# VERSIÓN: INTEGRACIÓN CLOUDINARY + ORIÓN UI (CORREGIDO)
+# AUTOR: [JHON ESTEBAN PENAGOS]
+# VERSIÓN: INTEGRACIÓN CLOUDINARY + ORIÓN UI (CORREGIDO & INDENTADO)
 # ==============================================================================
 import streamlit as st
 import pandas as pd
@@ -43,8 +43,9 @@ except KeyError:
     st.warning("⚠️ ADVERTENCIA: No se encontraron las credenciales de Cloudinary en secrets.toml. La subida de imágenes fallará.")
 except Exception as e:
     st.error(f"Error configurando Cloudinary: {e}")
+
 # ==============================================================================
-# 🎨 TEMA: "ORIÓN COMFORT UI" (SOLUCIÓN FINAL POR UBICACIÓN)
+# 🎨 TEMA: "ORIÓN COMFORT UI"
 # ==============================================================================
 
 PRO_ORANGE = "#F59E0B" 
@@ -72,7 +73,7 @@ st.markdown(f"""
         border-right: 1px solid #30363d;
     }}
     
-    /* A) TEXTO DEL MENÚ DE NAVEGACIÓN -> BLANCO (Como te gustó) */
+    /* A) TEXTO DEL MENÚ DE NAVEGACIÓN -> BLANCO */
     [data-testid="stSidebarNav"] span {{
         color: #E5E7EB !important;
         font-weight: 500;
@@ -84,7 +85,7 @@ st.markdown(f"""
         border-left: 3px solid {PRO_ORANGE};
     }}
 
-    /* B) BOTÓN 'SALIR' (Solo los botones secundarios DENTRO del Sidebar) */
+    /* B) BOTÓN 'SALIR' */
     section[data-testid="stSidebar"] button[kind="secondary"] {{
         background-color: transparent !important;
         border: 1px solid #fca5a5 !important;
@@ -104,33 +105,32 @@ st.markdown(f"""
        3. ÁREA PRINCIPAL (MAIN)
        ========================================= */
     
-    /* C) BOTÓN 'RECHAZAR' / 'ELIMINAR' (Cualquier botón secundario en el centro) */
+    /* C) BOTÓN 'RECHAZAR' / 'ELIMINAR' */
     section[data-testid="stMain"] button[kind="secondary"] {{
         background-color: #fca5a5 !important; /* FONDO ROSADO SÓLIDO */
         border: 1px solid #ef4444 !important;
         transition: transform 0.1s;
     }}
 
-    /* Texto del botón Rechazar -> NEGRO (Forzado con fuerza bruta) */
+    /* Texto del botón Rechazar -> NEGRO */
     section[data-testid="stMain"] button[kind="secondary"] * {{
         color: #000000 !important; /* NEGRO PURO */
         font-weight: 800 !important; /* NEGRITA */
     }}
     
-    /* Aseguramos que el párrafo interno también sea negro */
     section[data-testid="stMain"] button[kind="secondary"] p {{
         color: #000000 !important;
     }}
 
     /* Hover del botón Rechazar */
     section[data-testid="stMain"] button[kind="secondary"]:hover {{
-        background-color: #f87171 !important; /* Rojo un poco más intenso */
+        background-color: #f87171 !important; 
         transform: scale(1.02);
         border-color: #b91c1c !important;
     }}
 
     /* =========================================
-       4. RESTO DE ESTILOS (Títulos, Inputs, etc)
+       4. RESTO DE ESTILOS
        ========================================= */
     h1, h2, h3 {{
         background: linear-gradient(90deg, {PRO_ORANGE}, {PRO_GREEN});
@@ -209,6 +209,7 @@ st.markdown(f"""
     }}
     </style>
 """, unsafe_allow_html=True)
+
 # --- 2. CONEXIÓN A SUPABASE ---
 @st.cache_resource
 def init_supabase():
@@ -226,8 +227,9 @@ def init_supabase():
 supabase = init_supabase()
 if not supabase:
     st.stop()
+
 # ==============================================================================
-# 🔔 SISTEMA DE NOTIFICACIONES (FALTABA ESTO)
+# 🔔 SISTEMA DE NOTIFICACIONES
 # ==============================================================================
 def agregar_notificacion(tipo, mensaje):
     """Guarda una notificación en el estado de la sesión"""
@@ -296,11 +298,8 @@ def subir_archivo_generico(archivo):
                 public_id=public_id_manual,
                 use_filename=True,
                 unique_filename=use_unique,
-                
-                # --- ESTAS DOS LÍNEAS SOLUCIONAN EL 401 EN CÓDIGO ---
-                type="upload",        # Tipo 'upload' significa PÚBLICO (vs 'private' o 'authenticated')
+                type="upload",        # Tipo 'upload' significa PÚBLICO
                 access_mode="public"  # Refuerzo para asegurar que sea accesible
-                # ---------------------------------------------------
             )
             return respuesta.get("secure_url")
         except Exception as e:
@@ -331,38 +330,31 @@ def subir_imagen(archivo, carpeta="orion_evidencias"):
     """
     Sube imágenes a Cloudinary con optimización automática.
     Retorna la URL segura (https).
-    Reemplaza la lógica anterior de Supabase Storage.
     """
     if archivo:
         try:
             # 1. Preparar el archivo (Bytes o UploadedFile)
             file_to_upload = archivo
             
-            # Si es bytes (QR generado por código)
             if isinstance(archivo, bytes):
                 file_to_upload = archivo
-            # Si es un UploadedFile de Streamlit
             elif hasattr(archivo, 'getvalue'):
                 file_to_upload = archivo.getvalue()
             
-            # 2. Subir a Cloudinary
-            # Usamos transformaciones para que la imagen no pese tanto (ahorro de datos)
+            # 2. Subir a Cloudinary con transformaciones
             respuesta = cloudinary.uploader.upload(
                 file_to_upload,
                 folder=carpeta,
                 resource_type="image",
                 transformation=[
-                    {'width': 1000, 'crop': "limit"}, # Limitar ancho a 1000px
-                    {'quality': "auto"},              # Calidad automática
-                    {'fetch_format': "auto"}          # Formato moderno (WebP/AVIF)
+                    {'width': 1000, 'crop': "limit"}, 
+                    {'quality': "auto"},              
+                    {'fetch_format': "auto"}          
                 ]
             )
-            
-            # 3. Retornar la URL segura
             return respuesta.get("secure_url")
             
         except Exception as e:
-            # Imprimimos el error en consola para depuración
             print(f"Error Cloudinary: {e}")
             st.error(f"Error al subir imagen a la nube: {e}")
             return None
@@ -378,7 +370,6 @@ def generar_qr_activo(id_activo, nombre_activo):
     img_byte_arr = io.BytesIO()
     img.save(img_byte_arr, format='PNG')
     img_byte_arr = img_byte_arr.getvalue()
-    # Usamos la carpeta específica para QRs
     return subir_imagen(img_byte_arr, "orion_codigos_qr")
 
 def leer_qr_imagen(uploaded_image):
@@ -397,10 +388,7 @@ def leer_qr_imagen(uploaded_image):
         return None
 
 def convertir_tipos_python(data_dict):
-    """
-    Convierte los valores de un diccionario a tipos nativos de Python
-    para evitar errores de serialización JSON
-    """
+    """Convierte los valores de un diccionario a tipos nativos de Python"""
     converted = {}
     for key, value in data_dict.items():
         if value is None:
@@ -418,42 +406,30 @@ def convertir_tipos_python(data_dict):
         else:
             converted[key] = value
     return converted
+
 # ==============================================================================
-# 🛡️ FUNCIONES DE VALIDACIÓN DE USUARIOS (FALTABAN ESTAS)
+# 🛡️ FUNCIONES DE VALIDACIÓN DE USUARIOS
 # ==============================================================================
 
 def validar_usuario_unico(nuevo_documento, id_ignorar=None):
-    """
-    Verifica si el documento ya existe en la base de datos.
-    Si id_ignorar se pasa (al editar), permite que el documento sea el mismo del usuario actual.
-    Retorna True si es único (válido), False si ya existe (inválido).
-    """
+    """Verifica si el documento ya existe en la base de datos."""
     try:
-        # Buscamos si existe alguien con ese documento
         res = supabase.table("usuarios").select("*").eq("documento", nuevo_documento).execute()
         
         if res.data:
             usuario_existente = res.data[0]
-            # Si estamos editando y el ID encontrado es el mismo que estamos editando, todo bien.
             if id_ignorar and str(usuario_existente['id']) == str(id_ignorar):
                 return True
-            
-            # Si encontramos a alguien y no somos nosotros mismos, es un duplicado.
             return False
             
-        # Si no hay datos, el documento está libre.
         return True
     except Exception as e:
         st.error(f"Error validando usuario: {e}")
         return False
 
 def check_open_orders(user_id):
-    """
-    Revisa si un usuario (técnico) tiene órdenes pendientes (Abierta o Por Validar).
-    Retorna True si tiene pendientes (Bloquea borrado), False si está libre.
-    """
+    """Revisa si un usuario (técnico) tiene órdenes pendientes."""
     try:
-        # Buscamos órdenes activas asignadas a este ID
         res = supabase.table("ordenes").select("id")\
             .eq("tecnico_asignado", user_id)\
             .in_("estado", ["Abierta", "Por Validar"])\
@@ -467,10 +443,37 @@ def check_open_orders(user_id):
         return False
 
 # ==========================================
-# 🔔 FUNCIÓN CORREGIDA (SOLO 1 ENVÍO)
+# 🔔 FUNCIÓN TELEGRAM RECONSTRUIDA
 # ==========================================
 def notificar_telegram(chat_id, mensaje, foto_url=None):
     """Envía notificaciones a Telegram (Versión Limpia)"""
+    token_raw = "8382805163:AAEfkue6AMQu6qvqyRdTmh05kIOZUOxCdwM"
+    token = token_raw.strip().replace("bot", "") 
+    
+    if not chat_id:
+        return # No hay a quien enviar
+
+    try:
+        base_url = f"https://api.telegram.org/bot{token}"
+        payload = {
+            "chat_id": chat_id,
+            "parse_mode": "Markdown"
+        }
+        
+        url_envio = ""
+        if foto_url:
+            payload["caption"] = mensaje
+            payload["photo"] = foto_url
+            url_envio = f"{base_url}/sendPhoto"
+        else:
+            payload["text"] = mensaje
+            url_envio = f"{base_url}/sendMessage"
+        
+        # Enviar petición
+        requests.post(url_envio, data=payload)
+        
+    except Exception as e:
+        print(f"Error Telegram: {e}")
 
 # --- 🖨️ GENERADOR DE REPORTES PDF ---
 class PDFReport(FPDF):
@@ -541,7 +544,7 @@ def generar_hoja_vida_pdf(activo, lista_ordenes, df_users):
         pdf.line(10, pdf.get_y(), 200, pdf.get_y()) # Línea separadora
         pdf.ln(2)
 
-    return pdf.output(dest='S').encode('latin-1') # <--- AQUÍ ESTABA EL ERROR (Faltaba paréntesis de cierre)
+    return pdf.output(dest='S').encode('latin-1') 
 
 # --- FUNCIÓN ORIGINAL (YA EXISTENTE) ---
 def generar_pdf_orden(orden, activo_nombre, tecnico_nombre):
@@ -567,7 +570,6 @@ def generar_pdf_orden(orden, activo_nombre, tecnico_nombre):
     
     # Fila 2
     pdf.cell(50, 8, "Activo:", 0, 0, 'B')
-    # encode/decode para evitar errores de tildes en FPDF básico
     pdf.cell(50, 8, f"{activo_nombre}".encode('latin-1', 'replace').decode('latin-1'), 0, 0)
     pdf.cell(40, 8, "Técnico:", 0, 0, 'B')
     pdf.cell(50, 8, f"{tecnico_nombre}".encode('latin-1', 'replace').decode('latin-1'), 0, 1)
@@ -627,49 +629,8 @@ def generar_pdf_orden(orden, activo_nombre, tecnico_nombre):
 
     # Retornar bytes
     return pdf.output(dest='S').encode('latin-1')
-    # ---------------------------------------------------------
-    # TOKEN CONFIGURADO DIRECTAMENTE
-    # ---------------------------------------------------------
-    token_raw = "8382805163:AAEfkue6AMQu6qvqyRdTmh05kIOZUOxCdwM" 
-    token = token_raw.strip().replace("bot", "") 
-    # ---------------------------------------------------------
 
-    with st.expander("🕵️ DIAGNÓSTICO TELEGRAM (Clic para ver)", expanded=False):
-        st.write(f"🔹 **1. Chat ID:** `{chat_id}`")
-        
-        try:
-            base_url = f"https://api.telegram.org/bot{token}"
-            payload = {
-                "chat_id": chat_id,
-                "parse_mode": "Markdown"
-            }
-            
-            url_envio = ""
-            if foto_url:
-                st.write("🔹 **Modo:** FOTO")
-                payload["caption"] = mensaje
-                payload["photo"] = foto_url
-                url_envio = f"{base_url}/sendPhoto"
-            else:
-                st.write("🔹 **Modo:** TEXTO")
-                payload["text"] = mensaje
-                url_envio = f"{base_url}/sendMessage"
 
-            st.write("⏳ Enviando una sola vez...")
-            
-            # --- AQUÍ OCURRE EL ENVÍO (SOLO UNA VEZ) ---
-            response = requests.post(url_envio, data=payload)
-            # -------------------------------------------
-            
-            if response.status_code == 200:
-                st.success("✅ Mensaje entregado a Telegram")
-            else:
-                st.error(f"❌ Error {response.status_code}: {response.text}")
-
-        except Exception as e:
-            st.error(f"❌ Error de Conexión Python: {e}")
-
-# --- MÉTRICAS INTELIGENTES (VERSIÓN BLINDADA) ---
 # --- MÉTRICAS INTELIGENTES (AHORA CON SOLICITUDES) ---
 def mostrar_metricas_inteligentes(df_ordenes, df_users, df_solicitudes):
     """Muestra métricas incluyendo el Buzón de Solicitudes"""
@@ -724,6 +685,7 @@ def mostrar_metricas_inteligentes(df_ordenes, df_users, df_solicitudes):
         
     with c5:
         st.metric("📦 Total OTs", total)
+
 # --- GRÁFICOS (PLOTLY) ---
 def graficar_ordenes_por_tecnico(df_ordenes, df_users):
     """Muestra gráfico compacto de órdenes por técnico"""
@@ -1120,7 +1082,7 @@ if "id_activo_qr" in query_params:
             </div>
         """, unsafe_allow_html=True)
 
-        st.markdown("<h3 style='margin-top:20px;'>Historial</h3>", unsafe_allow_html=True)
+        st.markdown(f"<h3 style='margin-top:20px;'>Historial</h3>", unsafe_allow_html=True)
         try:
             ots = supabase.table("ordenes").select("*").eq("activo_id", id_qr).order("id", desc=True).limit(5).execute()
             if ots.data:
@@ -1140,24 +1102,6 @@ if "id_activo_qr" in query_params:
             st.rerun()
     st.stop() 
 
-# ==============================================================================
-# 🚀 LOGIN
-# ==============================================================================
-
-if 'usuario' not in st.session_state: st.session_state['usuario'] = None
-if 'rol' not in st.session_state: st.session_state['rol'] = None
-
-def logout():
-    st.session_state['usuario'] = None
-    st.session_state['rol'] = None
-    # --- NUEVO: LIMPIAR URL ---
-    st.query_params.clear() 
-    # --------------------------
-    st.rerun()
-# ==============================================================================
-# 🔄 LÓGICA DE PERSISTENCIA (AUTO-LOGIN AL REFRESCAR)
-# ==============================================================================
-# Si no hay usuario en memoria, pero SÍ hay datos en la URL, intentamos recuperar la sesión
 # ==============================================================================
 # 🚀 LOGIN & GESTIÓN DE SESIÓN
 # ==============================================================================
@@ -1327,6 +1271,7 @@ with st.sidebar:
 # ==============================================================================
 # 📊 PANTALLAS
 # ==============================================================================
+
 # ==============================================================================
 # 📅 MÓDULO DE MANTENIMIENTO PREVENTIVO
 # ==============================================================================
@@ -1334,7 +1279,7 @@ def render_tab_preventivos(df_act, df_users):
     """Interfaz para gestionar y ejecutar planes de mantenimiento"""
     
     st.markdown("### 🗓️ Planes de Mantenimiento Recurrente")
-       
+        
     # --- 🔵 LÓGICA DE RECEPCIÓN DE SALTO (NUEVO) ---
     filtro_id_externo = None
     if st.session_state.get('jump_target') == 'preventivo' and st.session_state.get('jump_id'):
@@ -1469,6 +1414,7 @@ def render_tab_preventivos(df_act, df_users):
             st.rerun()
         else:
             st.info("👍 Todo al día. No hay mantenimientos pendientes para hoy.")
+
 if choice == "Tablero de Mando":
     st.title("TABLERO DE MANDO")
     mostrar_notificaciones()
@@ -1486,7 +1432,7 @@ if choice == "Tablero de Mando":
     if not df.empty:
         # 3. --- NUEVO: GRÁFICAS VISUALES (FLUJO Y CARRERA) ---
         st.markdown("---")
-        # Aquí llamamos a la nueva función que acabas de pegar arriba
+        # Aquí llamamos a la nueva función
         graficar_alternativas_visuales(df, df_users)
         st.markdown("---")
 
@@ -2260,11 +2206,6 @@ elif choice == "Ordenes de Trabajo":
         n_pendientes = len(df_solicitudes)
         titulo_buzon = f"👮 VALIDAR ({n_pendientes})" if n_pendientes > 0 else "👮 VALIDAR"
         
-        # ==============================================================================
-        # 🟢 AQUI EMPIEZA LA PARTE 3 (MODIFICADA)
-        # Reemplazamos la definición anterior de st.tabs por esta nueva lista de 6 pestañas
-        # ==============================================================================
-        
         tab_mis_gestiones, tab_buzon, tab_calidad, tab_gestion, tab_crear_directa, tab_preventivos = st.tabs([
             "📂 MIS GESTIONES",  # <--- NUEVA PESTAÑA
             titulo_buzon, 
@@ -2275,11 +2216,7 @@ elif choice == "Ordenes de Trabajo":
         ])
         
         # ------------------------------------------------------------------
-        # 1. PESTAÑA DE GESTIÓN ADMINISTRATIVA (NUEVA LÓGICA)
-        # ------------------------------------------------------------------
-
-# ------------------------------------------------------------------
-        # 1. PESTAÑA DE GESTIÓN ADMINISTRATIVA (BLOQUE CORREGIDO)
+        # 1. PESTAÑA DE GESTIÓN ADMINISTRATIVA
         # ------------------------------------------------------------------
         with tab_mis_gestiones:
             st.info("Aquí administras las órdenes asignadas a ti (Cotizaciones, Compras, Trámites).")
@@ -2416,7 +2353,7 @@ elif choice == "Ordenes de Trabajo":
 
                             st.divider()
 
-                            # 3. FORMULARIO NUEVO AVANCE (Aquí estaba el error de indentación)
+                            # 3. FORMULARIO NUEVO AVANCE
                             with st.form(key=f"form_bitacora_{row['id']}", clear_on_submit=True):
                                 st.markdown("##### ➕ Registrar Nuevo Avance")
                                 c_msg, c_file = st.columns([2, 1])
@@ -2456,62 +2393,8 @@ elif choice == "Ordenes de Trabajo":
                                     st.rerun()
             else:
                 st.warning("No se pudo identificar tu usuario en la base de datos.")
-                            # ==========================================
-                            # FIN DEL LISTADO
-                            # ==========================================
 
-                            st.divider() # Aquí sigue tu código del formulario de "Registrar Nuevo Avance"...
-
-                            # B) Formulario para NUEVO AVANCE
-                            # Importante: clear_on_submit=True limpia el texto después de enviar
-                            with st.form(key=f"form_bitacora_{row['id']}", clear_on_submit=True):
-                                st.markdown("##### ➕ Registrar Nuevo Avance")
-                                c_msg, c_file = st.columns([2, 1])
-                                nuevo_mensaje = c_msg.text_area("Detalle de la gestión", placeholder="Ej: Recibí la cotización del proveedor X...", height=100)
-
-                                archivo_gestion = c_file.file_uploader("Adjuntar (PDF, Word, Foto, Email .msg)", type=["pdf", "docx", "xlsx", "jpg", "png", "msg"])
-                                
-                                col_btns = st.columns([1, 1])
-                                btn_avanzar = col_btns[0].form_submit_button("💾 REGISTRAR AVANCE", type="primary")
-                                btn_cerrar_admin = col_btns[1].form_submit_button("✅ FINALIZAR GESTIÓN (CERRAR ORDEN)")
-
-                                if btn_avanzar:
-                                    if not nuevo_mensaje:
-                                        st.error("Escribe un detalle.")
-                                    else:
-                                        url_doc = None
-                                        if archivo_gestion:
-                                            with st.spinner("Subiendo documento..."):
-                                                # Usamos la función nueva que creamos en el PASO 2
-                                                url_doc = subir_archivo_generico(archivo_gestion)
-                                        
-                                        try:
-                                            supabase.table("bitacora").insert({
-                                                "orden_id": row['id'],
-                                                "usuario_text": usuario,
-                                                "mensaje": nuevo_mensaje,
-                                                "archivo_url": url_doc
-                                            }).execute()
-                                            st.success("Avance registrado.")
-                                            st.rerun()
-                                        except Exception as e:
-                                            st.error(f"Error guardando bitácora: {e}")
-
-                                if btn_cerrar_admin:
-                                    try:
-                                        supabase.table("ordenes").update({
-                                            "estado": "Concluida",
-                                            "comentarios_cierre": f"[CIERRE ADMINISTRATIVO] {nuevo_mensaje if nuevo_mensaje else 'Gestión finalizada.'}",
-                                            "fecha_cierre": datetime.now().isoformat()
-                                        }).eq("id", row['id']).execute()
-                                        st.success("Gestión finalizada y orden cerrada.")
-                                        st.rerun()
-                                    except Exception as e:
-                                        st.error(f"Error cerrando orden: {e}")
-            else:
-                st.warning("No se pudo identificar tu usuario Admin en la base de datos.")
-
-# 1. BUZÓN DE VALIDACIÓN
+        # 2. BUZÓN DE VALIDACIÓN
         with tab_buzon:
             if df_solicitudes.empty:
                 st.markdown("<div style='text-align: center; padding: 40px; color: #6B7280;'><h3>✨ Todo limpio</h3><p>No hay solicitudes pendientes.</p></div>", unsafe_allow_html=True)
@@ -2522,7 +2405,7 @@ elif choice == "Ordenes de Trabajo":
                     lista_nombres_activos = sorted(list(act_map_nombre_id.keys()))
                     
                     for idx, sol in df_solicitudes.iterrows():
-                        # --- INICIO DEL FORMULARIO (Evita el refresco al mover el slider) ---
+                        # --- INICIO DEL FORMULARIO ---
                         with st.form(key=f"form_sol_{sol['id']}"):
                             st.markdown(f"""
                             <div style="border: 1px solid #374151; border-radius: 8px; padding: 15px; margin-bottom: 15px; background-color: #1F2937;">
@@ -2564,19 +2447,15 @@ elif choice == "Ordenes de Trabajo":
                                 
                                 sug = sol['prioridad_sugerida']
                                 val_defecto = sug if sug in ["Baja", "Media", "Alta", "Crítica"] else "Media"
-                                # Al estar dentro de st.form, este slider YA NO refrescará la página
                                 criticidad_final = st.select_slider("Definir Criticidad", options=["Baja", "Media", "Alta", "Crítica"], value=val_defecto)
                             
                             with cols_val[3]:
                                 st.markdown("<br>", unsafe_allow_html=True)
-                                # Usamos form_submit_button para ambos casos
                                 btn_crear = st.form_submit_button("✅ CREAR", type="primary", use_container_width=True)
                                 btn_rechazar = st.form_submit_button("❌ RECHAZAR", type="secondary", use_container_width=True)
 
-                            
-                           # --- LÓGICA DE BOTONES ---
+                            # --- LÓGICA DE BOTONES ---
                             if btn_crear:
-                                # Validación: Solo exigimos datos si se va a CREAR
                                 if not activo_final_nombre or not tipo_ot or not asignar_a:
                                     st.error("⚠️ Falta seleccionar: Activo, Tipo o Técnico.")
                                 else:
@@ -2596,11 +2475,8 @@ elif choice == "Ordenes de Trabajo":
                                         if res_orden.data:
                                             nuevo_id = res_orden.data[0]['id']
                                             
-                                            # =================================================================
-                                            # 🔥 LO NUEVO: PASAR LA EVIDENCIA DE TELEGRAM A LA BITÁCORA
-                                            # =================================================================
+                                            # PASAR EVIDENCIA A BITÁCORA
                                             if sol.get('foto_url'):
-                                                # Detectamos si es archivo o foto para el mensaje
                                                 es_imagen = sol['foto_url'].lower().endswith(('.png', '.jpg', '.jpeg', '.webp'))
                                                 icono_msg = "📸" if es_imagen else "📎"
                                                 texto_msg = "Evidencia original del reporte (Telegram/Solicitud)."
@@ -2612,7 +2488,6 @@ elif choice == "Ordenes de Trabajo":
                                                     "archivo_url": sol['foto_url'],
                                                     "fecha": datetime.now().isoformat()
                                                 }).execute()
-                                            # =================================================================
 
                                             # Notificación y cierre de solicitud
                                             msj_ok = f"✅ **¡Solicitud Aprobada!**\n\nOrden **#{nuevo_id}** ({tipo_ot}). Prioridad: {criticidad_final}."
@@ -2629,13 +2504,12 @@ elif choice == "Ordenes de Trabajo":
                                     except Exception as e: st.error(f"Error: {e}")
                             
                             if btn_rechazar:
-                                # Si rechaza, no importan los selectboxes vacíos
                                 supabase.table("solicitudes").update({"estado": "Rechazada"}).eq("id", sol['id']).execute()
                                 notificar_telegram(sol.get('chat_id'), "🚫 Solicitud Rechazada.")
                                 st.warning("Rechazada.")
                                 st.rerun()
 
-        # 2. CONTROL DE CALIDAD
+        # 3. CONTROL DE CALIDAD
         with tab_calidad:
             df_revision = run_query("ordenes", {"estado": "Por Validar"})
             if df_revision.empty:
@@ -2682,7 +2556,7 @@ elif choice == "Ordenes de Trabajo":
                                     else: st.error("Falta motivo.")
                         st.markdown("</div>", unsafe_allow_html=True)
 
-# 3. GESTIÓN GLOBAL (CON VISOR DE BITÁCORA)
+        # 4. GESTIÓN GLOBAL
         with tab_gestion:
             st.markdown("### 🎛️ Control Central de Órdenes")
             
@@ -2713,7 +2587,7 @@ elif choice == "Ordenes de Trabajo":
                 df_display['Activo Nombre'] = df_display['activo_id'].map(map_act).fillna("Desconocido")
                 df_display['Técnico Nombre'] = df_display['tecnico_asignado'].map(map_user).fillna("Sin Asignar")
                 df_display = df_display.sort_values('id', ascending=False)
-                
+                               
                 # TABLA DE SELECCIÓN
                 event = st.dataframe(
                     df_display[['id', 'estado', 'Activo Nombre', 'descripcion', 'Técnico Nombre', 'criticidad', 'fecha_creacion']], 
@@ -3045,6 +2919,7 @@ elif choice == "Usuarios":
                             agregar_notificacion('error', f'Error al eliminar: {e}')
         else:
             st.info("No se encontraron usuarios en la base de datos. Use la pestaña 'CREAR USUARIO'.")
+
 
 
 
