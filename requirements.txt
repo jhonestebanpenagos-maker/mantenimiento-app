@@ -7,7 +7,7 @@ pandas==2.0.3
 supabase==1.2.0
 qrcode==7.4.2
 pillow==10.1.0           
-opencv-python-headless==4.8.1.78
+opencv-python-headless
 numpy==1.24.3
 plotly==5.15.0
 cloudinary==1.36.0
