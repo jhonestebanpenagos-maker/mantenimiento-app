@@ -2,11 +2,11 @@
 # ORIÓN - Mantenimiento Inteligente
 # ============================================
 
-streamlit==1.38.0          # Versión que soporta key en st.tabs
+streamlit==1.38.0       
 pandas==2.0.3
 supabase==1.2.0
 qrcode==7.4.2
-pillow==10.1.0            # Necesario para qrcode
+pillow==10.1.0           
 opencv-python-headless==4.8.1.78
 numpy==1.24.3
 plotly==5.15.0
