@@ -1729,7 +1729,7 @@ elif choice == "Inventario Activos":
                                 "id": nid, "nombre": nom, "area": area_principal, "ubicacion": ubic_final,
                                 "categoria": cat, "foto_url": final_url, "detalles": detalles_json, "qr_url": qr
                             }
-                            st.rerun()
+                        
                     except Exception as e:
                         agregar_notificacion('error', f'Error: {e}')
 
@@ -2919,8 +2919,6 @@ elif choice == "Usuarios":
                             agregar_notificacion('error', f'Error al eliminar: {e}')
         else:
             st.info("No se encontraron usuarios en la base de datos. Use la pestaña 'CREAR USUARIO'.")
-
-
 
 
 
