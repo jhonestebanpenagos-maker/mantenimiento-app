@@ -1511,7 +1511,7 @@ elif choice == "Inventario Activos":
     if 'draft_data' not in st.session_state:
         st.session_state.draft_data = {}
 
-tab_lista, tab_nuevo, tab_edit = st.tabs(
+    tab_lista, tab_nuevo, tab_edit = st.tabs(
     ["📋 LISTA DE ACTIVOS", "➕ NUEVO ACTIVO", "✏️ EDITAR / QR"],
     key="tabs_activos"
 )
@@ -2922,5 +2922,6 @@ elif choice == "Usuarios":
                             agregar_notificacion('error', f'Error al eliminar: {e}')
         else:
             st.info("No se encontraron usuarios en la base de datos. Use la pestaña 'CREAR USUARIO'.")
+
 
 
