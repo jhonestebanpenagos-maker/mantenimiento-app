@@ -28,6 +28,7 @@ import cloudinary.api
 
 # --- 1. CONFIGURACIÓN INICIAL ---
 st.set_page_config(page_title="Orión | Mantenimiento", layout="wide", initial_sidebar_state="collapsed")
+st.write("Streamlit version:", st.__version__)
 
 # ==============================================================================
 # ☁️ CONFIGURACIÓN DE CLOUDINARY
@@ -2920,9 +2921,4 @@ elif choice == "Usuarios":
                             agregar_notificacion('error', f'Error al eliminar: {e}')
         else:
             st.info("No se encontraron usuarios en la base de datos. Use la pestaña 'CREAR USUARIO'.")
-
-
-
-
-
 
