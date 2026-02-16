@@ -1656,7 +1656,19 @@ elif choice == "Inventario Activos":
             
             c_foto, c_datos, c_qr = st.columns([1, 1.5, 1])
             with c_foto:
-                if info['foto_url']: st.image(info['foto_url'], use_container_width=True)
+                st.markdown("#### 🖼️ Foto")
+                # 1. Capturamos la variable de forma segura
+                foto_exito = info.get('foto_url')
+                
+                # 2. Aplicamos el BLINDAJE (Try-Except)
+                try:
+                    if foto_exito and isinstance(foto_exito, str) and len(foto_exito.strip()) > 5:
+                        st.image(foto_exito, use_container_width=True)
+                    else:
+                        st.info("Sin imagen registrada")
+                except Exception:
+                    # Si falla, no rompemos la app, solo avisamos
+                    st.warning("⚠️ No se pudo visualizar la foto")
             with c_datos:
                 st.markdown(f"### {info['nombre']}")
                 st.markdown(f"**📍 Ubicación:** {info['area']} / {info['ubicacion']}")
@@ -3024,6 +3036,7 @@ elif choice == "Usuarios":
                             agregar_notificacion('error', f'Error al eliminar: {e}')
         else:
             st.info("No se encontraron usuarios en la base de datos. Use la pestaña 'CREAR USUARIO'.")
+
 
 
 
