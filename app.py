@@ -1827,15 +1827,24 @@ elif choice == "Inventario Activos":
             col_f1, col_f2 = st.columns([1, 2])
             
             with col_f1:
-                st.markdown("#### 🖼️ Foto Actual")
-                # Capturamos la foto de forma segura
-                foto = dat.get('foto_url') 
-                
-                # Verificamos si es válida
-                if foto and isinstance(foto, str) and len(foto.strip()) > 0:
+            st.markdown("#### 🖼️ Foto Actual")
+            foto = dat.get('foto_url')
+
+            # --- CÓDIGO CHISMOSO (TEMPORAL) ---
+            # Esto nos mostrará en pantalla qué valor exacto está fallando
+            st.write(f"🧐 Tipo de dato: {type(foto)}")
+            st.write(f"🧐 Valor exacto: '{foto}'") 
+            # ----------------------------------
+
+            # Intento blindado de mostrar la imagen
+            if foto and isinstance(foto, str) and len(foto.strip()) > 5:
+                # Solo intentamos mostrar si parece una URL real (tiene http o similar)
+                if "http" in foto or "assets" in foto:
                     st.image(foto, use_container_width=True)
                 else:
-                    st.warning("Sin imagen")
+                    st.warning(f"El texto '{foto}' no parece una URL válida.")
+            else:
+                st.info("Sin imagen válida.")
             
             with col_f2:
                 st.markdown("#### 🔄 Cambiar Foto (Opcional)")
@@ -2988,6 +2997,7 @@ elif choice == "Usuarios":
                             agregar_notificacion('error', f'Error al eliminar: {e}')
         else:
             st.info("No se encontraron usuarios en la base de datos. Use la pestaña 'CREAR USUARIO'.")
+
 
 
 
