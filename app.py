@@ -1905,16 +1905,14 @@ elif choice == "Inventario Activos":
             with col_f1:
                 st.markdown("#### 🖼️ Visualización")
                 if nueva_foto_temp:
-                    st.image(nueva_foto_temp, use_container_width=True, caption="Nueva imagen (Sin guardar)")
-                elif dat.get('foto_url') and not pd.isna(dat['foto_url']):
-                    # Convertimos a string por seguridad y validamos que no sea un valor vacío
-                    foto_url_act = str(dat['foto_url'])
-                    if foto_url_act.startswith("http"):
-                        st.image(foto_url_act, use_container_width=True, caption="Imagen actual")
-                    else:
-                        st.warning("⚠️ URL de imagen no válida.")
+                st.image(nueva_foto_temp, use_container_width=True, caption="Nueva imagen (Sin guardar)")
+            else:
+                # Extraemos y validamos que sea un string real y no un NaN de Pandas
+                url_db = dat.get('foto_url')
+                if pd.notna(url_db) and isinstance(url_db, str) and url_db.strip():
+                    st.image(url_db, use_container_width=True, caption="Imagen actual")
                 else:
-                    st.info("Sin imagen asignada.")
+                    st.info("Sin imagen asignada."))
 
             # COLUMNA 2: INFO
             with col_f2:
@@ -3136,6 +3134,7 @@ elif choice == "Usuarios":
                             agregar_notificacion('error', f'Error al eliminar: {e}')
         else:
             st.info("No se encontraron usuarios en la base de datos. Use la pestaña 'CREAR USUARIO'.")
+
 
 
 
