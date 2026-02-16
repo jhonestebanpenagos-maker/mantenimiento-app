@@ -1642,8 +1642,9 @@ elif choice == "Inventario Activos":
             st.info("Aún no hay activos registrados para mostrar en la lista.")
 
     with tab_nuevo:
-        # 1. Si se acaba de crear un activo, mostramos la ficha de éxito (Igual que antes)
+        # 1. Si se acaba de crear un activo, mostramos la ficha de éxito
         if 'activo_creado_info' in st.session_state and st.session_state.activo_creado_info is not None:
+            # ... (Mismo código de éxito que ya tenías, no cambia nada aquí) ...
             info = st.session_state.activo_creado_info
             
             st.markdown(f"""
@@ -1695,40 +1696,66 @@ elif choice == "Inventario Activos":
                     st.rerun()
 
         else:
-            # 2. FORMULARIO DE CREACIÓN (AQUÍ ESTÁ LA MAGIA ANTI-PARPADEO)
+            # ==========================================================
+            # 2. FORMULARIO DE CREACIÓN (CORREGIDO PARA INTERACTIVIDAD)
+            # ==========================================================
             st.markdown("### Registrar Nuevo Activo")
             draft = st.session_state.get('draft_data', {})
             
-            # --- INICIO DEL FORMULARIO ---
-            # 'clear_on_submit=False' para que no borre los datos si hay un error (como falta de nombre)
+            # --- SELECCIÓN DE UBICACIÓN (FUERA DEL FORMULARIO) ---
+            # Al estar fuera, al cambiar el Área, la página se recarga y actualiza la Sub-área
+            st.info("📍 Paso 1: Definir Ubicación")
+            
+            c_loc1, c_loc2 = st.columns(2)
+            
+            # 1. Área Principal
+            keys_areas = sorted(areas_data.keys())
+            
+            # Intentamos recuperar lo que había antes o por defecto
+            idx_area_def = 0
+            if draft.get('area') in keys_areas:
+                idx_area_def = keys_areas.index(draft.get('area'))
+                
+            area_principal = c_loc1.selectbox("Área Principal", keys_areas, index=idx_area_def, key="new_asset_area_out")
+
+            # 2. Sub-área (Ahora sí se actualiza dinámicamente)
+            sub_areas = sorted(areas_data[area_principal])
+            
+            # Lógica para recuperar sub-área si venimos de editar
+            idx_sub_def = 0
+            d_sub_prev = ""
+            if draft.get('ubicacion'):
+                parts = draft['ubicacion'].split('] ', 1)
+                d_sub_prev = parts[0].replace('[', '')
+            
+            if d_sub_prev in sub_areas:
+                idx_sub_def = sub_areas.index(d_sub_prev)
+
+            sub_area = c_loc2.selectbox("Sub-área", sub_areas, index=idx_sub_def, key="new_asset_sub_out")
+
+            # --- RESTO DEL FORMULARIO (DENTRO DE ST.FORM) ---
+            st.write("") # Espacio visual
             with st.form("form_crear_activo", clear_on_submit=False):
+                st.markdown("📝 **Paso 2: Detalles del Activo**")
+                
                 c1, c2 = st.columns(2)
                 
-                # Helpers para selects
+                # Helpers para selects dentro del form
                 def get_idx(opts, val): 
                     try: return list(opts).index(val) 
                     except: return 0
                 
-                keys_areas = sorted(areas_data.keys())
-                area_principal = c1.selectbox("Área Principal", keys_areas, index=get_idx(keys_areas, draft.get('area')))
+                # Inputs de texto
+                nom = c1.text_input("Nombre del Activo", value=draft.get('nombre', ''))
                 
-                # Lógica de sub-áreas dentro del form
-                # Nota: Si cambias el Área Principal, el formulario NO se actualizará instantáneamente.
-                # El usuario debe elegir el área y luego presionar un botón si quieres dinamismo puro,
-                # pero con st.form sacrificamos ese dinamismo por estabilidad (no parpadeo).
-                sub_areas = sorted(areas_data[area_principal])
-                
-                d_sub, d_det = "", ""
+                # Recuperar detalle de ubicación
+                d_det_prev = ""
                 if draft.get('ubicacion'):
                     parts = draft['ubicacion'].split('] ', 1)
-                    d_sub = parts[0].replace('[', '')
-                    d_det = parts[1] if len(parts) > 1 else ""
+                    if len(parts) > 1: d_det_prev = parts[1]
+
+                ubic_detalle = c2.text_input("Ubicación Exacta / Detalle (Opcional)", value=d_det_prev, placeholder="Ej: Pasillo 3, Estante B")
                 
-                sub_area = c2.selectbox("Sub-área", sub_areas, index=get_idx(sub_areas, d_sub))
-                
-                # Inputs de texto (Ya no recargarán la página al escribir)
-                nom = c1.text_input("Nombre del Activo", value=draft.get('nombre', ''))
-                ubic_detalle = c2.text_input("Ubicación Exacta / Detalle", value=d_det)
                 cat = c1.selectbox("Categoría", categorias_list, index=get_idx(categorias_list, draft.get('categoria')))
                 
                 st.markdown("---")
@@ -1745,12 +1772,10 @@ elif choice == "Inventario Activos":
 
                 st.markdown("<br>", unsafe_allow_html=True)
                 
-                # ESTE ES EL BOTÓN QUE ACTIVA TODO
+                # ESTE ES EL BOTÓN QUE ENVÍA TODO
                 enviado = st.form_submit_button("💾 GUARDAR ACTIVO", type="primary", use_container_width=True)
             
-            # --- FIN DEL FORMULARIO ---
-
-            # 3. Lógica que se ejecuta SOLO al presionar el botón
+            # --- LÓGICA POST-SUBMIT ---
             if enviado:
                 final_url = None
                 
@@ -1764,10 +1789,10 @@ elif choice == "Inventario Activos":
                 # Validaciones
                 if not nom or not final_url:
                     agregar_notificacion('error', '⚠️ El Nombre y la Foto son obligatorios.')
-                    # No hacemos rerun aquí para que el usuario pueda corregir sin perder lo escrito
                 else:
                     try:
                         detalles_json = {row["Componente/Dato"]: row["Valor"] for i, row in edited_df.iterrows() if row["Componente/Dato"] and row["Valor"]}
+                        # Aquí usamos las variables 'area_principal' y 'sub_area' que están FUERA del form
                         ubic_final = f"[{sub_area}] {ubic_detalle}" if ubic_detalle else f"[{sub_area}]"
                         
                         res = supabase.table("activos").insert({
@@ -1792,7 +1817,6 @@ elif choice == "Inventario Activos":
                         
                     except Exception as e:
                         agregar_notificacion('error', f'Error guardando en base de datos: {e}')
-
     with tab_edit:
         if not df_act.empty:
             all_assets = df_act['nombre'].values
@@ -3000,6 +3024,7 @@ elif choice == "Usuarios":
                             agregar_notificacion('error', f'Error al eliminar: {e}')
         else:
             st.info("No se encontraron usuarios en la base de datos. Use la pestaña 'CREAR USUARIO'.")
+
 
 
 
