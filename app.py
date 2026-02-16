@@ -738,7 +738,8 @@ def graficar_ordenes_por_tecnico(df_ordenes, df_users):
         marker=dict(color=PRO_GREEN, line=dict(width=0)),
         text=df_final['Concluidas'],
         textposition='inside',
-        textfont=dict(color='white', size=12, weight='bold'),
+        # CORRECCIÓN: Eliminamos "weight='bold'" que causaba el error
+        textfont=dict(color='white', size=12), 
         hovertemplate='<b>%{y}</b><br>Concluidas: %{x}<extra></extra>'
     ))
     
@@ -751,7 +752,8 @@ def graficar_ordenes_por_tecnico(df_ordenes, df_users):
         marker=dict(color=PRO_ORANGE, line=dict(width=0)),
         text=df_final['Abiertas'],
         textposition='inside',
-        textfont=dict(color='white', size=12, weight='bold'),
+        # CORRECCIÓN: Eliminamos "weight='bold'" que causaba el error
+        textfont=dict(color='white', size=12),
         hovertemplate='<b>%{y}</b><br>Abiertas: %{x}<extra></extra>'
     ))
     
@@ -2950,6 +2952,7 @@ elif choice == "Usuarios":
                             agregar_notificacion('error', f'Error al eliminar: {e}')
         else:
             st.info("No se encontraron usuarios en la base de datos. Use la pestaña 'CREAR USUARIO'.")
+
 
 
 
