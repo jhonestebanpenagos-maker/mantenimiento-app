@@ -1839,11 +1839,14 @@ elif choice == "Inventario Activos":
                             
                             st.cache_data.clear()
                             st.session_state.draft_data = {}
+
+                            img_local = foto_archivo.getvalue() if foto_archivo else None
+
                             
                             # Guardamos info en sesión para mostrar la pantalla de éxito
                             st.session_state.activo_creado_info = {
                                 "id": nid, "nombre": nom, "area": area_principal, "ubicacion": ubic_final,
-                                "categoria": cat, "foto_url": final_url, "detalles": detalles_json, "qr_url": qr
+                                "categoria": cat, "foto_url": final_url,"foto_bytes": img_local,"detalles": detalles_json, "qr_url": qr
                             }
                             st.rerun()
                         
@@ -3117,6 +3120,7 @@ elif choice == "Usuarios":
                             agregar_notificacion('error', f'Error al eliminar: {e}')
         else:
             st.info("No se encontraron usuarios en la base de datos. Use la pestaña 'CREAR USUARIO'.")
+
 
 
 
