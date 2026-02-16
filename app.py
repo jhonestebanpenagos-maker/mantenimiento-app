@@ -1907,14 +1907,17 @@ elif choice == "Inventario Activos":
                 if nueva_foto_temp:
                     st.image(nueva_foto_temp, use_container_width=True, caption="Nueva imagen (Sin guardar)")
                 else:
-                    # Extraemos y validamos que sea un string real y no un NaN de Pandas
+                    # Limpieza profunda: extraemos el valor y verificamos que sea texto real
                     url_db = dat.get('foto_url')
-                    if pd.notna(url_db) and isinstance(url_db, str) and url_db.strip():
-                        st.image(url_db, use_container_width=True, caption="Imagen actual")
+                    
+                    # Verificamos que no sea nulo, sea string y tenga contenido
+                    if pd.notna(url_db) and isinstance(url_db, str) and len(url_db.strip()) > 10:
+                        try:
+                            st.image(url_db, use_container_width=True, caption="Imagen actual")
+                        except Exception:
+                            st.error("Error al cargar la imagen desde la nube.")
                     else:
                         st.info("Sin imagen asignada.")
-
-            # COLUMNA 2: INFO
             with col_f2:
                 st.markdown("#### 🔄 Estado de Carga")
                 if nueva_foto_temp:
@@ -3134,6 +3137,7 @@ elif choice == "Usuarios":
                             agregar_notificacion('error', f'Error al eliminar: {e}')
         else:
             st.info("No se encontraron usuarios en la base de datos. Use la pestaña 'CREAR USUARIO'.")
+
 
 
 
