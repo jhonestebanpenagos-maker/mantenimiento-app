@@ -2776,48 +2776,57 @@ elif choice == "Ordenes de Trabajo":
                     # ---------------------------------------------------------
                     # COLUMNA IZQUIERDA: FORMULARIO DE EDICIÓN
                     # ---------------------------------------------------------
-                    with col_izq:
-                        st.markdown(f"#### ✏️ Gestionar Orden #{id_orden_selec}")
-                        
-                        # Botón PDF
-                        if orden_actual['estado'] in ['Concluida', 'Por Validar']:
-                            try:
-                                pdf_data = generar_pdf_orden(orden_actual, df_display.iloc[idx_tabla]['Activo Nombre'], df_display.iloc[idx_tabla]['Técnico Nombre'])
-                                st.download_button("📄 Descargar PDF Reporte", data=pdf_data, file_name=f"Reporte_OT_{id_orden_selec}.pdf", mime="application/pdf", key=f"btn_pdf_g_{id_orden_selec}")
-                            except: pass
+                    # ---------------------------------------------------------
+# COLUMNA IZQUIERDA: FORMULARIO DE EDICIÓN (CORREGIDO)
+# ---------------------------------------------------------
+with col_izq:
+    st.markdown(f"#### ✏️ Gestionar Orden #{id_orden_selec}")
+    
+    # Botón PDF (Solo si está avanzada)
+    if orden_actual['estado'] in ['Concluida', 'Por Validar']:
+        try:
+            pdf_data = generar_pdf_orden(orden_actual, df_display.iloc[idx_tabla]['Activo Nombre'], df_display.iloc[idx_tabla]['Técnico Nombre'])
+            st.download_button("📄 Descargar PDF Reporte", data=pdf_data, file_name=f"Reporte_OT_{id_orden_selec}.pdf", mime="application/pdf", key=f"btn_pdf_g_{id_orden_selec}")
+        except: pass
 
-                        with st.form(key=f"form_edit_orden_g_{id_orden_selec}"):
-                            c_edit1, c_edit2, c_edit3 = st.columns(3)
-                            
-                            est_opts = ["Abierta", "Por Validar", "Concluida", "Cancelada"]
-                            idx_est = est_opts.index(orden_actual['estado']) if orden_actual['estado'] in est_opts else 0
-                            nuevo_estado = c_edit1.selectbox("Estado", est_opts, index=idx_est)
-                            
-                            # Logica Técnicos
-                            lista_tecnicos = df_users[df_users['rol'].isin(['Tecnico', 'Admin', 'Programador'])]
-                            tech_dict = dict(zip(lista_tecnicos['nombre'], lista_tecnicos['id']))
-                            tech_actual_id = str(orden_actual['tecnico_asignado'])
-                            nombre_tech = next((k for k, v in tech_dict.items() if str(v) == tech_actual_id), "Seleccionar...")
-                            idx_tech = list(tech_dict.keys()).index(nombre_tech) if nombre_tech in tech_dict else 0
-                            nuevo_tec_nom = c_edit2.selectbox("Reasignar Técnico", list(tech_dict.keys()), index=idx_tech)
-                            
-                            nueva_crit = c_edit3.select_slider("Criticidad", ["Baja", "Media", "Alta", "Crítica"], value=orden_actual['criticidad'])
-                            
-                            st.markdown("**Descripción / Falla:**")
-                            nueva_desc = st.text_area("Descripción", value=orden_actual['descripcion'], height=100)
-                            
-                            st.markdown("<br>", unsafe_allow_html=True)
-                            
-                            if st.form_submit_button("💾 GUARDAR CAMBIOS", type="primary", use_container_width=True):
-                                supabase.table("ordenes").update({
-                                    "estado": nuevo_estado, 
-                                    "tecnico_asignado": str(tech_dict[nuevo_tec_nom]), 
-                                    "criticidad": nueva_crit, 
-                                    "descripcion": nueva_desc
-                                }).eq("id", id_orden_selec).execute()
-                                st.success("Orden actualizada correctamente.")
-                                time.sleep(1)
-                                st.rerun()
+    # --- FORMULARIO ÚNICO ---
+    with st.form(key=f"form_edit_orden_g_{id_orden_selec}"):
+        c_edit1, c_edit2, c_edit3 = st.columns(3)
+        
+        est_opts = ["Abierta", "Por Validar", "Concluida", "Cancelada"]
+        idx_est = est_opts.index(orden_actual['estado']) if orden_actual['estado'] in est_opts else 0
+        nuevo_estado = c_edit1.selectbox("Estado", est_opts, index=idx_est)
+        
+        # Lógica Técnicos
+        lista_tecnicos = df_users[df_users['rol'].isin(['Tecnico', 'Admin', 'Programador'])]
+        tech_dict = dict(zip(lista_tecnicos['nombre'], lista_tecnicos['id']))
+        tech_actual_id = str(orden_actual['tecnico_asignado'])
+        nombre_tech = next((k for k, v in tech_dict.items() if str(v) == tech_actual_id), "Seleccionar...")
+        idx_tech = list(tech_dict.keys()).index(nombre_tech) if nombre_tech in tech_dict else 0
+        nuevo_tec_nom = c_edit2.selectbox("Reasignar Técnico", list(tech_dict.keys()), index=idx_tech)
+        
+        nueva_crit = c_edit3.select_slider("Criticidad", ["Baja", "Media", "Alta", "Crítica"], value=orden_actual['criticidad'])
+        
+        st.markdown("**Descripción / Falla:**")
+        nueva_desc = st.text_area("Descripción", value=orden_actual['descripcion'], height=100)
+        
+        st.markdown("<br>", unsafe_allow_html=True)
+        
+        # UN SOLO BOTÓN DE ENVÍO
+        if st.form_submit_button("💾 GUARDAR CAMBIOS", type="primary", use_container_width=True):
+            try:
+                supabase.table("ordenes").update({
+                    "estado": nuevo_estado, 
+                    "tecnico_asignado": str(tech_dict[nuevo_tec_nom]), 
+                    "criticidad": nueva_crit, 
+                    "descripcion": nueva_desc
+                }).eq("id", int(id_orden_selec)).execute()
+                
+                st.success("Orden actualizada correctamente.")
+                time.sleep(1)
+                st.rerun()
+            except Exception as e:
+                st.error(f"Error al actualizar: {e}")
 
                         # ... aquí termina el bloque del formulario with st.form ...
                         st.markdown("<br>", unsafe_allow_html=True)
@@ -3133,6 +3142,7 @@ elif choice == "Usuarios":
                             agregar_notificacion('error', f'Error al eliminar: {e}')
         else:
             st.info("No se encontraron usuarios en la base de datos. Use la pestaña 'CREAR USUARIO'.")
+
 
 
 
