@@ -1824,26 +1824,26 @@ elif choice == "Inventario Activos":
             edit_cat = c1.selectbox("Categoría", categorias_list, index=curr_cat_idx, key=f"edit_cat_{id_suffix}")
             
             st.markdown("---")
-col_f1, col_f2 = st.columns([1, 2])
-        
-        # COLUMNA 1: FOTO (Bloque con tu corrección aplicada)
-        with col_f1:
-            st.markdown("#### 🖼️ Foto Actual")
-            foto = dat.get('foto_url')
+            col_f1, col_f2 = st.columns([1, 2])
             
-            # Verificación de seguridad para evitar el crash
-            if foto and isinstance(foto, str) and len(foto.strip()) > 0:
-                st.image(foto, use_container_width=True)
-            else:
-                st.warning("Sin imagen")
-        
-        # COLUMNA 2: SUBIR FOTO (Debe estar ALINEADO con col_f1, no dentro)
-        with col_f2:
-            st.markdown("#### 🔄 Cambiar Foto (Opcional)")
-            edit_foto_file = st.file_uploader("Subir nueva foto", type=["jpg", "png"], key=f"edit_uploader_{id_suffix}")
-        
-        # LÍNEA SEPARADORA (Fuera de las columnas)
-        st.markdown("---")
+            with col_f1:
+                st.markdown("#### 🖼️ Foto Actual")
+                # Capturamos la foto de forma segura
+                foto = dat.get('foto_url') 
+                
+                # Verificamos si es válida
+                if foto and isinstance(foto, str) and len(foto.strip()) > 0:
+                    st.image(foto, use_container_width=True)
+                else:
+                    st.warning("Sin imagen")
+            
+            with col_f2:
+                st.markdown("#### 🔄 Cambiar Foto (Opcional)")
+                edit_foto_file = st.file_uploader("Subir nueva foto", type=["jpg", "png"], key=f"edit_uploader_{id_suffix}")
+            
+            # --- FIN CORRECCIÓN ---
+
+            st.markdown("---")
             st.markdown("#### ⚙️ Editar Especificaciones")
             
             current_specs_df = pd.DataFrame(columns=["Componente/Dato", "Valor"])
@@ -2988,5 +2988,6 @@ elif choice == "Usuarios":
                             agregar_notificacion('error', f'Error al eliminar: {e}')
         else:
             st.info("No se encontraron usuarios en la base de datos. Use la pestaña 'CREAR USUARIO'.")
+
 
 
