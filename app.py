@@ -1826,7 +1826,7 @@ elif choice == "Inventario Activos":
             st.markdown("---")
             col_f1, col_f2 = st.columns([1, 2])
             
-            with col_f1:
+           with col_f1:
             st.markdown("#### 🖼️ Foto Actual")
             foto = dat.get('foto_url')
 
@@ -2997,6 +2997,7 @@ elif choice == "Usuarios":
                             agregar_notificacion('error', f'Error al eliminar: {e}')
         else:
             st.info("No se encontraron usuarios en la base de datos. Use la pestaña 'CREAR USUARIO'.")
+
 
 
 
