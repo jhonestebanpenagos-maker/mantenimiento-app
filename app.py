@@ -1906,11 +1906,13 @@ elif choice == "Inventario Activos":
                 st.markdown("#### 🖼️ Visualización")
                 if nueva_foto_temp:
                     st.image(nueva_foto_temp, use_container_width=True, caption="Nueva imagen (Sin guardar)")
-                elif dat.get('foto_url'):
-                    # Bloque de seguridad para la URL actual
-                    foto_url_act = dat['foto_url']
-                    if foto_url_act and isinstance(foto_url_act, str):
+                elif dat.get('foto_url') and not pd.isna(dat['foto_url']):
+                    # Convertimos a string por seguridad y validamos que no sea un valor vacío
+                    foto_url_act = str(dat['foto_url'])
+                    if foto_url_act.startswith("http"):
                         st.image(foto_url_act, use_container_width=True, caption="Imagen actual")
+                    else:
+                        st.warning("⚠️ URL de imagen no válida.")
                 else:
                     st.info("Sin imagen asignada.")
 
@@ -3134,6 +3136,7 @@ elif choice == "Usuarios":
                             agregar_notificacion('error', f'Error al eliminar: {e}')
         else:
             st.info("No se encontraron usuarios en la base de datos. Use la pestaña 'CREAR USUARIO'.")
+
 
 
 
