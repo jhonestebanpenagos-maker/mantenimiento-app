@@ -1824,11 +1824,18 @@ elif choice == "Inventario Activos":
             edit_cat = c1.selectbox("Categoría", categorias_list, index=curr_cat_idx, key=f"edit_cat_{id_suffix}")
             
             st.markdown("---")
-            col_f1, col_f2 = st.columns([1, 2])
-            with col_f1:
-                st.markdown("#### 🖼️ Foto Actual")
-                if dat.get('foto_url'): st.image(dat['foto_url'], use_container_width=True)
-                else: st.warning("Sin imagen")
+        col_f1, col_f2 = st.columns([1, 2])
+        
+        with col_f1:
+            st.markdown("#### 🖼️ Foto Actual")
+            # 1. Primero capturamos el valor
+            foto = dat.get('foto_url') 
+            
+            # 2. Luego verificamos si es válido (texto y no vacío)
+            if foto and isinstance(foto, str) and len(foto.strip()) > 0:
+                st.image(foto, use_container_width=True)
+            else:
+                st.warning("Sin imagen")
             
             with col_f2:
                 st.markdown("#### 🔄 Cambiar Foto (Opcional)")
@@ -2979,3 +2986,4 @@ elif choice == "Usuarios":
                             agregar_notificacion('error', f'Error al eliminar: {e}')
         else:
             st.info("No se encontraron usuarios en la base de datos. Use la pestaña 'CREAR USUARIO'.")
+
