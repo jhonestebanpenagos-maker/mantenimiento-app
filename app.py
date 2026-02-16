@@ -1642,7 +1642,8 @@ elif choice == "Inventario Activos":
         else:
             st.info("Aún no hay activos registrados para mostrar en la lista.")
 
-    with tab_nuevo:
+with tab_nuevo:
+        # 1. Si se acaba de crear un activo, mostramos la ficha de éxito (Igual que antes)
         if 'activo_creado_info' in st.session_state and st.session_state.activo_creado_info is not None:
             info = st.session_state.activo_creado_info
             
@@ -1695,50 +1696,76 @@ elif choice == "Inventario Activos":
                     st.rerun()
 
         else:
+            # 2. FORMULARIO DE CREACIÓN (AQUÍ ESTÁ LA MAGIA ANTI-PARPADEO)
             st.markdown("### Registrar Nuevo Activo")
             draft = st.session_state.get('draft_data', {})
-            c1, c2 = st.columns(2)
             
-            def get_idx(opts, val): 
-                try: return list(opts).index(val) 
-                except: return 0
-            
-            keys_areas = sorted(areas_data.keys())
-            area_principal = c1.selectbox("Área Principal", keys_areas, index=get_idx(keys_areas, draft.get('area')))
-            sub_areas = sorted(areas_data[area_principal])
-            
-            d_sub, d_det = "", ""
-            if draft.get('ubicacion'):
-                parts = draft['ubicacion'].split('] ', 1)
-                d_sub = parts[0].replace('[', '')
-                d_det = parts[1] if len(parts) > 1 else ""
+            # --- INICIO DEL FORMULARIO ---
+            # 'clear_on_submit=False' para que no borre los datos si hay un error (como falta de nombre)
+            with st.form("form_crear_activo", clear_on_submit=False):
+                c1, c2 = st.columns(2)
                 
-            sub_area = c2.selectbox("Sub-área", sub_areas, index=get_idx(sub_areas, d_sub))
-            nom = c1.text_input("Nombre del Activo", value=draft.get('nombre', ''))
-            ubic_detalle = c2.text_input("Ubicación Exacta / Detalle", value=d_det)
-            cat = c1.selectbox("Categoría", categorias_list, index=get_idx(categorias_list, draft.get('categoria')))
-            
-            st.markdown("---")
-            st.markdown("#### 📸 Fotografía (Obligatorio)")
-            if draft.get('foto_url'):
-                st.image(draft['foto_url'], width=100, caption="Foto actual")
-            foto_archivo = st.file_uploader("Subir imagen", type=["jpg", "png", "jpeg"], key="uploader_new")
-            
-            st.markdown("---")
-            st.markdown("#### ⚙️ Especificaciones")
-            edited_df = st.data_editor(st.session_state.specs_data, num_rows="dynamic", use_container_width=True, key="editor_new")
+                # Helpers para selects
+                def get_idx(opts, val): 
+                    try: return list(opts).index(val) 
+                    except: return 0
+                
+                keys_areas = sorted(areas_data.keys())
+                area_principal = c1.selectbox("Área Principal", keys_areas, index=get_idx(keys_areas, draft.get('area')))
+                
+                # Lógica de sub-áreas dentro del form
+                # Nota: Si cambias el Área Principal, el formulario NO se actualizará instantáneamente.
+                # El usuario debe elegir el área y luego presionar un botón si quieres dinamismo puro,
+                # pero con st.form sacrificamos ese dinamismo por estabilidad (no parpadeo).
+                sub_areas = sorted(areas_data[area_principal])
+                
+                d_sub, d_det = "", ""
+                if draft.get('ubicacion'):
+                    parts = draft['ubicacion'].split('] ', 1)
+                    d_sub = parts[0].replace('[', '')
+                    d_det = parts[1] if len(parts) > 1 else ""
+                
+                sub_area = c2.selectbox("Sub-área", sub_areas, index=get_idx(sub_areas, d_sub))
+                
+                # Inputs de texto (Ya no recargarán la página al escribir)
+                nom = c1.text_input("Nombre del Activo", value=draft.get('nombre', ''))
+                ubic_detalle = c2.text_input("Ubicación Exacta / Detalle", value=d_det)
+                cat = c1.selectbox("Categoría", categorias_list, index=get_idx(categorias_list, draft.get('categoria')))
+                
+                st.markdown("---")
+                st.markdown("#### 📸 Fotografía (Obligatorio)")
+                if draft.get('foto_url'):
+                    st.image(draft['foto_url'], width=100, caption="Foto actual (Draft)")
+                
+                foto_archivo = st.file_uploader("Subir imagen", type=["jpg", "png", "jpeg"])
+                
+                st.markdown("---")
+                st.markdown("#### ⚙️ Especificaciones")
+                # El editor de datos también va dentro
+                edited_df = st.data_editor(st.session_state.specs_data, num_rows="dynamic", use_container_width=True)
 
-            st.markdown("<br>", unsafe_allow_html=True)
-            if st.button("💾 GUARDAR ACTIVO", type="primary", use_container_width=True):
+                st.markdown("<br>", unsafe_allow_html=True)
+                
+                # ESTE ES EL BOTÓN QUE ACTIVA TODO
+                enviado = st.form_submit_button("💾 GUARDAR ACTIVO", type="primary", use_container_width=True)
+            
+            # --- FIN DEL FORMULARIO ---
+
+            # 3. Lógica que se ejecuta SOLO al presionar el botón
+            if enviado:
                 final_url = None
+                
+                # Manejo de la foto
                 if foto_archivo:
                     with st.spinner("Subiendo foto a Cloudinary..."):
                         final_url = subir_imagen(foto_archivo)
                 elif draft.get('foto_url'):
                     final_url = draft['foto_url']
                 
+                # Validaciones
                 if not nom or not final_url:
-                    agregar_notificacion('error', 'Nombre y Foto son obligatorios.')
+                    agregar_notificacion('error', '⚠️ El Nombre y la Foto son obligatorios.')
+                    # No hacemos rerun aquí para que el usuario pueda corregir sin perder lo escrito
                 else:
                     try:
                         detalles_json = {row["Componente/Dato"]: row["Valor"] for i, row in edited_df.iterrows() if row["Componente/Dato"] and row["Valor"]}
@@ -1751,19 +1778,21 @@ elif choice == "Inventario Activos":
                         
                         if res.data:
                             nid = res.data[0]['id']
-                            # Generamos el QR (que ahora también se guarda en Cloudinary)
                             qr = generar_qr_activo(nid, nom)
                             supabase.table("activos").update({"qr_url":qr}).eq("id", nid).execute()
                             
                             st.cache_data.clear()
                             st.session_state.draft_data = {}
+                            
+                            # Guardamos info en sesión para mostrar la pantalla de éxito
                             st.session_state.activo_creado_info = {
                                 "id": nid, "nombre": nom, "area": area_principal, "ubicacion": ubic_final,
                                 "categoria": cat, "foto_url": final_url, "detalles": detalles_json, "qr_url": qr
                             }
+                            st.rerun()
                         
                     except Exception as e:
-                        agregar_notificacion('error', f'Error: {e}')
+                        agregar_notificacion('error', f'Error guardando en base de datos: {e}')
 
     with tab_edit:
         if not df_act.empty:
@@ -2951,6 +2980,7 @@ elif choice == "Usuarios":
                             agregar_notificacion('error', f'Error al eliminar: {e}')
         else:
             st.info("No se encontraron usuarios en la base de datos. Use la pestaña 'CREAR USUARIO'.")
+
 
 
 
