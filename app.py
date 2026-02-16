@@ -1824,28 +1824,30 @@ elif choice == "Inventario Activos":
             edit_cat = c1.selectbox("Categoría", categorias_list, index=curr_cat_idx, key=f"edit_cat_{id_suffix}")
             
             st.markdown("---")
+            # 1. Alinea esta línea con el resto de tu código
             col_f1, col_f2 = st.columns([1, 2])
-            
-           with col_f1:
-            st.markdown("#### 🖼️ Foto Actual")
-            foto = dat.get('foto_url')
 
-            # --- CÓDIGO CHISMOSO (TEMPORAL) ---
-            # Esto nos mostrará en pantalla qué valor exacto está fallando
-            st.write(f"🧐 Tipo de dato: {type(foto)}")
-            st.write(f"🧐 Valor exacto: '{foto}'") 
-            # ----------------------------------
+            # 2. Nota que 'with' empieza EXACTAMENTE al mismo nivel que 'col_f1' arriba
+            with col_f1:
+                st.markdown("#### 🖼️ Foto Actual")
+                foto = dat.get('foto_url')
 
-            # Intento blindado de mostrar la imagen
-            if foto and isinstance(foto, str) and len(foto.strip()) > 5:
-                # Solo intentamos mostrar si parece una URL real (tiene http o similar)
-                if "http" in foto or "assets" in foto:
-                    st.image(foto, use_container_width=True)
+                # --- CÓDIGO CHISMOSO (DIAGNÓSTICO) ---
+                st.write(f"🧐 Tipo: {type(foto)}")
+                st.write(f"🧐 Valor: '{foto}'")
+                # -------------------------------------
+
+                # Lógica Blindada
+                if foto and isinstance(foto, str) and len(foto.strip()) > 5:
+                    # Validamos si parece una URL real
+                    if "http" in foto or "assets" in foto:
+                        st.image(foto, use_container_width=True)
+                    else:
+                        st.warning(f"URL inválida: '{foto}'")
                 else:
-                    st.warning(f"El texto '{foto}' no parece una URL válida.")
-            else:
-                st.info("Sin imagen válida.")
-            
+                    st.info("Sin imagen")
+
+                    
             with col_f2:
                 st.markdown("#### 🔄 Cambiar Foto (Opcional)")
                 edit_foto_file = st.file_uploader("Subir nueva foto", type=["jpg", "png"], key=f"edit_uploader_{id_suffix}")
@@ -2997,7 +2999,6 @@ elif choice == "Usuarios":
                             agregar_notificacion('error', f'Error al eliminar: {e}')
         else:
             st.info("No se encontraron usuarios en la base de datos. Use la pestaña 'CREAR USUARIO'.")
-
 
 
 
