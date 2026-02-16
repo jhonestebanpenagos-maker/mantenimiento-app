@@ -1875,32 +1875,24 @@ elif choice == "Inventario Activos":
             st.markdown("---")
             # 1. Alinea esta línea con el resto de tu código
             st.markdown("---")
-            # DEFINICIÓN DE COLUMNAS
-            col_f1, col_f2 = st.columns([1, 2])
-            
-            # COLUMNA 1: FOTO (CON BLINDAJE TOTAL)
-            with col_f1:
-                st.markdown("#### 🖼️ Foto Actual")
-                foto = dat.get('foto_url')
-                
-                # --- INICIO BLOQUE DE SEGURIDAD ---
-                try:
-                    # 1. Verificación básica de que es texto y no está vacío
-                    if foto is not None and isinstance(foto, str) and len(str(foto).strip()) > 5:
-                        # 2. Intento de mostrar
-                        st.image(foto, use_container_width=True)
-                    else:
-                        st.info("Sin imagen asignada.")
-                except Exception as e:
-                    # 3. Si falla CUALQUIER COSA, mostramos aviso en vez de romper la app
-                    st.warning("⚠️ Error cargando imagen")
-                    print(f"Error interno imagen: {e}")
-                # --- FIN BLOQUE DE SEGURIDAD ---
 
-            # COLUMNA 2: SUBIDA (ALINEADA CON LA COLUMNA 1)
+            # --- BLOQUE DE FOTOS EN EDICIÓN ---
+            col_f1, col_f2 = st.columns([1, 2])
+            with col_f1:
+                st.markdown("#### 🖼️ Visualización")
+                # Si el usuario seleccionó un archivo nuevo en el uploader (que está en col_f2)
+                # lo mostramos de inmediato.
+                if edit_foto_file:
+                    st.image(edit_foto_file, use_container_width=True, caption="Nueva imagen (Sin guardar)")
+                elif dat.get('foto_url'):
+                    st.image(dat['foto_url'], use_container_width=True, caption="Imagen actual en la nube")
+                else:
+                    st.info("Sin imagen asignada.")
+
             with col_f2:
                 st.markdown("#### 🔄 Cambiar Foto")
                 edit_foto_file = st.file_uploader("Subir nueva foto", type=["jpg", "png"], key=f"edit_up_{id_suffix}")
+
             
             # --- FIN CORRECCIÓN ---
 
@@ -3110,6 +3102,7 @@ elif choice == "Usuarios":
                             agregar_notificacion('error', f'Error al eliminar: {e}')
         else:
             st.info("No se encontraron usuarios en la base de datos. Use la pestaña 'CREAR USUARIO'.")
+
 
 
 
