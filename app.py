@@ -1658,24 +1658,24 @@ elif choice == "Inventario Activos":
             c_foto, c_datos, c_qr = st.columns([1, 1.5, 1])
             with c_foto:
                 st.markdown("#### 🖼️ Foto")
-                # Extraemos la info de la sesión
                 info = st.session_state.activo_creado_info
                 
-                # 1. PRIORIDAD: Mostrar los bytes locales (Carga INSTANTÁNEA)
-                if info.get('foto_bytes'):
-                    st.image(
-                        info['foto_bytes'], 
-                        use_container_width=True, 
-                        caption="Previsualización inmediata"
-                    )
+                # 1. Validamos primero si hay bytes locales (Carga rápida)
+                foto_local = info.get('foto_bytes')
+                foto_nube = info.get('foto_url')
+
+                if foto_local is not None:
+                    try:
+                        st.image(foto_local, use_container_width=True, caption="Previsualización")
+                    except Exception:
+                        st.warning("No se pudo cargar la vista previa local.")
                 
-                # 2. RESPALDO: Si los bytes no están (por un refresco manual), usar la URL
-                elif info.get('foto_url'):
-                    foto_url = info['foto_url']
-                    if isinstance(foto_url, str) and len(foto_url.strip()) > 10:
-                        st.image(foto_url, use_container_width=True)
-                    else:
-                        st.warning("⚠️ URL de imagen no válida.")
+                # 2. Si no hay bytes, intentamos con la URL de la nube
+                elif pd.notna(foto_nube) and isinstance(foto_nube, str) and len(foto_nube) > 10:
+                    try:
+                        st.image(foto_nube, use_container_width=True)
+                    except Exception:
+                        st.error("Error al cargar imagen desde la nube.")
                 
                 else:
                     st.info("ℹ️ Sin imagen disponible.")
@@ -3137,6 +3137,7 @@ elif choice == "Usuarios":
                             agregar_notificacion('error', f'Error al eliminar: {e}')
         else:
             st.info("No se encontraron usuarios en la base de datos. Use la pestaña 'CREAR USUARIO'.")
+
 
 
 
