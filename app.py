@@ -1872,26 +1872,36 @@ elif choice == "Inventario Activos":
             curr_cat_idx = categorias_list.index(dat['categoria']) if dat['categoria'] in categorias_list else 0
             edit_cat = c1.selectbox("Categoría", categorias_list, index=curr_cat_idx, key=f"edit_cat_{id_suffix}")
             
-            st.markdown("---")
             # 1. Alinea esta línea con el resto de tu código
             st.markdown("---")
+            # Pero lo guardamos en una variable para usarla en las columnas
+            nueva_foto_temp = st.file_uploader("Subir nueva foto", type=["jpg", "png"], key=f"edit_up_{id_suffix}")
 
             # --- BLOQUE DE FOTOS EN EDICIÓN ---
             col_f1, col_f2 = st.columns([1, 2])
+            # COLUMNA 1: VISUALIZACIÓN
             with col_f1:
                 st.markdown("#### 🖼️ Visualización")
-                # Si el usuario seleccionó un archivo nuevo en el uploader (que está en col_f2)
-                # lo mostramos de inmediato.
-                if edit_foto_file:
-                    st.image(edit_foto_file, use_container_width=True, caption="Nueva imagen (Sin guardar)")
+                if nueva_foto_temp:
+                    st.image(nueva_foto_temp, use_container_width=True, caption="Nueva imagen (Sin guardar)")
                 elif dat.get('foto_url'):
-                    st.image(dat['foto_url'], use_container_width=True, caption="Imagen actual en la nube")
+                    # Bloque de seguridad para la URL actual
+                    foto_url_act = dat['foto_url']
+                    if foto_url_act and isinstance(foto_url_act, str):
+                        st.image(foto_url_act, use_container_width=True, caption="Imagen actual")
                 else:
                     st.info("Sin imagen asignada.")
 
+            # COLUMNA 2: INFO
             with col_f2:
-                st.markdown("#### 🔄 Cambiar Foto")
-                edit_foto_file = st.file_uploader("Subir nueva foto", type=["jpg", "png"], key=f"edit_up_{id_suffix}")
+                st.markdown("#### 🔄 Estado de Carga")
+                if nueva_foto_temp:
+                    st.success("✅ Foto lista para actualizar. No olvides darle a 'Guardar Cambios'.")
+                else:
+                    st.caption("Selecciona un archivo arriba si deseas cambiar la foto actual.")
+            
+            # Actualizamos la variable que usa tu botón de GUARDAR
+            edit_foto_file = nueva_foto_temp
 
             
             # --- FIN CORRECCIÓN ---
@@ -3102,6 +3112,7 @@ elif choice == "Usuarios":
                             agregar_notificacion('error', f'Error al eliminar: {e}')
         else:
             st.info("No se encontraron usuarios en la base de datos. Use la pestaña 'CREAR USUARIO'.")
+
 
 
 
