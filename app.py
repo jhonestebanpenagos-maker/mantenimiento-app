@@ -13,7 +13,7 @@ import requests
 import urllib.parse
 import json
 import qrcode
-import cv2 
+import cv2
 import numpy as np
 import time
 import plotly.express as px
@@ -49,12 +49,12 @@ except Exception as e:
 # 🎨 TEMA: "ORIÓN COMFORT UI"
 # ==============================================================================
 
-PRO_ORANGE = "#F59E0B" 
-PRO_GREEN = "#10B981"  
-BG_DARK_CLEAN = "#0e1117"  
-BG_SIDEBAR = "#161b22"     
-BG_CARD = "rgba(30, 41, 59, 0.7)" 
-TEXT_WHITE = "#E5E7EB"     
+PRO_ORANGE = "#F59E0B"
+PRO_GREEN = "#10B981"
+BG_DARK_CLEAN = "#0e1117"
+BG_SIDEBAR = "#161b22"
+BG_CARD = "rgba(30, 41, 59, 0.7)"
+TEXT_WHITE = "#E5E7EB"
 
 st.markdown(f"""
     <style>
@@ -217,7 +217,7 @@ def init_supabase():
     try:
         url = st.secrets["SUPABASE_URL"]
         key = st.secrets["SUPABASE_KEY"]
-        return create_client(url, key) 
+        return create_client(url, key)
     except KeyError as e:
         st.error(f"❌ ERROR CRÍTICO: La clave {e} no se encuentra en la configuración de Streamlit Secrets (secrets.toml).")
         return None
@@ -274,7 +274,7 @@ def subir_archivo_generico(archivo):
             if es_imagen_visual:
                 tipo_recurso = "image"
                 carpeta = "orion_evidencias"
-                public_id_manual = None 
+                public_id_manual = None
                 use_unique = True
             else:
                 # 2. DOCUMENTOS (PDF, MSG, DOCX) - MODO RAW
@@ -362,7 +362,7 @@ def subir_imagen(archivo, carpeta="orion_evidencias"):
     return None
 
 def generar_qr_activo(id_activo, nombre_activo):
-    base_url = "https://mantenimiento-app-esw6r3vpeqxngz3ifyp5ey.streamlit.app" 
+    base_url = "https://mantenimiento-app-esw6r3vpeqxngz3ifyp5ey.streamlit.app"
     link = f"{base_url}/?id_activo_qr={id_activo}"
     qr = qrcode.QRCode(version=1, box_size=10, border=4)
     qr.add_data(link)
@@ -449,7 +449,7 @@ def check_open_orders(user_id):
 def notificar_telegram(chat_id, mensaje, foto_url=None):
     """Envía notificaciones a Telegram (Versión Limpia)"""
     token_raw = "8382805163:AAEfkue6AMQu6qvqyRdTmh05kIOZUOxCdwM"
-    token = token_raw.strip().replace("bot", "") 
+    token = token_raw.strip().replace("bot", "")
     
     if not chat_id:
         return # No hay a quien enviar
@@ -545,7 +545,7 @@ def generar_hoja_vida_pdf(activo, lista_ordenes, df_users):
         pdf.line(10, pdf.get_y(), 200, pdf.get_y()) # Línea separadora
         pdf.ln(2)
 
-    return pdf.output(dest='S').encode('latin-1') 
+    return pdf.output(dest='S').encode('latin-1')
 
 # --- FUNCIÓN ORIGINAL (YA EXISTENTE) ---
 def generar_pdf_orden(orden, activo_nombre, tecnico_nombre):
@@ -1541,9 +1541,8 @@ elif choice == "Inventario Activos":
     if 'draft_data' not in st.session_state:
         st.session_state.draft_data = {}
 
-    tab_lista, tab_nuevo, tab_edit = st.tabs(
-    ["📋 LISTA DE ACTIVOS", "➕ NUEVO ACTIVO", "✏️ EDITAR / QR"]
-)
+    tab_lista, tab_nuevo, tab_edit = st.tabs(["📋 LISTA DE ACTIVOS", "➕ NUEVO ACTIVO", "✏️ EDITAR / QR"])
+    
     with tab_lista:
         if not df_act.empty:
             @st.dialog("📸 Detalle Visual del Activo")
@@ -1642,7 +1641,7 @@ elif choice == "Inventario Activos":
         else:
             st.info("Aún no hay activos registrados para mostrar en la lista.")
 
-with tab_nuevo:
+    with tab_nuevo:
         # 1. Si se acaba de crear un activo, mostramos la ficha de éxito (Igual que antes)
         if 'activo_creado_info' in st.session_state and st.session_state.activo_creado_info is not None:
             info = st.session_state.activo_creado_info
@@ -2648,7 +2647,7 @@ elif choice == "Ordenes de Trabajo":
                 df_display['Activo Nombre'] = df_display['activo_id'].map(map_act).fillna("Desconocido")
                 df_display['Técnico Nombre'] = df_display['tecnico_asignado'].map(map_user).fillna("Sin Asignar")
                 df_display = df_display.sort_values('id', ascending=False)
-                               
+                                
                 # TABLA DE SELECCIÓN
                 event = st.dataframe(
                     df_display[['id', 'estado', 'Activo Nombre', 'descripcion', 'Técnico Nombre', 'criticidad', 'fecha_creacion']], 
@@ -2980,7 +2979,3 @@ elif choice == "Usuarios":
                             agregar_notificacion('error', f'Error al eliminar: {e}')
         else:
             st.info("No se encontraron usuarios en la base de datos. Use la pestaña 'CREAR USUARIO'.")
-
-
-
-
