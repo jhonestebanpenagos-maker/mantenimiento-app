@@ -2778,7 +2778,7 @@ elif choice == "Ordenes de Trabajo":
                     with col_izq:
                         st.markdown(f"#### ✏️ Gestionar Orden #{id_orden_selec}")
                         
-                        # Botón PDF (Mantenemos tu lógica)
+                        # Botón PDF
                         if orden_actual['estado'] in ['Concluida', 'Por Validar']:
                             try:
                                 pdf_data = generar_pdf_orden(orden_actual, df_display.iloc[idx_tabla]['Activo Nombre'], df_display.iloc[idx_tabla]['Técnico Nombre'])
@@ -2817,6 +2817,31 @@ elif choice == "Ordenes de Trabajo":
                                 st.success("Orden actualizada correctamente.")
                                 time.sleep(1)
                                 st.rerun()
+
+                        # --- NUEVO: ZONA DE REACTIVACIÓN (BOTÓN DE PÁNICO) ---
+                        if orden_actual['estado'] in ['Concluida', 'Cancelada']:
+                            st.markdown("---")
+                            st.markdown("#### 🔓 Reactivar Orden")
+                            st.info("Utiliza este botón si cerraste la orden por error o necesitas abrirla de nuevo.")
+                            
+                            if st.button("🔄 RE-ABRIR ORDEN (DESHACER CIERRE)", key=f"reopen_{id_orden_selec}", type="secondary", use_container_width=True):
+                                try:
+                                    supabase.table("ordenes").update({
+                                        "estado": "Abierta",
+                                        "fecha_cierre": None
+                                    }).eq("id", id_orden_selec).execute()
+                                    
+                                    supabase.table("bitacora").insert({
+                                        "orden_id": id_orden_selec,
+                                        "usuario_text": usuario,
+                                        "mensaje": "🔄 Orden RE-ABIERTA administrativamente.",
+                                        "fecha": datetime.now().isoformat()
+                                    }).execute()
+                                    
+                                    st.success("Orden reactivada.")
+                                    st.rerun()
+                                except Exception as e:
+                                    st.error(f"Error: {e}")
 
                         with st.expander("🗑️ Zona de Peligro (Eliminar)"):
                             if st.button("ELIMINAR DEFINITIVAMENTE", key=f"del_g_{id_orden_selec}", type="secondary"):
@@ -3083,9 +3108,6 @@ elif choice == "Usuarios":
                             agregar_notificacion('error', f'Error al eliminar: {e}')
         else:
             st.info("No se encontraron usuarios en la base de datos. Use la pestaña 'CREAR USUARIO'.")
-
-
-
 
 
 
