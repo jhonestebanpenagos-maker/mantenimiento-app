@@ -1626,6 +1626,7 @@ elif choice == "Inventario Activos":
 
                     if len(event.selection.rows) > 0:
                         idx = event.selection.rows[0]
+                        id_orden_selec = int(df_display.iloc[idx_tabla]['id'])
                         sel_data = dataframe_filtrado.iloc[idx]
                         sel_id = sel_data['id']
                         if st.session_state.last_viewed_id != sel_id:
@@ -2818,35 +2819,59 @@ elif choice == "Ordenes de Trabajo":
                                 time.sleep(1)
                                 st.rerun()
 
-                        # --- NUEVO: ZONA DE REACTIVACIÓN (BOTÓN DE PÁNICO) ---
-                        if orden_actual['estado'] in ['Concluida', 'Cancelada']:
-                            st.markdown("---")
-                            st.markdown("#### 🔓 Reactivar Orden")
-                            st.info("Utiliza este botón si cerraste la orden por error o necesitas abrirla de nuevo.")
-                            
-                            if st.button("🔄 RE-ABRIR ORDEN (DESHACER CIERRE)", key=f"reopen_{id_orden_selec}", type="secondary", use_container_width=True):
-                                try:
-                                    supabase.table("ordenes").update({
-                                        "estado": "Abierta",
-                                        "fecha_cierre": None
-                                    }).eq("id", id_orden_selec).execute()
-                                    
-                                    supabase.table("bitacora").insert({
-                                        "orden_id": id_orden_selec,
-                                        "usuario_text": usuario,
-                                        "mensaje": "🔄 Orden RE-ABIERTA administrativamente.",
-                                        "fecha": datetime.now().isoformat()
-                                    }).execute()
-                                    
-                                    st.success("Orden reactivada.")
-                                    st.rerun()
-                                except Exception as e:
-                                    st.error(f"Error: {e}")
+                        # ... aquí termina el bloque del formulario with st.form ...
+                        st.markdown("<br>", unsafe_allow_html=True)
+                        
+                        if st.form_submit_button("💾 GUARDAR CAMBIOS", type="primary", use_container_width=True):
+                            supabase.table("ordenes").update({
+                                "estado": nuevo_estado, 
+                                "tecnico_asignado": str(tech_dict[nuevo_tec_nom]), 
+                                "criticidad": nueva_crit, 
+                                "descripcion": nueva_desc
+                            }).eq("id", int(id_orden_selec)).execute()
+                            st.success("Orden actualizada correctamente.")
+                            time.sleep(1)
+                            st.rerun()
 
-                        with st.expander("🗑️ Zona de Peligro (Eliminar)"):
-                            if st.button("ELIMINAR DEFINITIVAMENTE", key=f"del_g_{id_orden_selec}", type="secondary"):
-                                supabase.table("ordenes").delete().eq("id", id_orden_selec).execute()
-                                st.success("Eliminado."); st.rerun()
+                    # --- NUEVO: ZONA DE REACTIVACIÓN (BOTÓN DE PÁNICO) ---
+                    # Esta parte va alineada con el "with st.form", justo debajo.
+                    if orden_actual['estado'] in ['Concluida', 'Cancelada']:
+                        st.markdown("---")
+                        st.markdown("#### 🔓 Reactivar Orden")
+                        st.info("Utiliza este botón si cerraste la orden por error o necesitas abrirla de nuevo.")
+                        
+                        if st.button("🔄 RE-ABRIR ORDEN (DESHACER CIERRE)", key=f"reopen_{id_orden_selec}", type="secondary", use_container_width=True):
+                            try:
+                                # Blindaje contra error int64: convertimos ID a entero puro de Python
+                                id_limpio = int(id_orden_selec)
+                                
+                                # 1. Actualizar estado en Supabase
+                                supabase.table("ordenes").update({
+                                    "estado": "Abierta",
+                                    "fecha_cierre": None
+                                }).eq("id", id_limpio).execute()
+                                
+                                # 2. Registrar el movimiento en la bitácora
+                                supabase.table("bitacora").insert({
+                                    "orden_id": id_limpio,
+                                    "usuario_text": str(usuario),
+                                    "mensaje": "🔄 Orden RE-ABIERTA administrativamente.",
+                                    "fecha": datetime.now().isoformat()
+                                }).execute()
+                                
+                                st.success("✅ Orden reactivada.")
+                                time.sleep(1)
+                                st.rerun()
+                            except Exception as e:
+                                st.error(f"Error al re-abrir: {e}")
+
+                    # --- ZONA DE ELIMINACIÓN ---
+                    with st.expander("🗑️ Zona de Peligro (Eliminar)"):
+                        if st.button("ELIMINAR DEFINITIVAMENTE", key=f"del_g_{id_orden_selec}", type="secondary", use_container_width=True):
+                            supabase.table("ordenes").delete().eq("id", int(id_orden_selec)).execute()
+                            st.success("Eliminado.")
+                            time.sleep(1)
+                            st.rerun()
 
                     # ---------------------------------------------------------
                     # COLUMNA DERECHA: BITÁCORA Y ADJUNTOS (¡LO NUEVO!)
@@ -3108,6 +3133,7 @@ elif choice == "Usuarios":
                             agregar_notificacion('error', f'Error al eliminar: {e}')
         else:
             st.info("No se encontraron usuarios en la base de datos. Use la pestaña 'CREAR USUARIO'.")
+
 
 
 
