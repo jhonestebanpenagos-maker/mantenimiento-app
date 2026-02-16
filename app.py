@@ -2776,111 +2776,86 @@ elif choice == "Ordenes de Trabajo":
                     # ---------------------------------------------------------
                     # COLUMNA IZQUIERDA: FORMULARIO DE EDICIÓN
                     # ---------------------------------------------------------
-                    # ---------------------------------------------------------
-# COLUMNA IZQUIERDA: FORMULARIO DE EDICIÓN (CORREGIDO)
-# ---------------------------------------------------------
-with col_izq:
-    st.markdown(f"#### ✏️ Gestionar Orden #{id_orden_selec}")
-    
-    # Botón PDF (Solo si está avanzada)
-    if orden_actual['estado'] in ['Concluida', 'Por Validar']:
-        try:
-            pdf_data = generar_pdf_orden(orden_actual, df_display.iloc[idx_tabla]['Activo Nombre'], df_display.iloc[idx_tabla]['Técnico Nombre'])
-            st.download_button("📄 Descargar PDF Reporte", data=pdf_data, file_name=f"Reporte_OT_{id_orden_selec}.pdf", mime="application/pdf", key=f"btn_pdf_g_{id_orden_selec}")
-        except: pass
-
-    # --- FORMULARIO ÚNICO ---
-    with st.form(key=f"form_edit_orden_g_{id_orden_selec}"):
-        c_edit1, c_edit2, c_edit3 = st.columns(3)
-        
-        est_opts = ["Abierta", "Por Validar", "Concluida", "Cancelada"]
-        idx_est = est_opts.index(orden_actual['estado']) if orden_actual['estado'] in est_opts else 0
-        nuevo_estado = c_edit1.selectbox("Estado", est_opts, index=idx_est)
-        
-        # Lógica Técnicos
-        lista_tecnicos = df_users[df_users['rol'].isin(['Tecnico', 'Admin', 'Programador'])]
-        tech_dict = dict(zip(lista_tecnicos['nombre'], lista_tecnicos['id']))
-        tech_actual_id = str(orden_actual['tecnico_asignado'])
-        nombre_tech = next((k for k, v in tech_dict.items() if str(v) == tech_actual_id), "Seleccionar...")
-        idx_tech = list(tech_dict.keys()).index(nombre_tech) if nombre_tech in tech_dict else 0
-        nuevo_tec_nom = c_edit2.selectbox("Reasignar Técnico", list(tech_dict.keys()), index=idx_tech)
-        
-        nueva_crit = c_edit3.select_slider("Criticidad", ["Baja", "Media", "Alta", "Crítica"], value=orden_actual['criticidad'])
-        
-        st.markdown("**Descripción / Falla:**")
-        nueva_desc = st.text_area("Descripción", value=orden_actual['descripcion'], height=100)
-        
-        st.markdown("<br>", unsafe_allow_html=True)
-        
-        # UN SOLO BOTÓN DE ENVÍO
-        if st.form_submit_button("💾 GUARDAR CAMBIOS", type="primary", use_container_width=True):
-            try:
-                supabase.table("ordenes").update({
-                    "estado": nuevo_estado, 
-                    "tecnico_asignado": str(tech_dict[nuevo_tec_nom]), 
-                    "criticidad": nueva_crit, 
-                    "descripcion": nueva_desc
-                }).eq("id", int(id_orden_selec)).execute()
-                
-                st.success("Orden actualizada correctamente.")
-                time.sleep(1)
-                st.rerun()
-            except Exception as e:
-                st.error(f"Error al actualizar: {e}")
-
-                        # ... aquí termina el bloque del formulario with st.form ...
-                        st.markdown("<br>", unsafe_allow_html=True)
+                    with col_izq:
+                        st.markdown(f"#### ✏️ Gestionar Orden #{id_orden_selec}")
                         
-                        if st.form_submit_button("💾 GUARDAR CAMBIOS", type="primary", use_container_width=True):
-                            supabase.table("ordenes").update({
-                                "estado": nuevo_estado, 
-                                "tecnico_asignado": str(tech_dict[nuevo_tec_nom]), 
-                                "criticidad": nueva_crit, 
-                                "descripcion": nueva_desc
-                            }).eq("id", int(id_orden_selec)).execute()
-                            st.success("Orden actualizada correctamente.")
-                            time.sleep(1)
-                            st.rerun()
-
-                    # --- NUEVO: ZONA DE REACTIVACIÓN (BOTÓN DE PÁNICO) ---
-                    # Esta parte va alineada con el "with st.form", justo debajo.
-                    if orden_actual['estado'] in ['Concluida', 'Cancelada']:
-                        st.markdown("---")
-                        st.markdown("#### 🔓 Reactivar Orden")
-                        st.info("Utiliza este botón si cerraste la orden por error o necesitas abrirla de nuevo.")
-                        
-                        if st.button("🔄 RE-ABRIR ORDEN (DESHACER CIERRE)", key=f"reopen_{id_orden_selec}", type="secondary", use_container_width=True):
+                        # Botón PDF (Solo si está avanzada)
+                        if orden_actual['estado'] in ['Concluida', 'Por Validar']:
                             try:
-                                # Blindaje contra error int64: convertimos ID a entero puro de Python
-                                id_limpio = int(id_orden_selec)
-                                
-                                # 1. Actualizar estado en Supabase
-                                supabase.table("ordenes").update({
-                                    "estado": "Abierta",
-                                    "fecha_cierre": None
-                                }).eq("id", id_limpio).execute()
-                                
-                                # 2. Registrar el movimiento en la bitácora
-                                supabase.table("bitacora").insert({
-                                    "orden_id": id_limpio,
-                                    "usuario_text": str(usuario),
-                                    "mensaje": "🔄 Orden RE-ABIERTA administrativamente.",
-                                    "fecha": datetime.now().isoformat()
-                                }).execute()
-                                
-                                st.success("✅ Orden reactivada.")
+                                pdf_data = generar_pdf_orden(orden_actual, df_display.iloc[idx_tabla]['Activo Nombre'], df_display.iloc[idx_tabla]['Técnico Nombre'])
+                                st.download_button("📄 Descargar PDF Reporte", data=pdf_data, file_name=f"Reporte_OT_{id_orden_selec}.pdf", mime="application/pdf", key=f"btn_pdf_g_{id_orden_selec}")
+                            except: pass
+
+                        # FORMULARIO ÚNICO DE EDICIÓN
+                        with st.form(key=f"form_edit_orden_g_{id_orden_selec}"):
+                            c_edit1, c_edit2, c_edit3 = st.columns(3)
+                            
+                            est_opts = ["Abierta", "Por Validar", "Concluida", "Cancelada"]
+                            idx_est = est_opts.index(orden_actual['estado']) if orden_actual['estado'] in est_opts else 0
+                            nuevo_estado = c_edit1.selectbox("Estado", est_opts, index=idx_est)
+                            
+                            # Lógica Técnicos
+                            lista_tecnicos = df_users[df_users['rol'].isin(['Tecnico', 'Admin', 'Programador'])]
+                            tech_dict = dict(zip(lista_tecnicos['nombre'], lista_tecnicos['id']))
+                            tech_actual_id = str(orden_actual['tecnico_asignado'])
+                            nombre_tech = next((k for k, v in tech_dict.items() if str(v) == tech_actual_id), "Seleccionar...")
+                            idx_tech = list(tech_dict.keys()).index(nombre_tech) if nombre_tech in tech_dict else 0
+                            nuevo_tec_nom = c_edit2.selectbox("Reasignar Técnico", list(tech_dict.keys()), index=idx_tech)
+                            
+                            nueva_crit = c_edit3.select_slider("Criticidad", ["Baja", "Media", "Alta", "Crítica"], value=orden_actual['criticidad'])
+                            
+                            st.markdown("**Descripción / Falla:**")
+                            nueva_desc = st.text_area("Descripción", value=orden_actual['descripcion'], height=100)
+                            
+                            st.markdown("<br>", unsafe_allow_html=True)
+                            
+                            # Botón de envío del formulario
+                            if st.form_submit_button("💾 GUARDAR CAMBIOS", type="primary", use_container_width=True):
+                                try:
+                                    supabase.table("ordenes").update({
+                                        "estado": nuevo_estado, 
+                                        "tecnico_asignado": str(tech_dict[nuevo_tec_nom]), 
+                                        "criticidad": nueva_crit, 
+                                        "descripcion": nueva_desc
+                                    }).eq("id", int(id_orden_selec)).execute()
+                                    
+                                    st.success("Orden actualizada correctamente.")
+                                    time.sleep(1)
+                                    st.rerun()
+                                except Exception as e:
+                                    st.error(f"Error al actualizar: {e}")
+
+                        # --- FUERA DEL FORMULARIO (ZONA DE REACTIVACIÓN) ---
+                        if orden_actual['estado'] in ['Concluida', 'Cancelada']:
+                            st.markdown("---")
+                            st.markdown("#### 🔓 Reactivar Orden")
+                            st.info("Utiliza este botón si cerraste la orden por error.")
+                            
+                            if st.button("🔄 RE-ABRIR ORDEN", key=f"reopen_{id_orden_selec}", type="secondary", use_container_width=True):
+                                try:
+                                    id_limpio = int(id_orden_selec)
+                                    supabase.table("ordenes").update({"estado": "Abierta", "fecha_cierre": None}).eq("id", id_limpio).execute()
+                                    
+                                    supabase.table("bitacora").insert({
+                                        "orden_id": id_limpio,
+                                        "usuario_text": str(usuario),
+                                        "mensaje": "🔄 Orden RE-ABIERTA administrativamente.",
+                                        "fecha": datetime.now().isoformat()
+                                    }).execute()
+                                    
+                                    st.success("✅ Orden reactivada.")
+                                    time.sleep(1)
+                                    st.rerun()
+                                except Exception as e:
+                                    st.error(f"Error al re-abrir: {e}")
+
+                        # ZONA DE ELIMINACIÓN
+                        with st.expander("🗑️ Zona de Peligro (Eliminar)"):
+                            if st.button("ELIMINAR DEFINITIVAMENTE", key=f"del_g_{id_orden_selec}", type="secondary", use_container_width=True):
+                                supabase.table("ordenes").delete().eq("id", int(id_orden_selec)).execute()
+                                st.success("Eliminado.")
                                 time.sleep(1)
                                 st.rerun()
-                            except Exception as e:
-                                st.error(f"Error al re-abrir: {e}")
-
-                    # --- ZONA DE ELIMINACIÓN ---
-                    with st.expander("🗑️ Zona de Peligro (Eliminar)"):
-                        if st.button("ELIMINAR DEFINITIVAMENTE", key=f"del_g_{id_orden_selec}", type="secondary", use_container_width=True):
-                            supabase.table("ordenes").delete().eq("id", int(id_orden_selec)).execute()
-                            st.success("Eliminado.")
-                            time.sleep(1)
-                            st.rerun()
 
                     # ---------------------------------------------------------
                     # COLUMNA DERECHA: BITÁCORA Y ADJUNTOS (¡LO NUEVO!)
@@ -3142,6 +3117,7 @@ elif choice == "Usuarios":
                             agregar_notificacion('error', f'Error al eliminar: {e}')
         else:
             st.info("No se encontraron usuarios en la base de datos. Use la pestaña 'CREAR USUARIO'.")
+
 
 
 
