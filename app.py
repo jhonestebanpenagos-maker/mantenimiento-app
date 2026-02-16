@@ -2521,11 +2521,15 @@ elif choice == "Ordenes de Trabajo":
                                         time.sleep(1)
                                         st.rerun()
 
-                            # 4. ZONA DE CIERRE (SEPARADA Y SEGURA)
-                            st.markdown("<br>", unsafe_allow_html=True)
-                            with st.expander("✅ Finalizar Gestión / Cerrar Orden"):
+                            # 4. ZONA DE CIERRE (CORREGIDA - SIN EXPANDER ANIDADO)
+                            st.markdown("---")
+                            
+                            # Usamos un Checkbox como "Seguro" para evitar el error de anidamiento
+                            activar_cierre = st.checkbox("✅ Habilitar opciones de Finalizar / Cerrar", key=f"check_fin_{row['id']}")
+                            
+                            if activar_cierre:
                                 st.markdown(f"""
-                                <div style="background-color: rgba(16, 185, 129, 0.1); padding: 10px; border-radius: 5px; border-left: 3px solid #10B981; margin-bottom: 10px;">
+                                <div style="background-color: rgba(16, 185, 129, 0.1); padding: 10px; border-radius: 5px; border-left: 3px solid #10B981; margin-top: 10px; margin-bottom: 10px;">
                                     <small>Al finalizar, la orden pasará a estado <b>Concluida</b> y desaparecerá de tu lista pendiente.</small>
                                 </div>
                                 """, unsafe_allow_html=True)
@@ -3079,6 +3083,7 @@ elif choice == "Usuarios":
                             agregar_notificacion('error', f'Error al eliminar: {e}')
         else:
             st.info("No se encontraron usuarios en la base de datos. Use la pestaña 'CREAR USUARIO'.")
+
 
 
 
