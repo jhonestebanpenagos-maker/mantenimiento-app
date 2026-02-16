@@ -2414,7 +2414,7 @@ elif choice == "Ordenes de Trabajo":
                         # --- C. EXPANDER DE LA ORDEN ---
                         with st.expander(f"📂 {nombre_activo} | {row['descripcion'][:50]}... (ID: {row['id']})", expanded=False):
                             
-                            # 1. TARJETA DE CONTEXTO
+                            # 1. TARJETA DE CONTEXTO (DISEÑO ORIGINAL CONSERVADO)
                             color_borde = "#3B82F6"
                             if row['criticidad'] == 'Alta': color_borde = "#F59E0B"
                             if row['criticidad'] == 'Crítica': color_borde = "#EF4444"
@@ -2433,7 +2433,7 @@ elif choice == "Ordenes de Trabajo":
                             </div>
                             """, unsafe_allow_html=True)
 
-                            # 2. HISTORIAL / BITÁCORA
+                            # 2. HISTORIAL / BITÁCORA (LÓGICA ORIGINAL CONSERVADA)
                             st.markdown("##### 📜 Historial de Gestión")
                             try:
                                 bitacora = supabase.table("bitacora").select("*").eq("orden_id", row['id']).order("fecha", desc=True).execute()
@@ -2489,26 +2489,27 @@ elif choice == "Ordenes de Trabajo":
 
                             st.divider()
 
-                            # 3. FORMULARIO NUEVO AVANCE
+                            # 3. FORMULARIO NUEVO AVANCE (SOLO GUARDAR)
+                            st.markdown("##### ➕ Registrar Nuevo Avance")
+                            st.caption("Utiliza este espacio para reportar novedades, adjuntar cotizaciones o evidencias.")
+
                             with st.form(key=f"form_bitacora_{row['id']}", clear_on_submit=True):
-                                st.markdown("##### ➕ Registrar Nuevo Avance")
                                 c_msg, c_file = st.columns([2, 1])
-                                nuevo_mensaje = c_msg.text_area("Detalle", placeholder="Ej: Recibí la cotización...", height=100)
-                                archivo_gestion = c_file.file_uploader("Adjuntar", type=["pdf", "docx", "xlsx", "jpg", "png", "msg"], key=f"file_{row['id']}")
+                                nuevo_mensaje = c_msg.text_area("Detalle del avance", placeholder="Ej: Recibí la cotización, esperando aprobación...", height=100)
+                                archivo_gestion = c_file.file_uploader("Adjuntar archivo", type=["pdf", "docx", "xlsx", "jpg", "png", "msg"], key=f"file_{row['id']}")
                                 
-                                col_btns = st.columns([1, 1])
-                                btn_avanzar = col_btns[0].form_submit_button("💾 REGISTRAR", type="primary")
-                                btn_cerrar_admin = col_btns[1].form_submit_button("✅ FINALIZAR")
+                                # ÚNICO BOTÓN PRINCIPAL
+                                btn_avanzar = st.form_submit_button("💾 GUARDAR AVANCE", type="primary", use_container_width=True)
 
                                 if btn_avanzar:
                                     if not nuevo_mensaje:
-                                        st.error("Escribe un detalle.")
+                                        st.error("⚠️ El mensaje no puede estar vacío.")
                                     else:
                                         url_doc = None
                                         if archivo_gestion:
-                                            with st.spinner("Subiendo..."):
+                                            with st.spinner("Subiendo archivo..."):
                                                 url_doc = subir_archivo_generico(archivo_gestion)
-                                        
+                                            
                                         supabase.table("bitacora").insert({
                                             "orden_id": row['id'],
                                             "usuario_text": usuario,
@@ -2516,20 +2517,43 @@ elif choice == "Ordenes de Trabajo":
                                             "archivo_url": url_doc,
                                             "fecha": datetime.now().isoformat()
                                         }).execute()
-                                        st.success("Registrado.")
+                                        st.success("✅ Avance registrado correctamente.")
+                                        time.sleep(1)
                                         st.rerun()
 
-                                if btn_cerrar_admin:
+                            # 4. ZONA DE CIERRE (SEPARADA Y SEGURA)
+                            st.markdown("<br>", unsafe_allow_html=True)
+                            with st.expander("✅ Finalizar Gestión / Cerrar Orden"):
+                                st.markdown(f"""
+                                <div style="background-color: rgba(16, 185, 129, 0.1); padding: 10px; border-radius: 5px; border-left: 3px solid #10B981; margin-bottom: 10px;">
+                                    <small>Al finalizar, la orden pasará a estado <b>Concluida</b> y desaparecerá de tu lista pendiente.</small>
+                                </div>
+                                """, unsafe_allow_html=True)
+                                
+                                motivo_cierre = st.text_input("Comentario final de cierre (Opcional)", key=f"cierre_text_{row['id']}")
+                                
+                                if st.button("CONFIRMAR Y FINALIZAR ORDEN", key=f"btn_fin_seguro_{row['id']}", type="primary", use_container_width=True):
+                                    msg_final = f"[CIERRE ADMIN] {motivo_cierre}" if motivo_cierre else "[CIERRE ADMIN] Gestión finalizada."
+                                    
+                                    # Actualizamos estado
                                     supabase.table("ordenes").update({
                                         "estado": "Concluida",
-                                        "comentarios_cierre": f"[CIERRE ADMIN] {nuevo_mensaje}",
+                                        "comentarios_cierre": msg_final,
                                         "fecha_cierre": datetime.now().isoformat()
                                     }).eq("id", row['id']).execute()
-                                    st.success("Orden cerrada.")
-                                    st.rerun()
-            else:
-                st.warning("No se pudo identificar tu usuario en la base de datos.")
+                                    
+                                    # Dejamos constancia en bitácora
+                                    supabase.table("bitacora").insert({
+                                        "orden_id": row['id'],
+                                        "usuario_text": usuario,
+                                        "mensaje": "🏁 Orden finalizada administrativamente.",
+                                        "fecha": datetime.now().isoformat()
+                                    }).execute()
 
+                                    st.balloons()
+                                    st.success("🏆 Orden finalizada correctamente.")
+                                    time.sleep(1.5)
+                                    st.rerun()
         # 2. BUZÓN DE VALIDACIÓN
         with tab_buzon:
             if df_solicitudes.empty:
@@ -3055,6 +3079,7 @@ elif choice == "Usuarios":
                             agregar_notificacion('error', f'Error al eliminar: {e}')
         else:
             st.info("No se encontraron usuarios en la base de datos. Use la pestaña 'CREAR USUARIO'.")
+
 
 
 
