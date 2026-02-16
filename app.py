@@ -1794,77 +1794,76 @@ elif choice == "Inventario Activos":
 
                 st.markdown("<br>", unsafe_allow_html=True)
                 
+                
                 # ESTE ES EL BOTÓN QUE ENVÍA TODO
                 enviado = st.form_submit_button("💾 GUARDAR ACTIVO", type="primary", use_container_width=True)
-            
-            # ==============================================================================
-# 🚀 LÓGICA POST-SUBMIT: REGISTRO DE ACTIVO
-# ==============================================================================
-if enviado:
-    final_url = None
-    
-    # 1. Manejo de la foto (Subida a la nube)
-    if foto_archivo:
-        with st.spinner("Subiendo foto a Cloudinary..."):
-            final_url = subir_imagen(foto_archivo)
-    elif draft.get('foto_url'):
-        final_url = draft['foto_url']
-    
-    # 2. Validaciones de campos obligatorios
-    if not nom or not final_url:
-        agregar_notificacion('error', '⚠️ El Nombre y la Foto son obligatorios.')
-    else:
-        try:
-            # Procesar especificaciones del data_editor
-            detalles_json = {
-                row["Componente/Dato"]: row["Valor"] 
-                for i, row in edited_df.iterrows() 
-                if row["Componente/Dato"] and row["Valor"]
-            }
-            
-            # Construir ubicación final (Variables externas al form)
-            ubic_final = f"[{sub_area}] {ubic_detalle}" if ubic_detalle else f"[{sub_area}]"
-            
-            # 3. Inserción principal en Supabase
-            res = supabase.table("activos").insert({
-                "nombre": nom, 
-                "area": area_principal, 
-                "ubicacion": ubic_final,
-                "categoria": cat, 
-                "foto_url": final_url, 
-                "detalles": detalles_json
-            }).execute()
-            
-            if res.data:
-                # 4. Post-Procesamiento (QR y Limpieza)
-                nid = res.data[0]['id']
-                qr = generar_qr_activo(nid, nom)
-                supabase.table("activos").update({"qr_url": qr}).eq("id", nid).execute()
-                
-                st.cache_data.clear()
-                st.session_state.draft_data = {}
 
-                # --- CAPTURA DE BYTES PARA CARGA INSTANTÁNEA ---
-                # Guardamos los bytes en memoria antes del rerun para el visor de éxito
-                img_local = foto_archivo.getvalue() if foto_archivo else None
+            # ==============================================================================
+            # 🚀 LÓGICA POST-SUBMIT: REGISTRO DE ACTIVO (DENTRO DEL BLOQUE CORRECTO)
+            # ==============================================================================
+            if enviado:
+                final_url = None
                 
-                # 5. Guardar todo en Session State para la pantalla de éxito
-                st.session_state.activo_creado_info = {
-                    "id": nid, 
-                    "nombre": nom, 
-                    "area": area_principal, 
-                    "ubicacion": ubic_final,
-                    "categoria": cat, 
-                    "foto_url": final_url,
-                    "foto_bytes": img_local, # <--- La clave de la velocidad
-                    "detalles": detalles_json, 
-                    "qr_url": qr
-                }
+                # 1. Manejo de la foto (Subida a la nube)
+                if foto_archivo:
+                    with st.spinner("Subiendo foto a Cloudinary..."):
+                        final_url = subir_imagen(foto_archivo)
+                elif draft.get('foto_url'):
+                    final_url = draft['foto_url']
                 
-                st.rerun()
-            
-        except Exception as e:
-            agregar_notificacion('error', f'Error guardando en base de datos: {e}')
+                # 2. Validaciones de campos obligatorios
+                if not nom or not final_url:
+                    agregar_notificacion('error', '⚠️ El Nombre y la Foto son obligatorios.')
+                else:
+                    try:
+                        # Procesar especificaciones del data_editor
+                        detalles_json = {
+                            row["Componente/Dato"]: row["Valor"] 
+                            for i, row in edited_df.iterrows() 
+                            if row["Componente/Dato"] and row["Valor"]
+                        }
+                        
+                        # Construir ubicación final (Variables externas al form)
+                        ubic_final = f"[{sub_area}] {ubic_detalle}" if ubic_detalle else f"[{sub_area}]"
+                        
+                        # 3. Inserción principal en Supabase
+                        res = supabase.table("activos").insert({
+                            "nombre": nom, 
+                            "area": area_principal, 
+                            "ubicacion": ubic_final,
+                            "categoria": cat, 
+                            "foto_url": final_url, 
+                            "detalles": detalles_json
+                        }).execute()
+                        
+                        if res.data:
+                            # 4. Post-Procesamiento (QR y Limpieza)
+                            nid = res.data[0]['id']
+                            qr = generar_qr_activo(nid, nom)
+                            supabase.table("activos").update({"qr_url": qr}).eq("id", nid).execute()
+                            
+                            st.cache_data.clear()
+                            st.session_state.draft_data = {}
+
+                            # --- CAPTURA DE BYTES PARA CARGA INSTANTÁNEA ---
+                            img_local = foto_archivo.getvalue() if foto_archivo else None
+                            
+                            # 5. Guardar todo en Session State para la pantalla de éxito
+                            st.session_state.activo_creado_info = {
+                                "id": nid, 
+                                "nombre": nom, 
+                                "area": area_principal, 
+                                "ubicacion": ubic_final,
+                                "categoria": cat, 
+                                "foto_url": final_url,
+                                "foto_bytes": img_local,
+                                "detalles": detalles_json, 
+                                "qr_url": qr
+                            }
+                            st.rerun()
+                        
+                    except Exception as e:
+                        agregar_notificacion('error', f'Error guardando en base de datos: {e}')
     with tab_edit:
         if not df_act.empty:
             all_assets = df_act['nombre'].values
@@ -3135,6 +3134,7 @@ elif choice == "Usuarios":
                             agregar_notificacion('error', f'Error al eliminar: {e}')
         else:
             st.info("No se encontraron usuarios en la base de datos. Use la pestaña 'CREAR USUARIO'.")
+
 
 
 
