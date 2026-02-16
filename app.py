@@ -1658,37 +1658,27 @@ elif choice == "Inventario Activos":
             c_foto, c_datos, c_qr = st.columns([1, 1.5, 1])
             with c_foto:
                 st.markdown("#### 🖼️ Foto")
-                foto_exito = info.get('foto_url')
+                # Extraemos la info de la sesión
+                info = st.session_state.activo_creado_info
                 
-                # 1. Validación básica de que tenemos una URL que parece válida
-                if not foto_exito or not isinstance(foto_exito, str) or len(foto_exito.strip()) < 10:
-                     st.info("ℹ️ Sin imagen válida para mostrar.")
+                # 1. PRIORIDAD: Mostrar los bytes locales (Carga INSTANTÁNEA)
+                if info.get('foto_bytes'):
+                    st.image(
+                        info['foto_bytes'], 
+                        use_container_width=True, 
+                        caption="Previsualización inmediata"
+                    )
+                
+                # 2. RESPALDO: Si los bytes no están (por un refresco manual), usar la URL
+                elif info.get('foto_url'):
+                    foto_url = info['foto_url']
+                    if isinstance(foto_url, str) and len(foto_url.strip()) > 10:
+                        st.image(foto_url, use_container_width=True)
+                    else:
+                        st.warning("⚠️ URL de imagen no válida.")
+                
                 else:
-                    # --- MECANISMO INTELIGENTE DE REINTENTO ---
-                    # Usamos un 'placeholder' para ir actualizando el estado sin recargar toda la página
-                    placeholder_img = st.empty()
-                    
-                    exito_carga = False
-                    intentos_restantes = 3 # Probaremos 3 veces máximo
-                    
-                    while intentos_restantes > 0 and not exito_carga:
-                        try:
-                            # INTENTO DE CARGA
-                            # Si esto funciona, salta a la línea 'exito_carga = True'
-                            placeholder_img.image(foto_exito, use_container_width=True)
-                            exito_carga = True 
-                            
-                        except Exception:
-                            # SI FALLA LA CARGA
-                            intentos_restantes -= 1
-                            if intentos_restantes > 0:
-                                # Si quedan intentos, mostramos un mensaje de espera
-                                placeholder_img.info(f"⏳ Procesando imagen... (Reintento {3 - intentos_restantes}/3)")
-                                time.sleep(1.5) # Esperamos 1.5 segundos antes de volver a probar
-                            else:
-                                # Si se acabaron los intentos, mostramos el error final
-                                placeholder_img.error("⚠️ La imagen se guardó, pero tarda en visualizarse. Refresque en unos segundos.")
-                    # -------------------------------------------
+                    st.info("ℹ️ Sin imagen disponible.")
             with c_datos:
                 st.markdown(f"### {info['nombre']}")
                 st.markdown(f"**📍 Ubicación:** {info['area']} / {info['ubicacion']}")
@@ -3120,6 +3110,7 @@ elif choice == "Usuarios":
                             agregar_notificacion('error', f'Error al eliminar: {e}')
         else:
             st.info("No se encontraron usuarios en la base de datos. Use la pestaña 'CREAR USUARIO'.")
+
 
 
 
