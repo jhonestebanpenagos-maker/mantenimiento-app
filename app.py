@@ -1904,15 +1904,15 @@ elif choice == "Inventario Activos":
             # COLUMNA 1: VISUALIZACIÓN
             with col_f1:
                 st.markdown("#### 🖼️ Visualización")
-                    if nueva_foto_temp:
-                st.image(nueva_foto_temp, use_container_width=True, caption="Nueva imagen (Sin guardar)")
-            else:
-                # Extraemos y validamos que sea un string real y no un NaN de Pandas
-                url_db = dat.get('foto_url')
-                if pd.notna(url_db) and isinstance(url_db, str) and url_db.strip():
-                    st.image(url_db, use_container_width=True, caption="Imagen actual")
+                if nueva_foto_temp:
+                    st.image(nueva_foto_temp, use_container_width=True, caption="Nueva imagen (Sin guardar)")
                 else:
-                    st.info("Sin imagen asignada.")
+                    # Extraemos y validamos que sea un string real y no un NaN de Pandas
+                    url_db = dat.get('foto_url')
+                    if pd.notna(url_db) and isinstance(url_db, str) and url_db.strip():
+                        st.image(url_db, use_container_width=True, caption="Imagen actual")
+                    else:
+                        st.info("Sin imagen asignada.")
 
             # COLUMNA 2: INFO
             with col_f2:
@@ -3134,6 +3134,7 @@ elif choice == "Usuarios":
                             agregar_notificacion('error', f'Error al eliminar: {e}')
         else:
             st.info("No se encontraron usuarios en la base de datos. Use la pestaña 'CREAR USUARIO'.")
+
 
 
 
