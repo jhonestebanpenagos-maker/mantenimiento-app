@@ -786,18 +786,46 @@ def graficar_ordenes_por_tecnico(df_ordenes, df_users):
 
 def graficar_criticidad(df):
     if df.empty: return
+
+    # 1. Contar los datos
     conteo = df['criticidad'].value_counts().reset_index()
     conteo.columns = ['Nivel', 'Cantidad']
-    orden = ["Baja", "Media", "Alta", "Crítica"]
-    conteo['Nivel'] = pd.Categorical(conteo['Nivel'], categories=orden, ordered=True)
-    conteo = conteo.sort_values('Nivel')
-    colores = {"Baja": "#10B981", "Media": "#F59E0B", "Alta": "#EA580C", "Crítica": "#EF4444"}
-    fig = px.bar(conteo, x='Nivel', y='Cantidad', color='Nivel', 
-                 color_discrete_map=colores, text='Cantidad')
+
+    # 2. LIMPIEZA PARA PANDAS 2.0 (CRÍTICO)
+    # Convertimos explícitamente a string para romper cualquier formato 'Categorical' previo
+    conteo['Nivel'] = conteo['Nivel'].astype(str).str.strip()
+
+    # 3. Definimos configuración visual
+    orden_oficial = ["Baja", "Media", "Alta", "Crítica"]
+    colores = {
+        "Baja": "#10B981", 
+        "Media": "#F59E0B", 
+        "Alta": "#EA580C", 
+        "Crítica": "#EF4444"
+    }
+
+    # 4. Filtramos basura (Para que solo grafique lo que está en nuestra lista oficial)
+    conteo = conteo[conteo['Nivel'].isin(orden_oficial)]
+
+    # 5. CREAR GRÁFICO (Sin tocar el índice del DataFrame)
+    # Usamos 'category_orders' para que Plotly ordene visualmente, no Pandas.
+    fig = px.bar(
+        conteo, 
+        x='Nivel', 
+        y='Cantidad', 
+        color='Nivel', 
+        color_discrete_map=colores, 
+        text='Cantidad',
+        category_orders={"Nivel": orden_oficial} # <--- ESTA ES LA CLAVE DE LA SOLUCIÓN
+    )
+    
     fig.update_layout(
-        paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)',
-        font=dict(color='white'), showlegend=False,
-        margin=dict(l=0, r=0, t=10, b=0), height=250,
+        paper_bgcolor='rgba(0,0,0,0)', 
+        plot_bgcolor='rgba(0,0,0,0)',
+        font=dict(color='white'), 
+        showlegend=False,
+        margin=dict(l=0, r=0, t=10, b=0), 
+        height=250,
         xaxis=dict(title=None),
         yaxis=dict(showgrid=True, gridcolor='rgba(255,255,255,0.1)')
     )
@@ -2922,6 +2950,7 @@ elif choice == "Usuarios":
                             agregar_notificacion('error', f'Error al eliminar: {e}')
         else:
             st.info("No se encontraron usuarios en la base de datos. Use la pestaña 'CREAR USUARIO'.")
+
 
 
 
