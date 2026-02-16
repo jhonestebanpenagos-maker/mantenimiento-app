@@ -1542,8 +1542,7 @@ elif choice == "Inventario Activos":
         st.session_state.draft_data = {}
 
     tab_lista, tab_nuevo, tab_edit = st.tabs(
-    ["📋 LISTA DE ACTIVOS", "➕ NUEVO ACTIVO", "✏️ EDITAR / QR"],
-    key="tabs_activos"
+    ["📋 LISTA DE ACTIVOS", "➕ NUEVO ACTIVO", "✏️ EDITAR / QR"]
 )
     with tab_lista:
         if not df_act.empty:
@@ -2952,8 +2951,6 @@ elif choice == "Usuarios":
                             agregar_notificacion('error', f'Error al eliminar: {e}')
         else:
             st.info("No se encontraron usuarios en la base de datos. Use la pestaña 'CREAR USUARIO'.")
-
-
 
 
 
