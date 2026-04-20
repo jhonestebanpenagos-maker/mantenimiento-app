@@ -3050,8 +3050,8 @@ elif choice == "Usuarios":
                     else:
                         try:
                             res = supabase.table("usuarios").insert({
-                                "documento": documento, "nombre": nombre, "password": password, "rol": rol
-                            }).execute()
+                                "documento": documento, "nombre": nombre, "password": hashear_password(password), "rol": rol
+}).execute()
 
                             if res.data:
                                 st.cache_data.clear()
