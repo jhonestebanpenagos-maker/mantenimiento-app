@@ -1626,7 +1626,6 @@ elif choice == "Inventario Activos":
 
                     if len(event.selection.rows) > 0:
                         idx = event.selection.rows[0]
-                        id_orden_selec = int(df_display.iloc[idx_tabla]['id'])
                         sel_data = dataframe_filtrado.iloc[idx]
                         sel_id = sel_data['id']
                         if st.session_state.last_viewed_id != sel_id:
