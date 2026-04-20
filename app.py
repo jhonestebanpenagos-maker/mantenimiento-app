@@ -16,10 +16,15 @@ import qrcode
 import cv2
 import numpy as np
 import time
+import hashlib
 import plotly.express as px
 import plotly.graph_objects as go
 from fpdf import FPDF
 import tempfile
+
+def hashear_password(password: str) -> str:
+    """Convierte una contraseña en texto plano a SHA-256"""
+    return hashlib.sha256(password.encode()).hexdigest()
 
 # --- NUEVOS IMPORTS PARA CLOUDINARY ---
 import cloudinary
@@ -1203,7 +1208,8 @@ if st.session_state['usuario'] is None:
                     time.sleep(1) 
 
                 try:
-                    response = supabase.table("usuarios").select("*").eq("documento", documento).eq("password", password).execute()
+                    password_hash = hashear_password(password)
+                    response = supabase.table("usuarios").select("*").eq("documento", documento).eq("password", password_hash).execute()
 
                     if response.data:
                         user = response.data[0]
