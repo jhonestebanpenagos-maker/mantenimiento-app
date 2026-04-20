@@ -3109,7 +3109,7 @@ elif choice == "Usuarios":
                                 if len(new_password) < 4:
                                     agregar_notificacion('error', 'La contraseña debe tener al menos 4 caracteres.')
                                 else:
-                                    update_data["password"] = new_password
+                                    update_data["password"] = hashear_password(new_password)
 
                             try:
                                 supabase.table("usuarios").update(update_data).eq("id", user_id).execute()
