@@ -1,24 +1,23 @@
 # migrar_passwords.py
-# Ejecutar UNA SOLA VEZ para hashear las contraseñas existentes
-# Luego puedes borrar este archivo
-
 import hashlib
+import os
 from supabase import create_client
 
-# =====================================================
-# CONFIGURACIÓN: pon tus credenciales directamente aquí
-# (solo para este script de migración, no va a producción)
-# =====================================================
-SUPABASE_URL = "https://fquudfxkybqylcgtbbin.supabase.co"
-SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZxdXVkZnhreWJxeWxjZ3RiYmluIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjQyNjE4MDYsImV4cCI6MjA3OTgzNzgwNn0.Wf5i2KEvzWXj3dwsY5HxBOp3AcOX82h6WytZ0bH3dHg"
+# Lee las credenciales desde variables de entorno
+# (GitHub Actions las inyecta automáticamente desde los Secrets)
+SUPABASE_URL = os.environ.get("SUPABASE_URL")
+SUPABASE_KEY = os.environ.get("SUPABASE_KEY")
 
 def hashear_password(password: str) -> str:
     return hashlib.sha256(password.encode()).hexdigest()
 
 def migrar():
+    if not SUPABASE_URL or not SUPABASE_KEY:
+        print("❌ ERROR: No se encontraron las variables de entorno.")
+        return
+
     supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
     
-    # 1. Traer todos los usuarios
     res = supabase.table("usuarios").select("id, nombre, password").execute()
     
     if not res.data:
@@ -31,18 +30,17 @@ def migrar():
     fallidos = 0
     
     for user in res.data:
-        uid       = user['id']
-        nombre    = user['nombre']
+        uid         = user['id']
+        nombre      = user['nombre']
         pass_actual = user['password']
         
-        # Verificamos si ya está hasheada (SHA-256 siempre tiene 64 caracteres)
-        if len(pass_actual) == 64:
-            print(f"  ⏭️  {nombre} — ya está hasheada, omitiendo.")
+        # Si ya tiene 64 caracteres, ya está hasheada
+        if len(str(pass_actual)) == 64:
+            print(f"  ⏭️  {nombre} — ya hasheada, omitiendo.")
             continue
         
-        # Hashear y actualizar
         try:
-            nuevo_hash = hashear_password(pass_actual)
+            nuevo_hash = hashear_password(str(pass_actual))
             supabase.table("usuarios").update(
                 {"password": nuevo_hash}
             ).eq("id", uid).execute()
@@ -60,7 +58,6 @@ def migrar():
     print(f"  Fallidos : {fallidos}")
     print(f"  Omitidos : {len(res.data) - exitosos - fallidos}")
     print(f"{'='*40}")
-    print("\nYa puedes borrar este archivo. No lo subas a producción.")
 
 if __name__ == "__main__":
     migrar()
