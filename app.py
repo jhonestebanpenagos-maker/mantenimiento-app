@@ -17,6 +17,7 @@ import cv2
 import numpy as np
 import time
 import hashlib
+import uuid
 import plotly.express as px
 import plotly.graph_objects as go
 from fpdf import FPDF
