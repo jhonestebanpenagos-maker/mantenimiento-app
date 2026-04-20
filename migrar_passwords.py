@@ -9,8 +9,8 @@ from supabase import create_client
 # CONFIGURACIÓN: pon tus credenciales directamente aquí
 # (solo para este script de migración, no va a producción)
 # =====================================================
-SUPABASE_URL = "https://TU_URL.supabase.co"   # copia de tu secrets.toml
-SUPABASE_KEY = "TU_CLAVE_AQUI"                # copia de tu secrets.toml
+SUPABASE_URL = "https://fquudfxkybqylcgtbbin.supabase.co"
+SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZxdXVkZnhreWJxeWxjZ3RiYmluIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjQyNjE4MDYsImV4cCI6MjA3OTgzNzgwNn0.Wf5i2KEvzWXj3dwsY5HxBOp3AcOX82h6WytZ0bH3dHg"
 
 def hashear_password(password: str) -> str:
     return hashlib.sha256(password.encode()).hexdigest()
