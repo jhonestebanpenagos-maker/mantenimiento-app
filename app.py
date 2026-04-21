@@ -589,7 +589,7 @@ def graficar_ordenes_por_tecnico(df_ordenes, df_users):
         y=df_final['Técnico'],
         x=df_final['Concluidas'],
         orientation='h',
-        marker=dict(color=#10B981, line=dict(width=0)),
+        marker=dict(color='#10B981', line=dict(width=0)),
         text=df_final['Concluidas'],
         textposition='inside',
         # CORRECCIÓN: Eliminamos "weight='bold'" que causaba el error
@@ -603,7 +603,7 @@ def graficar_ordenes_por_tecnico(df_ordenes, df_users):
         y=df_final['Técnico'],
         x=df_final['Abiertas'],
         orientation='h',
-        marker=dict(color=#F59E0B, line=dict(width=0)),
+        marker=dict(color='#F59E0B', line=dict(width=0)),
         text=df_final['Abiertas'],
         textposition='inside',
         # CORRECCIÓN: Eliminamos "weight='bold'" que causaba el error
