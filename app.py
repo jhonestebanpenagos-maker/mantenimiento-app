@@ -1216,8 +1216,11 @@ if st.session_state['usuario'] is None:
                         user = response.data[0]
                         st.session_state['usuario'] = user['nombre']
                         st.session_state['rol'] = user['rol']
+                        st.session_state['user_doc'] = documento
                         
                         # --- NUEVO: GUARDAR SESIÓN EN URL ---
+                        token_sesion = str(uuid.uuid4())
+                        st.session_state['session_token'] = token_sesion
                         st.query_params["session_id"] = documento
                         st.query_params["last_page"] = "Tablero de Mando"
                         # ------------------------------------
