@@ -36,6 +36,45 @@ import cloudinary.api
 st.set_page_config(page_title="Orión | Mantenimiento", layout="wide", initial_sidebar_state="collapsed")
 st.write("Streamlit version:", st.__version__)
 
+# --- NUEVO: OPTIMIZACIÓN MÓVIL ---
+def aplicar_optimizacion_movil():
+    """Inyecta CSS para mejorar la visualización en dispositivos móviles."""
+    st.markdown("""
+    <style>
+    /* 1. Ocultar elementos por defecto de Streamlit (menú derecho y marca de agua) */
+    #MainMenu {visibility: hidden;}
+    footer {visibility: hidden;}
+    header {visibility: hidden;}
+
+    /* 2. Reglas exclusivas para pantallas de móviles (menores a 768px) */
+    @media (max-width: 768px) {
+        /* Reducir agresivamente los márgenes de la aplicación */
+        .block-container {
+            padding-top: 1.5rem !important;
+            padding-left: 0.5rem !important;
+            padding-right: 0.5rem !important;
+            padding-bottom: 1rem !important;
+        }
+
+        /* Hacer las tarjetas de métricas más compactas */
+        div[data-testid="metric-container"] {
+            padding: 5% !important;
+        }
+
+        /* Ajustar los tamaños de los encabezados para que no ocupen tanta pantalla */
+        h1 { font-size: 1.8rem !important; }
+        h2 { font-size: 1.5rem !important; }
+        h3 { font-size: 1.2rem !important; }
+        
+        /* Asegurar que las imágenes no se desborden */
+        img { max-width: 100% !important; height: auto !important; }
+    }
+    </style>
+    """, unsafe_allow_html=True)
+
+# Llamar a la función inmediatamente para que aplique a toda la app
+aplicar_optimizacion_movil()
+
 # ==============================================================================
 # ☁️ CONFIGURACIÓN DE CLOUDINARY
 # ==============================================================================
