@@ -492,9 +492,11 @@ def check_open_orders(user_id):
 # 🔔 FUNCIÓN TELEGRAM RECONSTRUIDA
 # ==========================================
 def notificar_telegram(chat_id, mensaje, foto_url=None):
-    """Envía notificaciones a Telegram (Versión Limpia)"""
-    token_raw = "8382805163:AAEfkue6AMQu6qvqyRdTmh05kIOZUOxCdwM"
-    token = token_raw.strip().replace("bot", "")
+    """Envía un mensaje o foto a través del bot de Telegram"""
+    # El token ahora se lee de forma segura desde secrets.toml
+    token_raw = st.secrets["telegram"]["bot_token"]
+    # Extraer solo el token real si viene en formato URL
+    token = token_raw.split("/bot")[-1].split("/")[0] if "/bot" in token_raw else token_raw
     
     if not chat_id:
         return # No hay a quien enviar
