@@ -14,3 +14,4 @@ plotly==5.15.0
 cloudinary==1.36.0
 requests==2.31.0
 fpdf==1.7.2
+openpyxl
