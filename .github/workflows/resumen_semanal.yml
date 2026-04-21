@@ -1,0 +1,32 @@
+name: Resumen Semanal Orión
+
+# Se ejecuta automáticamente cada lunes a las 8am (hora Colombia UTC-5)
+# En UTC eso es las 13:00
+on:
+  schedule:
+    - cron: '0 13 * * 1'   # lunes 8am Colombia
+
+  # También permite ejecutarlo manualmente para probar
+  workflow_dispatch:
+
+jobs:
+  enviar_resumen:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout del repositorio
+        uses: actions/checkout@v4
+
+      - name: Configurar Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Instalar dependencias
+        run: pip install supabase requests
+
+      - name: Ejecutar resumen semanal
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+        run: python resumen_semanal.py
