@@ -917,7 +917,7 @@ def graficar_alternativas_visuales(df_ordenes, df_users):
     st.plotly_chart(fig_race, use_container_width=True)
 
 # --- FUNCIÓN AISLADA PARA EL SVG ---
-def render_orion_svg("#F59E0B"):
+def render_orion_svg(color):
     ORION_SVG = f"""
         <svg width="250" height="250" viewBox="0 0 400 400" fill="none" xmlns="http://www.w3.org/2000/svg">
             <style>
@@ -1108,7 +1108,7 @@ if st.session_state['usuario'] is None:
 if st.session_state['usuario'] is None:
     c1, c2, c3 = st.columns([1,2,1])
     with c2:
-        render_orion_svg(PRO_ORANGE)
+        render_orion_svg("#F59E0B")
 
         st.markdown(f"""
             <h1 style='text-align: center; font-size: 3.5rem; margin-bottom: -15px; text-shadow: 0 0 10px {PRO_ORANGE};'>ORIÓN</h1>
@@ -3977,26 +3977,3 @@ elif choice == "Usuarios":
                             agregar_notificacion('error', f'Error al eliminar: {e}')
         else:
             st.info("No se encontraron usuarios en la base de datos. Use la pestaña 'CREAR USUARIO'.")
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
