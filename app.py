@@ -1393,7 +1393,17 @@ def generar_excel_historial(df_ordenes, df_act, df_users):
 # 🏭 KPIs INDUSTRIALES — MTTR & MTBF
 # ==============================================================================
 def mostrar_kpis_industriales(df_ordenes, df_act):
-    """Calcula y grafica MTTR y MTBF por activo"""
+    """Calcula y muestra indicadores clave de rendimiento (MTTR, MTBF)."""
+    # ESCUDO: Aseguramos formato Pandas para que no falle el .empty
+    df_ordenes = pd.DataFrame(df_ordenes) if not isinstance(df_ordenes, pd.DataFrame) else df_ordenes
+    df_act = pd.DataFrame(df_act) if not isinstance(df_act, pd.DataFrame) else df_act
+
+    if df_ordenes.empty:
+        st.info("No hay órdenes suficientes para calcular KPIs.")
+        return
+
+    # Ahora este mapeo funcionará perfectamente
+    map_act = dict(zip(df_act['id'], df_act['nombre'])) if not df_act.empty else {}
     
     df_k = df_ordenes[df_ordenes['estado'] == 'Concluida'].copy()
     
