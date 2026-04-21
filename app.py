@@ -946,7 +946,7 @@ def mostrar_tops_ordenes(df_ordenes):
     df_abiertas = df_ordenes[df_ordenes['estado'] != 'Concluida'].copy()
     
     if df_abiertas.empty:
-        st.success("¡Increíble! No hay órdenes pendientes antiguas.")
+        st.toast("¡Increíble! No hay órdenes pendientes antiguas.")
         return
 
     df_abiertas['dias_abierta'] = (now - df_abiertas['fecha_dt']).dt.days
@@ -1526,7 +1526,7 @@ def render_tab_preventivos(df_act, df_users):
                         "ultima_ejecucion": fecha_base.isoformat(),
                         "tecnico_default": str(id_tec)
                     }).execute()
-                    st.success("Plan guardado.")
+                    st.toast("Plan guardado.")
                     st.rerun()
                 except Exception as e:
                     st.error(f"Error: {e}")
@@ -1614,7 +1614,7 @@ def render_tab_preventivos(df_act, df_users):
             progress_bar.progress((idx + 1) / len(df_planes))
             
         if contador > 0:
-            st.success(f"✅ Se generaron {contador} órdenes de mantenimiento preventivo.")
+            st.toast(f"✅ Se generaron {contador} órdenes de mantenimiento preventivo.")
             time.sleep(2)
             st.rerun()
         else:
@@ -2541,7 +2541,7 @@ elif choice == "Inventario Activos":
             with col_f2:
                 st.markdown("#### 🔄 Estado de Carga")
                 if nueva_foto_temp:
-                    st.success("✅ Foto lista para actualizar. No olvides darle a 'Guardar Cambios'.")
+                    st.toast("✅ Foto lista para actualizar. No olvides darle a 'Guardar Cambios'.")
                 else:
                     st.caption("Selecciona un archivo arriba si deseas cambiar la foto actual.")
             
@@ -2689,7 +2689,7 @@ elif choice == "Inventario Activos":
                                 st.error(f"Error generando PDF: {e}")
                         
                         else:
-                            st.success("✅ Equipo limpio (Sin historial).")
+                            st.toast("✅ Equipo limpio (Sin historial).")
 
                         st.markdown("---")
                         
@@ -2794,7 +2794,7 @@ elif choice == "Ordenes de Trabajo":
                                 "descripcion": nueva_desc
                             }).eq("id", target_id).execute()
                             
-                            st.success("✅ Orden actualizada. Si cambiaste el activo, ahora podrás borrar el original.")
+                            st.toast("✅ Orden actualizada. Si cambiaste el activo, ahora podrás borrar el original.")
                             time.sleep(1.5)
                             st.rerun()
 
@@ -2802,7 +2802,7 @@ elif choice == "Ordenes de Trabajo":
                     st.markdown("### 🗑️ Opciones Críticas")
                     if st.button("ELIMINAR ORDEN DEFINITIVAMENTE", type="secondary", use_container_width=True, key="btn_focus_del"):
                         supabase.table("ordenes").delete().eq("id", target_id).execute()
-                        st.success("🗑️ Orden eliminada.")
+                        st.toast("🗑️ Orden eliminada.")
                         st.session_state.current_page = "Inventario Activos"
                         st.session_state.jump_target = None
                         time.sleep(1.5)
@@ -2854,14 +2854,14 @@ elif choice == "Ordenes de Trabajo":
                                  "frecuencia_dias": dias_p
                              }).eq("id", target_id).execute()
                              
-                             st.success(f"✅ Plan reasignado a '{nuevo_act_nom}'.")
+                             st.toast(f"✅ Plan reasignado a '{nuevo_act_nom}'.")
                              time.sleep(1.5)
                              st.rerun()
                     
                     st.markdown("---")
                     if st.button("🗑️ ELIMINAR PLAN DEFINITIVAMENTE", type="secondary", use_container_width=True):
                         supabase.table("planes_mantenimiento").delete().eq("id", target_id).execute()
-                        st.success("🗑️ Plan eliminado.")
+                        st.toast("🗑️ Plan eliminado.")
                         st.session_state.current_page = "Inventario Activos"
                         st.session_state.jump_target = None
                         time.sleep(1.5)
@@ -2936,7 +2936,7 @@ elif choice == "Ordenes de Trabajo":
                                                     "comentarios_validacion": None
                                                 }).eq("id", row['id']).execute()
                                                 
-                                                st.success("🚀 ¡Excelente! Orden enviada a control de calidad.")
+                                                st.toast("🚀 ¡Excelente! Orden enviada a control de calidad.")
                                                 time.sleep(1.5)
                                                 st.rerun()
                                         except Exception as e:
@@ -3028,7 +3028,7 @@ elif choice == "Ordenes de Trabajo":
                                     datos_update["archivo_url"] = url_subida
                             
                             supabase.table("bitacora").update(datos_update).eq("id", item_id).execute()
-                            st.success("Registro actualizado.")
+                            st.toast("Registro actualizado.")
                             st.rerun()
                         except Exception as e:
                             st.error(f"Error al guardar: {e}")
@@ -3047,7 +3047,7 @@ elif choice == "Ordenes de Trabajo":
                 ]
                 
                 if mis_gestiones.empty:
-                    st.success("🎉 No tienes gestiones administrativas pendientes.")
+                    st.toast("🎉 No tienes gestiones administrativas pendientes.")
                 else:
                     for idx, row in mis_gestiones.iterrows():
                         nombre_activo = df_act[df_act['id'] == row['activo_id']].iloc[0]['nombre'] if not df_act.empty else "Activo"
@@ -3158,7 +3158,7 @@ elif choice == "Ordenes de Trabajo":
                                             "archivo_url": url_doc,
                                             "fecha": datetime.now().isoformat()
                                         }).execute()
-                                        st.success("✅ Avance registrado correctamente.")
+                                        st.toast("✅ Avance registrado correctamente.")
                                         time.sleep(1)
                                         st.rerun()
 
@@ -3196,7 +3196,7 @@ elif choice == "Ordenes de Trabajo":
                                     }).execute()
 
                                     st.balloons()
-                                    st.success("🏆 Orden finalizada correctamente.")
+                                    st.toast("🏆 Orden finalizada correctamente.")
                                     time.sleep(1.5)
                                     st.rerun()
         # 2. BUZÓN DE VALIDACIÓN
@@ -3307,7 +3307,7 @@ elif choice == "Ordenes de Trabajo":
                                             
                                             supabase.table("solicitudes").update({"estado": "Aprobada"}).eq("id", sol['id']).execute()
                                             
-                                            st.success(f"✅ Orden #{nuevo_id} creada y evidencia adjuntada.")
+                                            st.toast(f"✅ Orden #{nuevo_id} creada y evidencia adjuntada.")
                                             time.sleep(1)
                                             st.rerun()
                                         else:
@@ -3354,7 +3354,7 @@ elif choice == "Ordenes de Trabajo":
                                 supabase.table("ordenes").update({"estado": "Concluida"}).eq("id", row['id']).execute()
                                 if row.get('chat_id'):
                                     notificar_telegram(row.get('chat_id'), f"🎉 **¡Solucionado!**\n\nOrden **#{row['id']}** cerrada.\n📝 Solución: {row.get('comentarios_cierre')}", row.get('foto_cierre_url'))
-                                st.success("Orden cerrada.")
+                                st.toast("Orden cerrada.")
                                 st.rerun()
                             
                             st.markdown("<br>", unsafe_allow_html=True)
@@ -3466,7 +3466,7 @@ elif choice == "Ordenes de Trabajo":
                                         "descripcion": nueva_desc
                                     }).eq("id", int(id_orden_selec)).execute()
                                     
-                                    st.success("Orden actualizada correctamente.")
+                                    st.toast("Orden actualizada correctamente.")
                                     time.sleep(1)
                                     st.rerun()
                                 except Exception as e:
@@ -3490,7 +3490,7 @@ elif choice == "Ordenes de Trabajo":
                                         "fecha": datetime.now().isoformat()
                                     }).execute()
                                     
-                                    st.success("✅ Orden reactivada.")
+                                    st.toast("✅ Orden reactivada.")
                                     time.sleep(1)
                                     st.rerun()
                                 except Exception as e:
@@ -3500,7 +3500,7 @@ elif choice == "Ordenes de Trabajo":
                         with st.expander("🗑️ Zona de Peligro (Eliminar)"):
                             if st.button("ELIMINAR DEFINITIVAMENTE", key=f"del_g_{id_orden_selec}", type="secondary", use_container_width=True):
                                 supabase.table("ordenes").delete().eq("id", int(id_orden_selec)).execute()
-                                st.success("Eliminado.")
+                                st.toast("Eliminado.")
                                 time.sleep(1)
                                 st.rerun()
 
@@ -3626,7 +3626,7 @@ elif choice == "Ordenes de Trabajo":
 
                                 if res_orden.data:
                                     nuevo_id_ot = res_orden.data[0]['id']
-                                    st.success(f"✅ Orden #{nuevo_id_ot} creada correctamente.")
+                                    st.toast(f"✅ Orden #{nuevo_id_ot} creada correctamente.")
 
                                     if archivo_inicial:
                                         with st.spinner("Subiendo archivo adjunto..."):
@@ -4003,7 +4003,7 @@ elif choice == "Repuestos":
             ].copy()
 
             if df_alertas_r.empty:
-                st.success("✅ Todo el inventario está en niveles óptimos.")
+                st.toast("✅ Todo el inventario está en niveles óptimos.")
             else:
                 df_alertas_r['Déficit'] = (
                     df_alertas_r['stock_minimo'] - df_alertas_r['stock_actual']
