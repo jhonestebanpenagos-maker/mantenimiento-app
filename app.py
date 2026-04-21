@@ -1542,13 +1542,12 @@ if choice == "Tablero de Mando":
 
     # 2. Verificar SLA (se ejecuta una vez por sesión)
     verificar_sla_y_alertar(df, df_users, df_act_sla)
-    st.caption(f"DEBUG — sla_alertas_count: {st.session_state.get('sla_alertas_count', 0)}")
+    
 
     # Mostrar toast si hay alertas pendientes
     if st.session_state.get('sla_alertas_count', 0) > 0:
         n = st.session_state['sla_alertas_count']
-        st.error(f"🚨 ALERTA SLA: {n} órdenes superaron su tiempo límite")
-        st.toast(f"⚠️ {n} órdenes superaron su tiempo límite", icon="🚨")
+        st.toast(f"🚨 {n} órdenes superaron su límite de tiempo", icon="⚠️")
         st.session_state['sla_alertas_count'] = 0
 
     
