@@ -2472,40 +2472,43 @@ if tab == "Activos":
         # 3. Consultas adicionales (Alineadas con edited_df)
         df_users = run_query("usuarios")
         df_ordenes = run_query("ordenes")
-    # ==============================================================================
-    # 🚀 INTERCEPTOR 3.0: GESTIÓN TOTAL (CON DATOS DISPONIBLES)
-    # ==============================================================================
-        if 'jump_target' in st.session_state and st.session_state.jump_target:
-        target_type = st.session_state.jump_target
-        target_id = st.session_state.jump_id
+# ==============================================================================
+# 🚀 INTERCEPTOR 3.0: GESTIÓN TOTAL (CON DATOS DISPONIBLES)
+# ==============================================================================
+if 'jump_target' in st.session_state and st.session_state.jump_target:
+    # --- ESTAS LÍNEAS DEBEN TENER SANGRÍA (4 espacios) ---
+    target_type = st.session_state.jump_target
+    target_id = st.session_state.jump_id
 
-        # Encabezado
-        st.markdown(f"""
-        <div style="background-color: #1F2937; padding: 15px; border-radius: 8px; border-left: 5px solid #3B82F6; margin-bottom: 20px; display: flex; align-items: center; justify-content: space-between;">
-            <div>
-                <h3 style="color: #60A5FA; margin: 0;">🛠️ Gestión de Dependencia #{target_id}</h3>
-                <p style="margin: 0; color: #9CA3AF; font-size: 0.9em;">Edita o reasigna este registro para liberar el activo original.</p>
-            </div>
+    # Encabezado (Alineado con target_type)
+    st.markdown(f"""
+    <div style="background-color: #1F2937; padding: 15px; border-radius: 8px; border-left: 5px solid #3B82F6; margin-bottom: 20px; display: flex; align-items: center; justify-content: space-between;">
+        <div>
+            <h3 style="color: #60A5FA; margin: 0;">🛠️ Gestión de Dependencia #{target_id}</h3>
+            <p style="margin: 0; color: #9CA3AF; font-size: 0.9em;">Edita o reasigna este registro para liberar el activo original.</p>
         </div>
-        """, unsafe_allow_html=True)
+    </div>
+    """, unsafe_allow_html=True)
 
-        if st.button("⬅️ VOLVER A EDICIÓN DE ACTIVO", use_container_width=True):
-            st.session_state.current_page = "Inventario Activos"
-            st.session_state.jump_target = None
-            st.session_state.jump_id = None
-            st.rerun()
+    if st.button("⬅️ VOLVER A EDICIÓN DE ACTIVO", use_container_width=True):
+        st.session_state.current_page = "Inventario Activos"
+        st.session_state.jump_target = None
+        st.session_state.jump_id = None
+        st.rerun()
 
-        st.markdown("---")
+    st.markdown("---")
 
-        # --- CASO 1: ORDEN DE TRABAJO ---
-        if target_type == "orden":
-            try:
-                res = supabase.table("ordenes").select("*").eq("id", target_id).execute()
-                if res.data:
-                    orden_actual = res.data[0]
-                    
-                    with st.form(key=f"form_focus_orden_{target_id}"):
-                        c_edit1, c_edit2, c_edit3 = st.columns(3)
+    # --- CASO 1: ORDEN DE TRABAJO ---
+    if target_type == "orden":
+        try:
+            res = supabase.table("ordenes").select("*").eq("id", target_id).execute()
+            if res.data:
+                orden_actual = res.data[0]
+                
+                with st.form(key=f"form_focus_orden_{target_id}"):
+                    # Todo lo que sigue dentro del form también lleva su nivel de sangría
+                    c_edit1, c_edit2, c_edit3 = st.columns(3)
+                    # ... resto de tu código ...
                         
                         est_opts = ["Abierta", "Por Validar", "Concluida", "Cancelada"]
                         idx_est = est_opts.index(orden_actual['estado']) if orden_actual['estado'] in est_opts else 0
