@@ -183,9 +183,10 @@ def _run_query_live(table_name, filters, order_by):
     if filters:
         for key, value in filters.items():
             query = query.eq(key, value)
-    # Agregamos .data para que devuelva una lista simple de diccionarios
+    
     response = query.order(order_by).execute()
-    return response.data
+    # VACUNA: Siempre devolvemos un DataFrame, incluso si está vacío
+    return pd.DataFrame(response.data if response.data else [])
     
     try:
         query = supabase.table(table_name).select("*")
