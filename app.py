@@ -22,6 +22,7 @@ import plotly.express as px
 import plotly.graph_objects as go
 from fpdf import FPDF
 import tempfile
+from pdf_utils import generar_hoja_vida_pdf, generar_pdf_orden
 
 def hashear_password(password: str) -> str:
     """Convierte una contraseña en texto plano a SHA-256"""
