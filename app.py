@@ -162,27 +162,31 @@ def subir_archivo_generico(archivo):
     return None
 
 def run_query(table_name, filters=None, order_by="id"):
-    """
-    Consulta datos de Supabase. 
-    Aplica caché solo a tablas maestras para optimizar velocidad sin perder tiempo real en procesos críticos.
-    """
-    # Tablas que NO cambian seguido (Maestras)
-    tablas_maestras = ["usuarios", "activos", "categorias", "ubicaciones"]
+    tablas_maestras = ["usuarios", "activos", "categorias", "ubicaciones", "inventario"]
     
     if table_name in tablas_maestras:
-        return _run_query_cached(table_name, filters, order_by)
+        # Usamos una función interna cacheada para no guardar el objeto DataFrame complejo
+        return pd.DataFrame(_run_query_internal(table_name, filters, order_by))
     else:
-        return _run_query_live(table_name, filters, order_by)
+        # Consultas en vivo para órdenes y solicitudes
+        return pd.DataFrame(_run_query_live_data(table_name, filters, order_by))
 
-@st.cache_data(ttl=600) # Caché de 10 minutos para datos que casi nunca cambian
-def _run_query_cached(table_name, filters, order_by):
-    return _run_query_live(table_name, filters, order_by)
-
-def _run_query_live(table_name, filters, order_by):
+@st.cache_data(ttl=600)
+def _run_query_internal(table_name, filters, order_by):
     query = supabase.table(table_name).select("*")
     if filters:
         for key, value in filters.items():
             query = query.eq(key, value)
+    res = query.order(order_by).execute()
+    return res.data if res.data else []
+
+def _run_query_live_data(table_name, filters, order_by):
+    query = supabase.table(table_name).select("*")
+    if filters:
+        for key, value in filters.items():
+            query = query.eq(key, value)
+    res = query.order(order_by).execute()
+    return res.data if res.data else []
     
     response = query.order(order_by).execute()
     # VACUNA: Siempre devolvemos un DataFrame, incluso si está vacío
