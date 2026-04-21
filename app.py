@@ -314,7 +314,7 @@ def subir_archivo_generico(archivo):
             return None
     return None
 
-@st.cache_data(ttl=1)  # Cache de 1 segundo para datos en tiempo real
+@st.cache_data(ttl=15)  # Cache de 1 segundo para datos en tiempo real
 def run_query(table_name, filters=None, order_by="id"):
     """Función optimizada para consultas con cache de 1 segundo"""
     try:
