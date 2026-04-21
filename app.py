@@ -2445,296 +2445,128 @@ elif choice == "Ordenes de Trabajo":
     st.title("GESTIÓN DE MANTENIMIENTO")
     mostrar_notificaciones()
     
-    # ---------------------------------------------------------
-    # 1. CARGA DE DATOS (CRÍTICO: HACERLO ANTES DEL INTERCEPTOR)
-    # ---------------------------------------------------------
-    # 1. Carga limpia (sin doble pd.DataFrame)
-df_act = run_query("activos")
+    # ==============================================================================
+    # 🚀 INTERCEPTOR 3.0: GESTIÓN TOTAL (CON DATOS DISPONIBLES)
+    # ==============================================================================
+    if 'jump_target' in st.session_state and st.session_state.jump_target:
+        target_type = st.session_state.jump_target
+        target_id = st.session_state.jump_id
 
-# 2. Antes de mostrar el editor (alrededor de la línea 2420), 
-# asegúrate de que no haya nulos que rompan a React:
-df_mostrar = df_act.copy().fillna("")
-
-# 3. Usa el editor con una llave (key) única para evitar el bucle de estado:
-if tab == "Activos":
-        # 1. Carga de datos
-        df_act = run_query("activos")
-        df_mostrar = df_act.copy().fillna("")
-
-        # 2. El editor (Alineado con df_act)
-        edited_df = st.data_editor(
-            df_mostrar,
-            use_container_width=True,
-            hide_index=True,
-            key="editor_activos_unique"
-        )
-
-        # 3. Consultas adicionales (Alineadas con edited_df)
-        df_users = run_query("usuarios")
-        df_ordenes = run_query("ordenes")
-# ==============================================================================
-# 🚀 INTERCEPTOR 3.0: GESTIÓN TOTAL (CON DATOS DISPONIBLES)
-# ==============================================================================
-if 'jump_target' in st.session_state and st.session_state.jump_target:
-    # --- ESTAS LÍNEAS DEBEN TENER SANGRÍA (4 espacios) ---
-    target_type = st.session_state.jump_target
-    target_id = st.session_state.jump_id
-
-    # Encabezado (Alineado con target_type)
-    st.markdown(f"""
-    <div style="background-color: #1F2937; padding: 15px; border-radius: 8px; border-left: 5px solid #3B82F6; margin-bottom: 20px; display: flex; align-items: center; justify-content: space-between;">
-        <div>
-            <h3 style="color: #60A5FA; margin: 0;">🛠️ Gestión de Dependencia #{target_id}</h3>
-            <p style="margin: 0; color: #9CA3AF; font-size: 0.9em;">Edita o reasigna este registro para liberar el activo original.</p>
+        # Encabezado
+        st.markdown(f"""
+        <div style="background-color: #1F2937; padding: 15px; border-radius: 8px; border-left: 5px solid #3B82F6; margin-bottom: 20px; display: flex; align-items: center; justify-content: space-between;">
+            <div>
+                <h3 style="color: #60A5FA; margin: 0;">🛠️ Gestión de Dependencia #{target_id}</h3>
+                <p style="margin: 0; color: #9CA3AF; font-size: 0.9em;">Edita o reasigna este registro para liberar el activo original.</p>
+            </div>
         </div>
-    </div>
-    """, unsafe_allow_html=True)
+        """, unsafe_allow_html=True)
 
-    if st.button("⬅️ VOLVER A EDICIÓN DE ACTIVO", use_container_width=True):
-        st.session_state.current_page = "Inventario Activos"
-        st.session_state.jump_target = None
-        st.session_state.jump_id = None
-        st.rerun()
+        if st.button("⬅️ VOLVER A EDICIÓN DE ACTIVO", use_container_width=True):
+            st.session_state.current_page = "Inventario Activos"
+            st.session_state.jump_target = None
+            st.session_state.jump_id = None
+            st.rerun()
 
-    st.markdown("---")
+        st.markdown("---")
 
-    # --- CASO 1: ORDEN DE TRABAJO ---
-    if target_type == "orden":
-        try:
-            res = supabase.table("ordenes").select("*").eq("id", target_id).execute()
-            if res.data:
-                orden_actual = res.data[0]
-                
-                with st.form(key=f"form_focus_orden_{target_id}"):
-                    c_edit1, c_edit2, c_edit3 = st.columns(3)
+        # --- CASO 1: ORDEN DE TRABAJO ---
+        if target_type == "orden":
+            try:
+                res = supabase.table("ordenes").select("*").eq("id", target_id).execute()
+                if res.data:
+                    orden_actual = res.data[0]
                     
-                    est_opts = ["Abierta", "Por Validar", "Concluida", "Cancelada"]
-                    # Buscamos el índice del estado actual para el selector
-                    idx_est = est_opts.index(orden_actual['estado']) if orden_actual['estado'] in est_opts else 0
-                    nuevo_estado = c_edit1.selectbox("Estado", est_opts, index=idx_est)
-                    
-                    # Selectores de Técnicos
-                    lista_tecnicos = df_users[df_users['rol'].isin(['Tecnico', 'Admin', 'Programador'])]
-                    tech_dict = dict(zip(lista_tecnicos['nombre'], lista_tecnicos['id']))
-                    tech_actual_id = str(orden_actual['tecnico_asignado'])
-                    nombre_tech = next((k for k, v in tech_dict.items() if str(v) == tech_actual_id), "Seleccionar...")
+                    with st.form(key=f"form_focus_orden_{target_id}"):
+                        c_edit1, c_edit2, c_edit3 = st.columns(3)
                         
-                    # Selector de Activo (Para reasignar si es necesario)
-                    act_dict = dict(zip(df_act['nombre'], df_act['id']))
-                    act_actual_id = orden_actual['activo_id']
-                    nombre_act = next((k for k, v in act_dict.items() if v == act_actual_id), list(act_dict.keys())[0])
+                        est_opts = ["Abierta", "Por Validar", "Concluida", "Cancelada"]
+                        idx_est = est_opts.index(orden_actual['estado']) if orden_actual['estado'] in est_opts else 0
+                        nuevo_estado = c_edit1.selectbox("Estado", est_opts, index=idx_est)
                         
-                    nuevo_act_nom = c_edit2.selectbox("Reasignar Activo", list(act_dict.keys()), index=list(act_dict.keys()).index(nombre_act))
-                    nuevo_tec_nom = c_edit3.selectbox("Técnico", list(tech_dict.keys()), index=list(tech_dict.keys()).index(nombre_tech) if nombre_tech in tech_dict else 0)
+                        lista_tecnicos = df_users[df_users['rol'].isin(['Tecnico', 'Admin', 'Programador'])]
+                        tech_dict = dict(zip(lista_tecnicos['nombre'], lista_tecnicos['id']))
+                        tech_actual_id = str(orden_actual['tecnico_asignado'])
+                        nombre_tech = next((k for k, v in tech_dict.items() if str(v) == tech_actual_id), "Seleccionar...")
                         
-                    nueva_desc = st.text_area("Descripción / Reporte", value=orden_actual['descripcion'])
-                    nueva_crit = st.select_slider("Criticidad", ["Baja", "Media", "Alta", "Crítica"], value=orden_actual['criticidad'])
+                        act_dict = dict(zip(df_act['nombre'], df_act['id']))
+                        act_actual_id = orden_actual['activo_id']
+                        nombre_act = next((k for k, v in act_dict.items() if v == act_actual_id), list(act_dict.keys())[0])
                         
-                    st.markdown("<br>", unsafe_allow_html=True)
+                        nuevo_act_nom = c_edit2.selectbox("Reasignar Activo", list(act_dict.keys()), index=list(act_dict.keys()).index(nombre_act))
+                        nuevo_tec_nom = c_edit3.selectbox("Técnico", list(tech_dict.keys()), index=list(tech_dict.keys()).index(nombre_tech) if nombre_tech in tech_dict else 0)
                         
-                    if st.form_submit_button("💾 GUARDAR CAMBIOS Y REASIGNAR", type="primary", use_container_width=True):
-                        supabase.table("ordenes").update({
-                            "estado": nuevo_estado, 
-                            "tecnico_asignado": str(tech_dict[nuevo_tec_nom]),
-                            "activo_id": int(act_dict[nuevo_act_nom]),
-                            "criticidad": nueva_crit, 
-                            "descripcion": nueva_desc
-                        }).eq("id", target_id).execute()
+                        nueva_desc = st.text_area("Descripción / Reporte", value=orden_actual['descripcion'])
+                        nueva_crit = st.select_slider("Criticidad", ["Baja", "Media", "Alta", "Crítica"], value=orden_actual['criticidad'])
+                        
+                        if st.form_submit_button("💾 GUARDAR CAMBIOS Y REASIGNAR", type="primary", use_container_width=True):
+                            supabase.table("ordenes").update({
+                                "estado": nuevo_estado, 
+                                "tecnico_asignado": str(tech_dict[nuevo_tec_nom]),
+                                "activo_id": int(act_dict[nuevo_act_nom]),
+                                "criticidad": nueva_crit, 
+                                "descripcion": nueva_desc
+                            }).eq("id", target_id).execute()
                             
-                        st.toast("✅ Orden actualizada correctamente.")
+                            st.toast("✅ Orden actualizada correctamente.")
+                            time.sleep(1.2)
+                            st.rerun()
+
+                    st.markdown("### 🗑️ Opciones Críticas")
+                    if st.button("ELIMINAR ORDEN DEFINITIVAMENTE", type="secondary", use_container_width=True):
+                        supabase.table("ordenes").delete().eq("id", target_id).execute()
+                        st.toast("🗑️ Orden eliminada.")
+                        st.session_state.jump_target = None
                         time.sleep(1.2)
                         st.rerun()
+                else:
+                    st.error("Orden no encontrada.")
+            except Exception as e:
+                st.error(f"Error: {e}")
 
-                # Botón de borrar fuera del form (Alineado con el "with")
-                st.markdown("### 🗑️ Opciones Críticas")
-                if st.button("ELIMINAR ORDEN DEFINITIVAMENTE", type="secondary", use_container_width=True, key="btn_focus_del"):
-                    supabase.table("ordenes").delete().eq("id", target_id).execute()
-                    st.toast("🗑️ Orden eliminada.")
-                    st.session_state.current_page = "Inventario Activos"
-                    st.session_state.jump_target = None
-                    time.sleep(1.2)
-                    st.rerun()
-
-        # --- CASO 2: PLAN PREVENTIVO (MEJORADO) ---
+        # --- CASO 2: PLAN PREVENTIVO ---
         elif target_type == "preventivo":
             try:
                 res = supabase.table("planes_mantenimiento").select("*").eq("id", target_id).execute()
                 if res.data:
                     plan_focus = res.data[0]
-                    
-                    st.info(f"Editando Plan Preventivo #{target_id}")
-                    
                     with st.form("form_focus_prev"):
                         c1, c2 = st.columns(2)
-                        
-                        # 1. Selector de Activo (Crucial para reasignar)
                         act_dict = dict(zip(df_act['nombre'], df_act['id']))
-                        act_actual_id = plan_focus['activo_id']
-                        # Buscar nombre del activo actual
-                        nombre_act_actual = next((k for k, v in act_dict.items() if v == act_actual_id), list(act_dict.keys())[0])
-                        idx_act = list(act_dict.keys()).index(nombre_act_actual) if nombre_act_actual in act_dict else 0
+                        nombre_act_actual = next((k for k, v in act_dict.items() if v == plan_focus['activo_id']), list(act_dict.keys())[0])
+                        nuevo_act_nom = c1.selectbox("Reasignar a Activo", list(act_dict.keys()), index=list(act_dict.keys()).index(nombre_act_actual))
                         
-                        nuevo_act_nom = c1.selectbox("Reasignar a Activo", list(act_dict.keys()), index=idx_act)
-                        
-                        # 2. Selector de Técnico
                         tech_dict = dict(zip(df_users['nombre'], df_users['id']))
-                        tech_actual_id = str(plan_focus['tecnico_default'])
-                        nombre_tech = next((k for k, v in tech_dict.items() if str(v) == tech_actual_id), list(tech_dict.keys())[0])
-                        idx_tech = list(tech_dict.keys()).index(nombre_tech) if nombre_tech in tech_dict else 0
-                        
-                        nuevo_tec_nom = c2.selectbox("Técnico Encargado", list(tech_dict.keys()), index=idx_tech)
+                        nombre_tech = next((k for k, v in tech_dict.items() if str(v) == str(plan_focus['tecnico_default'])), list(tech_dict.keys())[0])
+                        nuevo_tec_nom = c2.selectbox("Técnico Encargado", list(tech_dict.keys()), index=list(tech_dict.keys()).index(nombre_tech))
                         
                         desc_p = st.text_input("Tarea", value=plan_focus['descripcion'])
                         dias_p = st.number_input("Frecuencia (Días)", value=plan_focus['frecuencia_dias'])
-                        
-                        st.markdown("<br>", unsafe_allow_html=True)
 
                         if st.form_submit_button("💾 GUARDAR Y REASIGNAR", type="primary", use_container_width=True):
-                             supabase.table("planes_mantenimiento").update({
-                                 "activo_id": int(act_dict[nuevo_act_nom]), # Guardar cambio activo
-                                 "tecnico_default": str(tech_dict[nuevo_tec_nom]), # Guardar cambio técnico
-                                 "descripcion": desc_p,
-                                 "frecuencia_dias": dias_p
-                             }).eq("id", target_id).execute()
-                             
-                             st.toast(f"✅ Plan reasignado a '{nuevo_act_nom}'.")
-                             time.sleep(1.5)
-                             st.rerun()
+                            supabase.table("planes_mantenimiento").update({
+                                "activo_id": int(act_dict[nuevo_act_nom]),
+                                "tecnico_default": str(tech_dict[nuevo_tec_nom]),
+                                "descripcion": desc_p,
+                                "frecuencia_dias": dias_p
+                            }).eq("id", target_id).execute()
+                            st.toast("✅ Plan actualizado.")
+                            time.sleep(1.2)
+                            st.rerun()
                     
-                    st.markdown("---")
                     if st.button("🗑️ ELIMINAR PLAN DEFINITIVAMENTE", type="secondary", use_container_width=True):
                         supabase.table("planes_mantenimiento").delete().eq("id", target_id).execute()
-                        st.toast("🗑️ Plan eliminado.")
-                        st.session_state.current_page = "Inventario Activos"
                         st.session_state.jump_target = None
-                        time.sleep(1.5)
                         st.rerun()
             except Exception as e:
-                st.error(f"Error cargando plan: {e}")
+                st.error(f"Error en preventivo: {e}")
 
-        # 🛑 DETENER LA EJECUCIÓN (IMPORTANTE)
-        st.stop()
-        
-    # Cargar datos necesarios
-    df_act = pd.DataFrame(run_query("activos"))
+        st.stop() # IMPORTANTE: Detiene el resto de la página si el interceptor está activo
+
+    # --- 1. CARGA DE DATOS NORMAL ---
+    df_act = run_query("activos")
     df_users = run_query("usuarios")
     df_ordenes = run_query("ordenes")
-    
-    # --- LÓGICA DE PESTAÑAS SEGÚN ROL ---
-    
-    # 👷 TÉCNICO: Solo ve sus órdenes y puede pedir cosas nuevas
-    if rol == "Tecnico":
-        tab_mis_ordenes, tab_solicitar = st.tabs(["👷 MIS ÓRDENES", "📢 SOLICITAR MANTENIMIENTO"])
-        
-        # PESTAÑA 1: MIS ÓRDENES (Técnico)
-        with tab_mis_ordenes:
-            mi_id = None
-            if not df_users.empty:
-                usuario_data = df_users[df_users['nombre'] == usuario]
-                if not usuario_data.empty:
-                    mi_id = usuario_data.iloc[0]['id']
-            
-            if mi_id:
-                mis_ots = df_ordenes[(df_ordenes['tecnico_asignado'] == str(mi_id)) & (df_ordenes['estado'] == 'Abierta')]
-                
-                if mis_ots.empty:
-                    st.info("🎉 No tienes órdenes pendientes.")
-                else:
-                    st.write(f"Tienes {len(mis_ots)} órdenes pendientes.")
-                    for index, row in mis_ots.iterrows():
-                        nombre_activo = df_act[df_act['id'] == row['activo_id']].iloc[0]['nombre'] if not df_act.empty else "Activo"
-                        
-                        with st.expander(f"🔧 {nombre_activo} | {row['criticidad']} (ID: {row['id']})"):
-                            st.markdown(f"**Falla:** {row['descripcion']}")
-                            st.caption(f"📅 Asignada: {row['fecha_creacion'][:10]}")
-                            
-                            if row.get('comentarios_validacion'):
-                                st.error(f"⚠️ **Devolución:** {row['comentarios_validacion']}")
-                            
-                            st.divider()
-
-                            with st.form(f"cierre_riguroso_{row['id']}"):
-                                st.markdown("#### 📝 Reporte Técnico")
-                                reporte = st.text_area("Descripción del trabajo realizado:", height=100, placeholder="Describa qué reparó y qué repuestos usó...")
-                                st.markdown("#### 📸 Evidencia (Obligatoria)")
-                                foto_cierre = st.file_uploader("Subir foto del trabajo terminado", type=["jpg", "png", "jpeg"], key=f"up_cierre_{row['id']}")
-                                
-                                if st.form_submit_button("✅ TERMINAR Y ENVIAR A REVISIÓN", type="primary", use_container_width=True):
-                                    if not reporte or not foto_cierre:
-                                        st.error("⚠️ Faltan datos: Es obligatorio escribir el reporte Y subir la foto de evidencia.")
-                                    else:
-                                        try:
-                                            url_final = None
-                                            with st.spinner("Subiendo evidencia a la nube..."):
-                                                url_final = subir_imagen(foto_cierre, "orion_evidencias_cierre")
-                                            
-                                            if not url_final:
-                                                st.error("Error al subir la imagen. Intenta de nuevo.")
-                                            else:
-                                                supabase.table("ordenes").update({
-                                                    "estado": "Por Validar",
-                                                    "comentarios_cierre": reporte,
-                                                    "fecha_cierre": datetime.now().isoformat(),
-                                                    "foto_cierre_url": url_final,
-                                                    "comentarios_validacion": None
-                                                }).eq("id", row['id']).execute()
-                                                
-                                                st.toast("🚀 ¡Excelente! Orden enviada a control de calidad.")
-                                                time.sleep(1.5)
-                                                st.rerun()
-                                        except Exception as e:
-                                            st.error(f"Error al guardar: {e}")
-            else:
-                st.error("No se pudo identificar tu usuario técnico en la base de datos.")
-
-        # PESTAÑA 2: SOLICITAR (Técnico)
-        with tab_solicitar:
-            st.markdown("### Reportar una Falla o Necesidad")
-            if not df_act.empty:
-                act_nombres = df_act['nombre'].values
-                with st.form("form_solicitud"):
-                    act_sol = st.selectbox("Activo que presenta fallas", act_nombres)
-                    desc_sol = st.text_area("Describa el problema detalladamente")
-                    prio_sol = st.select_slider("¿Qué tan urgente parece?", ["Baja", "Media", "Alta"], value="Media")
-                    foto_sol = st.file_uploader("Foto del daño (Opcional)", type=["jpg", "png"])
-                    
-                    if st.form_submit_button("ENVIAR SOLICITUD", type="primary", use_container_width=True):
-                        if not desc_sol:
-                            st.error("La descripción es obligatoria.")
-                        else:
-                            act_id = df_act[df_act['nombre'] == act_sol].iloc[0]['id']
-                            url_foto = subir_imagen(foto_sol) if foto_sol else None
-                            
-                            supabase.table("solicitudes").insert({
-                                "activo_id": int(act_id),
-                                "solicitante_id": usuario,
-                                "descripcion": desc_sol,
-                                "prioridad_sugerida": prio_sol,
-                                "foto_url": url_foto,
-                                "estado": "Pendiente"
-                            }).execute()
-                            
-                            agregar_notificacion("success", "Solicitud enviada al planificador.")
-                            st.rerun()
-            else:
-                st.warning("No hay activos registrados.")
-
-    # 👮 ADMIN / PROGRAMADOR: Gestión Completa
-    else:
-        # Consultamos solicitudes pendientes
-        df_solicitudes = run_query("solicitudes", {"estado": "Pendiente"})
-        n_pendientes = len(df_solicitudes)
-        titulo_buzon = f"👮 VALIDAR ({n_pendientes})" if n_pendientes > 0 else "👮 VALIDAR"
-        
-        tab_mis_gestiones, tab_buzon, tab_calidad, tab_gestion, tab_crear_directa, tab_preventivos = st.tabs([
-            "📂 MIS GESTIONES",  # <--- NUEVA PESTAÑA
-            titulo_buzon, 
-            "💎 CALIDAD", 
-            "📊 GESTIÓN GLOBAL", 
-            "⚡ CREAR DIRECTA", 
-            "📅 PREVENTIVOS"
-        ])
-        
         # ------------------------------------------------------------------
         # 1. PESTAÑA DE GESTIÓN ADMINISTRATIVA
         # ------------------------------------------------------------------
