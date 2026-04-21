@@ -126,21 +126,21 @@ with st.sidebar:
 # 📄 RENDERIZAR PÁGINAS
 # ==============================================================================
 if choice == "Tablero de Mando":
-    from pages.dashboard import render as render_dashboard
+    from views.dashboard import render as render_dashboard
     render_dashboard()
 
 elif choice == "Inventario Activos":
-    from pages.activos import render as render_activos
+    from views.activos import render as render_activos
     render_activos()
 
 elif choice == "Ordenes de Trabajo":
-    from pages.ordenes import render as render_ordenes
+    from views.ordenes import render as render_ordenes
     render_ordenes()
 
 elif choice == "Repuestos":
-    from pages.repuestos import render as render_repuestos
+    from views.repuestos import render as render_repuestos
     render_repuestos()
 
 elif choice == "Usuarios":
-    from pages.usuarios import render as render_usuarios
+    from views.usuarios import render as render_usuarios
     render_usuarios()
