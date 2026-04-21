@@ -1603,6 +1603,148 @@ def generar_excel_historial(df_ordenes, df_act, df_users):
     buffer.seek(0)
     return buffer
 
+# ==============================================================================
+# 🏭 KPIs INDUSTRIALES — MTTR & MTBF
+# ==============================================================================
+def mostrar_kpis_industriales(df_ordenes, df_act):
+    """Calcula y grafica MTTR y MTBF por activo"""
+    
+    df_k = df_ordenes[df_ordenes['estado'] == 'Concluida'].copy()
+    
+    if df_k.empty:
+        st.info("Sin órdenes concluidas para calcular KPIs industriales.")
+        return
+
+    df_k['fecha_creacion'] = pd.to_datetime(df_k['fecha_creacion'])
+    df_k['fecha_cierre']   = pd.to_datetime(df_k['fecha_cierre'])
+    df_k['duracion_horas'] = (
+        df_k['fecha_cierre'] - df_k['fecha_creacion']
+    ).dt.total_seconds() / 3600
+
+    # Mapear nombres de activos
+    map_act = dict(zip(df_act['id'], df_act['nombre'])) if not df_act.empty else {}
+    df_k['Activo'] = df_k['activo_id'].map(map_act).fillna('Desconocido')
+
+    # --- MTTR: Promedio de tiempo de reparación por activo ---
+    mttr = df_k.groupby('Activo')['duracion_horas'].mean().reset_index()
+    mttr.columns = ['Activo', 'MTTR_horas']
+    mttr = mttr.sort_values('MTTR_horas', ascending=False).head(10)
+    mttr['MTTR_horas'] = mttr['MTTR_horas'].round(1)
+
+    # --- MTBF: Tiempo promedio entre fallas del mismo activo ---
+    df_sorted = df_k.sort_values(['Activo', 'fecha_creacion'])
+    df_sorted['tiempo_entre_fallas'] = (
+        df_sorted.groupby('Activo')['fecha_creacion']
+        .diff()
+        .dt.total_seconds() / 3600
+    )
+    mtbf = df_sorted.groupby('Activo')['tiempo_entre_fallas'].mean().reset_index()
+    mtbf.columns = ['Activo', 'MTBF_horas']
+    mtbf = mtbf.dropna().sort_values('MTBF_horas', ascending=False).head(10)
+    mtbf['MTBF_horas'] = mtbf['MTBF_horas'].round(1)
+
+    # --- MÉTRICAS RESUMEN ---
+    st.markdown("### 🏭 KPIs Industriales")
+    
+    col_r1, col_r2, col_r3, col_r4 = st.columns(4)
+    
+    mttr_prom = df_k['duracion_horas'].mean()
+    mtbf_prom = df_sorted['tiempo_entre_fallas'].mean()
+    activo_critico = mttr['Activo'].iloc[0] if not mttr.empty else "N/A"
+    activo_confiable = mtbf['Activo'].iloc[-1] if not mtbf.empty else "N/A"
+
+    col_r1.metric(
+        "⏱️ MTTR Promedio", 
+        f"{mttr_prom:.1f}h",
+        help="Tiempo promedio de reparación de todas las órdenes"
+    )
+    col_r2.metric(
+        "🔁 MTBF Promedio", 
+        f"{mtbf_prom:.1f}h" if not pd.isna(mtbf_prom) else "N/A",
+        help="Tiempo promedio entre fallas de todos los activos"
+    )
+    col_r3.metric(
+        "🔴 Más Difícil de Reparar", 
+        activo_critico.split()[0] if activo_critico != "N/A" else "N/A",
+        help="Activo con mayor MTTR (más horas promedio de reparación)"
+    )
+    col_r4.metric(
+        "🟢 Más Confiable", 
+        activo_confiable.split()[0] if activo_confiable != "N/A" else "N/A",
+        help="Activo con mayor MTBF (más tiempo entre fallas)"
+    )
+
+    st.markdown("---")
+
+    # --- GRÁFICAS ---
+    col_m1, col_m2 = st.columns(2)
+
+    with col_m1:
+        st.markdown(f"<span class='chart-header'>⏱️ MTTR — Tiempo Medio de Reparación</span>", unsafe_allow_html=True)
+        st.caption("Menos horas = más fácil de reparar")
+        
+        if not mttr.empty:
+            fig_mttr = px.bar(
+                mttr,
+                x='MTTR_horas',
+                y='Activo',
+                orientation='h',
+                color='MTTR_horas',
+                color_continuous_scale='Reds',
+                text='MTTR_horas'
+            )
+            fig_mttr.update_layout(
+                paper_bgcolor='rgba(0,0,0,0)',
+                plot_bgcolor='rgba(0,0,0,0)',
+                font=dict(color='white'),
+                height=300,
+                showlegend=False,
+                coloraxis_showscale=False,
+                margin=dict(l=0, r=0, t=10, b=0),
+                yaxis=dict(title=None),
+                xaxis=dict(title="Horas promedio")
+            )
+            fig_mttr.update_traces(
+                texttemplate='%{text}h',
+                textposition='outside'
+            )
+            st.plotly_chart(fig_mttr, use_container_width=True)
+        else:
+            st.info("Sin datos suficientes.")
+
+    with col_m2:
+        st.markdown(f"<span class='chart-header'>🔁 MTBF — Tiempo Medio Entre Fallas</span>", unsafe_allow_html=True)
+        st.caption("Más horas = equipo más confiable")
+        
+        if not mtbf.empty:
+            fig_mtbf = px.bar(
+                mtbf,
+                x='MTBF_horas',
+                y='Activo',
+                orientation='h',
+                color='MTBF_horas',
+                color_continuous_scale='Greens',
+                text='MTBF_horas'
+            )
+            fig_mtbf.update_layout(
+                paper_bgcolor='rgba(0,0,0,0)',
+                plot_bgcolor='rgba(0,0,0,0)',
+                font=dict(color='white'),
+                height=300,
+                showlegend=False,
+                coloraxis_showscale=False,
+                margin=dict(l=0, r=0, t=10, b=0),
+                yaxis=dict(title=None),
+                xaxis=dict(title="Horas promedio")
+            )
+            fig_mtbf.update_traces(
+                texttemplate='%{text}h',
+                textposition='outside'
+            )
+            st.plotly_chart(fig_mtbf, use_container_width=True)
+        else:
+            st.info("Sin datos suficientes para MTBF (se necesitan 2+ fallas por activo).")
+
 if choice == "Tablero de Mando":
     st.title("TABLERO DE MANDO")
     mostrar_notificaciones()
@@ -1656,7 +1798,11 @@ if choice == "Tablero de Mando":
         mostrar_tops_ordenes(df)
         st.markdown("---")
 
-        # 5. GRÁFICAS CLÁSICAS DE DISTRIBUCIÓN
+        # 5. KPIs INDUSTRIALES
+        mostrar_kpis_industriales(df, df_act_sla)
+        st.markdown("---")
+
+        # 6. GRÁFICAS CLÁSICAS DE DISTRIBUCIÓN
         st.markdown("### 📊 Análisis Global")
         c_left, c_mid, c_right = st.columns(3)
 
@@ -1675,7 +1821,7 @@ if choice == "Tablero de Mando":
             graficar_torta_tipo(df) 
             st.markdown("</div>", unsafe_allow_html=True)
         
-        # 6. PRODUCTIVIDAD
+        # 7. PRODUCTIVIDAD
         st.markdown("### 👥 Carga por Técnico")
         with st.container():
             graficar_ordenes_por_tecnico(df, df_users)
