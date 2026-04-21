@@ -1146,6 +1146,8 @@ if "id_activo_qr" in query_params:
 # 1. Inicializar variables de estado
 if 'usuario' not in st.session_state: st.session_state['usuario'] = None
 if 'rol' not in st.session_state: st.session_state['rol'] = None
+if 'user_doc' not in st.session_state:       st.session_state['user_doc'] = None
+if 'session_token' not in st.session_state:  st.session_state['session_token'] = None
 
 # 2. Función Logout (Limpiando URL también)
 def logout():
