@@ -1538,7 +1538,7 @@ if choice == "Tablero de Mando":
     df = run_query("ordenes")
     df_users = run_query("usuarios")
     df_solicitudes = run_query("solicitudes")
-    df_act_sla = run_query("activos")a
+    df_act_sla = run_query("activos")
 
     # 2. Verificar SLA (se ejecuta una vez por sesión)
     verificar_sla_y_alertar(df, df_users, df_act_sla)
