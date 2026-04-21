@@ -2475,7 +2475,7 @@ if tab == "Activos":
     # ==============================================================================
     # 🚀 INTERCEPTOR 3.0: GESTIÓN TOTAL (CON DATOS DISPONIBLES)
     # ==============================================================================
-    if 'jump_target' in st.session_state and st.session_state.jump_target:
+        if 'jump_target' in st.session_state and st.session_state.jump_target:
         target_type = st.session_state.jump_target
         target_id = st.session_state.jump_id
 
