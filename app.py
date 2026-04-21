@@ -3531,70 +3531,68 @@ elif choice == "Ordenes de Trabajo":
             if not df_act.empty:
                 act_dict = dict(zip(df_act['nombre'], df_act['id']))
 
-            # Sugerencia FUERA del form para que se vea antes de llenar
-            nom_sugerido = render_sugerencia_tecnico(df_ordenes, df_users)
+                # Sugerencia FUERA del form para que se vea antes de llenar
+                nom_sugerido = render_sugerencia_tecnico(df_ordenes, df_users)
 
-            with st.form("ot_directa", clear_on_submit=True):
+                with st.form("ot_directa", clear_on_submit=True):
+                    sel_act_dir = st.selectbox("Activo", sorted(act_dict.keys()))
 
-                sel_act_dir = st.selectbox("Activo", sorted(act_dict.keys()))
+                    c1, c2 = st.columns(2)
+                    tipo_d = c1.selectbox("Tipo", ["Correctivo", "Preventivo", "Predictivo", "Mejora"])
+                    crit_d = c2.select_slider("Criticidad", ["Baja", "Media", "Alta", "Crítica"])
 
-                c1, c2 = st.columns(2)
-                tipo_d = c1.selectbox("Tipo", ["Correctivo", "Preventivo", "Predictivo", "Mejora"])
-                crit_d = c2.select_slider("Criticidad", ["Baja", "Media", "Alta", "Crítica"])
+                    desc_d = st.text_area("Descripción")
 
-                desc_d = st.text_area("Descripción")
+                    tech_opts_d = {u['nombre']: u['id'] for i, u in df_users.iterrows()}
 
-                tech_opts_d = {u['nombre']: u['id'] for i, u in df_users.iterrows()}
+                    # Preseleccionar el técnico sugerido
+                    idx_sug = 0
+                    if nom_sugerido and nom_sugerido in list(tech_opts_d.keys()):
+                        idx_sug = list(tech_opts_d.keys()).index(nom_sugerido)
 
-                # Preseleccionar el técnico sugerido
-                idx_sug = 0
-                if nom_sugerido and nom_sugerido in list(tech_opts_d.keys()):
-                    idx_sug = list(tech_opts_d.keys()).index(nom_sugerido)
+                    asig_d = st.selectbox(
+                        "Asignar Técnico",
+                        list(tech_opts_d.keys()),
+                        index=idx_sug,
+                        help="🤖 Preseleccionado automáticamente por menor carga"
+                    )
 
-                asig_d = st.selectbox(
-                    "Asignar Técnico",
-                    list(tech_opts_d.keys()),
-                    index=idx_sug,
-                    help="🤖 Preseleccionado automáticamente por menor carga"
-                )
-                    
                     st.markdown("---")
                     st.markdown("##### 📎 Adjuntos Iniciales")
-                    archivo_inicial = st.file_uploader("Soporte (PDF, Excel, Foto, Correo)", 
-                                                     type=["pdf", "docx", "xlsx", "jpg", "png", "msg"],
-                                                     help="Este archivo se guardará automáticamente en la bitácora de la orden.")
-
+                    archivo_inicial = st.file_uploader(
+                        "Soporte (PDF, Excel, Foto, Correo)",
+                        type=["pdf", "docx", "xlsx", "jpg", "png", "msg"],
+                        help="Este archivo se guardará automáticamente en la bitácora de la orden."
+                    )
                     st.markdown("<br>", unsafe_allow_html=True)
-                    
+
                     if st.form_submit_button("CREAR ORDEN", type="primary", use_container_width=True):
                         if not desc_d:
                             st.error("La descripción es obligatoria.")
                         else:
                             try:
-                                # 1. CREAR LA ORDEN PRIMERO
                                 res_orden = supabase.table("ordenes").insert({
-                                    "activo_id": int(act_dict[sel_act_dir]), 
-                                    "descripcion": desc_d, 
-                                    "criticidad": crit_d, 
+                                    "activo_id": int(act_dict[sel_act_dir]),
+                                    "descripcion": desc_d,
+                                    "criticidad": crit_d,
                                     "tipo_mantenimiento": tipo_d,
-                                    "estado": "Abierta", 
-                                    "tecnico_asignado": str(tech_opts_d[asig_d]), 
+                                    "estado": "Abierta",
+                                    "tecnico_asignado": str(tech_opts_d[asig_d]),
                                     "fecha_creacion": datetime.now().isoformat()
                                 }).execute()
-                                
+
                                 if res_orden.data:
                                     nuevo_id_ot = res_orden.data[0]['id']
                                     st.success(f"✅ Orden #{nuevo_id_ot} creada correctamente.")
-                                    
-                                    # 2. SI HAY ARCHIVO, SUBIRLO A LA BITÁCORA DE ESA ORDEN
+
                                     if archivo_inicial:
                                         with st.spinner("Subiendo archivo adjunto..."):
                                             url_doc = subir_archivo_generico(archivo_inicial)
-                                            
+
                                             if url_doc:
                                                 supabase.table("bitacora").insert({
                                                     "orden_id": nuevo_id_ot,
-                                                    "usuario_text": usuario, # Variable global del usuario logueado
+                                                    "usuario_text": usuario,
                                                     "mensaje": "📎 Documento inicial adjunto al crear la orden.",
                                                     "archivo_url": url_doc,
                                                     "fecha": datetime.now().isoformat()
@@ -3610,6 +3608,9 @@ elif choice == "Ordenes de Trabajo":
 
                             except Exception as e:
                                 st.error(f"Error al crear: {e}")
+            else:
+                st.warning("No hay activos registrados.")
+
 
         # 5. ✅ MÓDULO NUEVO: MANTENIMIENTO PREVENTIVO
         with tab_preventivos:
