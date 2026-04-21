@@ -1154,7 +1154,7 @@ def logout():
     st.session_state['usuario'] = None
     st.session_state['rol'] = None
     st.session_state['user_doc']      = None
-    st.session_state['session_token'] = Non
+    st.session_state['session_token'] = None
     st.query_params.clear() # Limpia la URL para que no se vuelva a loguear solo
     st.rerun()
 
