@@ -1281,30 +1281,71 @@ if st.session_state['usuario'] is None:
             password = st.text_input("Contraseña", type="password")
             submitted = st.form_submit_button("ACCEDER AL SISTEMA", type="primary", use_container_width=True)
             if submitted:
+                MAX_INTENTOS    = 3
+                BLOQUEO_MINUTOS = 5
+
+                # 1. Verificar si está bloqueado
+                bloqueo = st.session_state.get('login_bloqueado')
+                if bloqueo:
+                    segundos_restantes = (bloqueo - datetime.now()).total_seconds()
+                    if segundos_restantes > 0:
+                        minutos = int(segundos_restantes // 60)
+                        segundos = int(segundos_restantes % 60)
+                        st.error(f"🔒 Cuenta bloqueada. Intenta en {minutos}m {segundos}s.")
+                        st.stop()
+                    else:
+                        # Bloqueo expirado, resetear
+                        st.session_state['login_intentos']  = 0
+                        st.session_state['login_bloqueado'] = None
+
                 with st.spinner("Conectando y validando credenciales..."):
-                    time.sleep(1) 
+                    time.sleep(1)
 
                 try:
                     password_hash = hashear_password(password)
-                    response = supabase.table("usuarios").select("*").eq("documento", documento).eq("password", password_hash).execute()
+                    response = supabase.table("usuarios").select("*")\
+                        .eq("documento", documento)\
+                        .eq("password", password_hash)\
+                        .execute()
 
                     if response.data:
+                        # Login exitoso — resetear contadores
+                        st.session_state['login_intentos']  = 0
+                        st.session_state['login_bloqueado'] = None
+
                         user = response.data[0]
-                        st.session_state['usuario'] = user['nombre']
-                        st.session_state['rol'] = user['rol']
+                        st.session_state['usuario']  = user['nombre']
+                        st.session_state['rol']      = user['rol']
                         st.session_state['user_doc'] = documento
-                        
-                        # --- NUEVO: GUARDAR SESIÓN EN URL ---
+
                         token_sesion = str(uuid.uuid4())
                         st.session_state['session_token'] = token_sesion
-                        st.query_params["session_id"] = documento
-                        st.query_params["last_page"] = "Tablero de Mando"
-                        # ------------------------------------
-                        
+                        st.query_params["session_id"] = token_sesion
+                        st.query_params["last_page"]  = "Tablero de Mando"
+
                         st.rerun()
-                    else: 
-                        st.error("Acceso denegado. Usuario o contraseña incorrectos.")
-                except Exception as e: 
+
+                    else:
+                        # Login fallido — incrementar contador
+                        st.session_state['login_intentos'] += 1
+                        intentos_restantes = MAX_INTENTOS - st.session_state['login_intentos']
+
+                        if st.session_state['login_intentos'] >= MAX_INTENTOS:
+                            # Bloquear por 5 minutos
+                            st.session_state['login_bloqueado'] = (
+                                datetime.now() + pd.Timedelta(minutes=BLOQUEO_MINUTOS)
+                            )
+                            st.error(
+                                f"🔒 Demasiados intentos fallidos. "
+                                f"Cuenta bloqueada por {BLOQUEO_MINUTOS} minutos."
+                            )
+                        else:
+                            st.error(
+                                f"❌ Usuario o contraseña incorrectos. "
+                                f"Te quedan {intentos_restantes} intento(s)."
+                            )
+
+                except Exception as e:
                     st.error(f"Error de conexión. Intente nuevamente. Detalles: {e}")
     st.stop()
 
