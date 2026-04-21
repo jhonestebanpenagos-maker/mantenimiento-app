@@ -3,7 +3,7 @@ import pandas as pd
 import time
 from datetime import datetime
 from utils.db import supabase, run_query
-from utils.helpers import mostrar_notificaciones, agregar_notificacion
+from utils.helpers import mostrar_notificaciones, agregar_notificacion, registrar_accion_critica
 from utils.uploads import subir_archivo_generico
 from utils.notifications import notificar_telegram
 from utils.charts import sugerir_tecnico, render_sugerencia_tecnico
@@ -119,6 +119,7 @@ def _interceptor_orden(target_id, df_act, df_users):
             st.markdown("### 🗑️ Opciones Críticas")
             if st.button("ELIMINAR ORDEN DEFINITIVAMENTE", type="secondary", use_container_width=True):
                 supabase.table("ordenes").delete().eq("id", target_id).execute()
+                registrar_accion_critica("ELIMINAR_ORDEN", st.session_state.get('usuario', '?'), f"Orden #{target_id} eliminada")
                 st.toast("🗑️ Orden eliminada.")
                 st.session_state.jump_target = None
                 time.sleep(1.2)
@@ -159,6 +160,7 @@ def _interceptor_preventivo(target_id, df_act, df_users):
 
             if st.button("🗑️ ELIMINAR PLAN DEFINITIVAMENTE", type="secondary", use_container_width=True):
                 supabase.table("planes_mantenimiento").delete().eq("id", target_id).execute()
+                registrar_accion_critica("ELIMINAR_PLAN", st.session_state.get('usuario', '?'), f"Plan #{target_id} eliminado")
                 st.session_state.jump_target = None
                 st.rerun()
     except Exception as e:
@@ -588,6 +590,7 @@ def _render_orden_detalle(id_orden_selec, orden_actual, df_display, idx_tabla, d
         with st.expander("🗑️ Zona de Peligro (Eliminar)"):
             if st.button("ELIMINAR DEFINITIVAMENTE", key=f"del_g_{id_orden_selec}", type="secondary", use_container_width=True):
                 supabase.table("ordenes").delete().eq("id", int(id_orden_selec)).execute()
+                registrar_accion_critica("ELIMINAR_ORDEN", st.session_state.get('usuario', '?'), f"Orden #{id_orden_selec} eliminada (Gestión Global)")
                 st.toast("Eliminado.")
                 time.sleep(1)
                 st.rerun()

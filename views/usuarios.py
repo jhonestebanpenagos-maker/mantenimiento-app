@@ -3,7 +3,7 @@ import pandas as pd
 from utils.db import supabase, run_query
 from utils.helpers import (
     mostrar_notificaciones, agregar_notificacion, validar_usuario_unico,
-    check_open_orders, hashear_password
+    check_open_orders, hashear_password, registrar_accion_critica
 )
 
 
@@ -47,6 +47,7 @@ def _render_crear():
                         }).execute()
                         if res.data:
                             st.cache_data.clear()
+                            registrar_accion_critica("CREAR_USUARIO", documento, f"Nombre: {nombre}, Rol: {rol}")
                             agregar_notificacion('success', f'Usuario {nombre} registrado con éxito.')
                             st.rerun()
                         else:
@@ -99,14 +100,22 @@ def _render_gestionar():
                         agregar_notificacion('error', 'El documento ya está en uso por otro usuario.')
                     else:
                         update_data = {"documento": edit_doc, "nombre": edit_name, "rol": new_rol}
+                        cambios = []
+                        if new_rol != selected_user['rol']:
+                            cambios.append(f"Rol: {selected_user['rol']} → {new_rol}")
                         if new_password:
                             if len(new_password) < 4:
                                 agregar_notificacion('error', 'La contraseña debe tener al menos 4 caracteres.')
                             else:
                                 update_data["password"] = hashear_password(new_password)
+                                cambios.append("Contraseña actualizada")
                         try:
                             supabase.table("usuarios").update(update_data).eq("id", user_id).execute()
                             st.cache_data.clear()
+                            if cambios:
+                                registrar_accion_critica("ACTUALIZAR_USUARIO",
+                                                         st.session_state.get('usuario', '?'),
+                                                         f"Usuario: {edit_name} — {', '.join(cambios)}")
                             agregar_notificacion('success', f'Usuario {edit_name} actualizado.')
                             st.rerun()
                         except Exception as e:
@@ -129,6 +138,8 @@ def _render_gestionar():
                     try:
                         supabase.table("usuarios").delete().eq("id", user_id).execute()
                         st.cache_data.clear()
+                        registrar_accion_critica("ELIMINAR_USUARIO", st.session_state.get('usuario', '?'),
+                                                 f"Eliminado: {selected_user['nombre']} (ID: {user_id})")
                         agregar_notificacion('delete', f'Usuario {selected_user["nombre"]} eliminado.')
                         st.rerun()
                     except Exception as e:

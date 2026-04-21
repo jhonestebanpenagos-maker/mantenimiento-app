@@ -3,7 +3,7 @@ import pandas as pd
 import time
 from datetime import datetime
 from utils.db import supabase, run_query
-from utils.helpers import mostrar_notificaciones, agregar_notificacion
+from utils.helpers import mostrar_notificaciones, agregar_notificacion, registrar_accion_critica
 from utils.uploads import subir_imagen
 from utils.qr import generar_qr_activo
 from pdf_utils import generar_hoja_vida_pdf
@@ -495,6 +495,8 @@ def _render_zona_peligro_activo(dat, id_suffix):
                         supabase.table("ordenes").delete().in_("id", ids_historial).execute()
                     supabase.table("activos").delete().eq("id", dat['id']).execute()
                     st.cache_data.clear()
+                    registrar_accion_critica("ELIMINAR_ACTIVO", st.session_state.get('usuario', '?'),
+                                             f"Activo: {dat['nombre']} (ID: {dat['id']}) — {len(ids_historial)} OTs eliminadas")
                     agregar_notificacion("delete", "Activo eliminado correctamente.")
                     time.sleep(1.5)
                     st.rerun()

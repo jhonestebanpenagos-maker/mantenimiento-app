@@ -4,7 +4,7 @@ import uuid
 import pandas as pd
 from datetime import datetime
 from utils.db import supabase
-from utils.helpers import hashear_password, agregar_notificacion
+from utils.helpers import hashear_password, verificar_password, migrar_password_si_sha256, agregar_notificacion, registrar_login
 
 
 # ==============================================================================
@@ -59,6 +59,8 @@ def init_session_state():
 # 🔓 LOGOUT
 # ==============================================================================
 def logout():
+    usuario = st.session_state.get('usuario', 'DESCONOCIDO')
+    registrar_login(usuario, exito=False, motivo="Sesión cerrada por el usuario")
     st.session_state['usuario'] = None
     st.session_state['rol'] = None
     st.session_state['user_doc'] = None
@@ -140,37 +142,59 @@ def show_login():
                 with st.spinner("Conectando y validando credenciales..."):
                     time.sleep(1)
                     try:
-                        password_hash = hashear_password(password)
+                        # Buscar usuario SOLO por documento (no por hash)
                         response = supabase.table("usuarios").select("*") \
                             .eq("documento", documento) \
-                            .eq("password", password_hash) \
                             .execute()
 
                         if response.data:
-                            st.session_state['login_intentos'] = 0
-                            st.session_state['login_bloqueado'] = None
                             user = response.data[0]
-                            st.session_state['usuario'] = user['nombre']
-                            st.session_state['rol'] = user['rol']
-                            st.session_state['user_doc'] = documento
-                            token_sesion = str(uuid.uuid4())
-                            st.session_state['session_token'] = token_sesion
-                            st.query_params["session_id"] = token_sesion
-                            st.query_params["last_page"] = "Tablero de Mando"
-                            st.rerun()
-                        else:
-                            st.session_state['login_intentos'] += 1
-                            intentos_restantes = MAX_INTENTOS - st.session_state['login_intentos']
-                            if st.session_state['login_intentos'] >= MAX_INTENTOS:
-                                st.session_state['login_bloqueado'] = (
-                                    datetime.now() + pd.Timedelta(minutes=BLOQUEO_MINUTOS)
-                                )
-                                st.error(f"🔒 Demasiados intentos. Cuenta bloqueada por {BLOQUEO_MINUTOS} minutos.")
+                            hash_almacenado = user.get('password', '')
+
+                            # Verificar contraseña con soporte dual (bcrypt / SHA-256 legacy)
+                            if verificar_password(password, hash_almacenado):
+                                # Migración automática si el hash es SHA-256
+                                migrar_password_si_sha256(documento, password, hash_almacenado)
+
+                                registrar_login(documento, exito=True, motivo="Credenciales válidas")
+
+                                st.session_state['login_intentos'] = 0
+                                st.session_state['login_bloqueado'] = None
+                                st.session_state['usuario'] = user['nombre']
+                                st.session_state['rol'] = user['rol']
+                                st.session_state['user_doc'] = documento
+                                token_sesion = str(uuid.uuid4())
+                                st.session_state['session_token'] = token_sesion
+                                st.query_params["session_id"] = token_sesion
+                                st.query_params["last_page"] = "Tablero de Mando"
+                                st.rerun()
                             else:
-                                st.error(f"❌ Usuario o contraseña incorrectos. Te quedan {intentos_restantes} intento(s).")
+                                registrar_login(documento, exito=False, motivo="Contraseña incorrecta")
+                                _manejar_intento_fallido(MAX_INTENTOS, BLOQUEO_MINUTOS)
+                        else:
+                            # Usuario no existe — igual registramos el intento
+                            # (usar documento en lugar de "desconocido" para no revelar si existe)
+                            registrar_login(documento, exito=False, motivo="Credenciales inválidas")
+                            _manejar_intento_fallido(MAX_INTENTOS, BLOQUEO_MINUTOS)
                     except Exception as e:
-                        st.error(f"Error de conexión. Intente nuevamente. Detalles: {e}")
+                        registrar_login(documento, exito=False, motivo=f"Error: {e}")
+                        st.error(f"Error de conexión. Intente nuevamente.")
     st.stop()
+
+
+def _manejar_intento_fallido(MAX_INTENTOS, BLOQUEO_MINUTOS):
+    """Maneja un intento de login fallido (bloqueo por intentos)."""
+    st.session_state['login_intentos'] += 1
+    intentos_restantes = MAX_INTENTOS - st.session_state['login_intentos']
+    if st.session_state['login_intentos'] >= MAX_INTENTOS:
+        st.session_state['login_bloqueado'] = (
+            datetime.now() + pd.Timedelta(minutes=BLOQUEO_MINUTOS)
+        )
+        registrar_login("SISTEMA", exito=False, motivo=f"Cuenta bloqueada por {BLOQUEO_MINUTOS} min")
+        st.error(f"🔒 Demasiados intentos. Cuenta bloqueada por {BLOQUEO_MINUTOS} minutos.")
+    else:
+        # Mensaje genérico — NO revelar si el usuario existe o no
+        st.error(f"❌ Usuario o contraseña incorrectos. Te quedan {intentos_restantes} intento(s).")
 
 
 # ==============================================================================
