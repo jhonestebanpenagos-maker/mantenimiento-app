@@ -21,6 +21,7 @@ def render():
     df_users = run_query("usuarios")
     df_solicitudes = run_query("solicitudes")
     df_act_sla = run_query("activos")
+    df_planes = run_query("planes_mantenimiento")
 
     verificar_sla_y_alertar(pd.DataFrame(df), df_users, df_act_sla)
 
@@ -52,7 +53,7 @@ def render():
         st.markdown("---")
         mostrar_tops_ordenes(df)
         st.markdown("---")
-        mostrar_kpis_industriales(df, df_act_sla)
+        mostrar_kpis_industriales(df, df_act_sla, df_planes)
         st.markdown("---")
         st.markdown("### 📊 Análisis Global")
         c_left, c_mid, c_right = st.columns(3)

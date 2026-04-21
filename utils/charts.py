@@ -261,7 +261,7 @@ def graficar_alternativas_visuales(df_ordenes, df_users):
 # ==============================================================================
 # 🏭 KPIs INDUSTRIALES — MTTR & MTBF
 # ==============================================================================
-def mostrar_kpis_industriales(df_ordenes, df_act):
+def mostrar_kpis_industriales(df_ordenes, df_act, df_planes=None):
     df_ordenes = pd.DataFrame(df_ordenes) if not isinstance(df_ordenes, pd.DataFrame) else df_ordenes
     df_act = pd.DataFrame(df_act) if not isinstance(df_act, pd.DataFrame) else df_act
 
@@ -271,75 +271,339 @@ def mostrar_kpis_industriales(df_ordenes, df_act):
 
     map_act = dict(zip(df_act['id'], df_act['nombre'])) if not df_act.empty else {}
     df_k = df_ordenes[df_ordenes['estado'] == 'Concluida'].copy()
+    now = datetime.now()
 
-    if df_k.empty:
-        st.info("Sin órdenes concluidas para calcular KPIs industriales.")
-        return
+    # =====================================================================
+    # SECCIÓN 1: SCORECARDS EJECUTIVOS (los 7 KPIs nuevos)
+    # =====================================================================
+    st.markdown("### 🏭 Panel de KPIs Industriales")
+    st.caption("Indicadores clave de rendimiento del mantenimiento")
 
-    df_k['fecha_creacion'] = pd.to_datetime(df_k['fecha_creacion'])
-    df_k['fecha_cierre'] = pd.to_datetime(df_k['fecha_cierre'])
-    df_k['duracion_horas'] = ((df_k['fecha_cierre'] - df_k['fecha_creacion'])
-                               .dt.total_seconds() / 3600)
-    df_k['Activo'] = df_k['activo_id'].map(map_act).fillna('Desconocido')
+    # --- Cálculos base ---
+    total_ordenes = len(df_ordenes)
+    concluidas = len(df_k)
+    abiertas = len(df_ordenes[df_ordenes['estado'] == 'Abierta'])
+    por_validar = len(df_ordenes[df_ordenes['estado'] == 'Por Validar'])
 
-    mttr = df_k.groupby('Activo')['duracion_horas'].mean().reset_index()
-    mttr.columns = ['Activo', 'MTTR_horas']
-    mttr = mttr.sort_values('MTTR_horas', ascending=False).head(10)
-    mttr['MTTR_horas'] = mttr['MTTR_horas'].round(1)
+    # Conteo por tipo
+    preventivas = len(df_ordenes[df_ordenes['tipo_mantenimiento'] == 'Preventivo'])
+    correctivas = len(df_ordenes[df_ordenes['tipo_mantenimiento'] == 'Correctivo'])
+    otros = total_ordenes - preventivas - correctivas
+    pct_preventivo = (preventivas / total_ordenes * 100) if total_ordenes > 0 else 0
 
-    df_sorted = df_k.sort_values(['Activo', 'fecha_creacion'])
-    df_sorted['tiempo_entre_fallas'] = (
-        df_sorted.groupby('Activo')['fecha_creacion'].diff().dt.total_seconds() / 3600
-    )
-    mtbf = df_sorted.groupby('Activo')['tiempo_entre_fallas'].mean().reset_index()
-    mtbf.columns = ['Activo', 'MTBF_horas']
-    mtbf = mtbf.dropna().sort_values('MTBF_horas', ascending=False).head(10)
-    mtbf['MTBF_horas'] = mtbf['MTBF_horas'].round(1)
+    # Backlog: horas acumuladas de trabajo pendiente
+    df_abiertas = df_ordenes[df_ordenes['estado'] == 'Abierta'].copy()
+    if not df_abiertas.empty:
+        df_abiertas['fecha_creacion'] = pd.to_datetime(df_abiertas['fecha_creacion'])
+        df_abiertas['horas_acumuladas'] = (now - df_abiertas['fecha_creacion']).dt.total_seconds() / 3600
+        backlog_horas = df_abiertas['horas_acumuladas'].sum()
+        backlog_ordenes = len(df_abiertas)
+    else:
+        backlog_horas = 0
+        backlog_ordenes = 0
 
-    st.markdown("### 🏭 KPIs Industriales")
-    col_r1, col_r2, col_r3, col_r4 = st.columns(4)
-    mttr_prom = df_k['duracion_horas'].mean()
-    mtbf_prom = df_sorted['tiempo_entre_fallas'].mean()
-    activo_critico = mttr['Activo'].iloc[0] if not mttr.empty else "N/A"
-    activo_confiable = mtbf['Activo'].iloc[-1] if not mtbf.empty else "N/A"
+    # MTTR / MTBF para disponibilidad
+    if not df_k.empty:
+        df_k['fecha_creacion'] = pd.to_datetime(df_k['fecha_creacion'])
+        df_k['fecha_cierre'] = pd.to_datetime(df_k['fecha_cierre'])
+        df_k['duracion_horas'] = ((df_k['fecha_cierre'] - df_k['fecha_creacion']).dt.total_seconds() / 3600)
+        mttr_prom = df_k['duracion_horas'].mean()
 
-    col_r1.metric("⏱️ MTTR Promedio", f"{mttr_prom:.1f}h")
-    col_r2.metric("🔁 MTBF Promedio", f"{mtbf_prom:.1f}h" if not pd.isna(mtbf_prom) else "N/A")
-    col_r3.metric("🔴 Más Difícil de Reparar", activo_critico.split()[0] if activo_critico != "N/A" else "N/A")
-    col_r4.metric("🟢 Más Confiable", activo_confiable.split()[0] if activo_confiable != "N/A" else "N/A")
+        df_sorted = df_k.sort_values(['activo_id', 'fecha_creacion'])
+        df_sorted['tiempo_entre_fallas'] = (
+            df_sorted.groupby('activo_id')['fecha_creacion'].diff().dt.total_seconds() / 3600
+        )
+        mtbf_prom = df_sorted['tiempo_entre_fallas'].mean()
+
+        # Disponibilidad = MTBF / (MTBF + MTTR)
+        if not pd.isna(mtbf_prom) and mtbf_prom > 0:
+            disponibilidad = (mtbf_prom / (mtbf_prom + mttr_prom)) * 100
+        else:
+            disponibilidad = 0
+
+        # Tasa de falla (fallas por 1000 horas)
+        tasa_falla = (1000 / mtbf_prom) if not pd.isna(mtbf_prom) and mtbf_prom > 0 else 0
+    else:
+        mttr_prom = 0
+        mtbf_prom = 0
+        disponibilidad = 0
+        tasa_falla = 0
+
+    # Cumplimiento de preventivos
+    if df_planes is not None and not df_planes.empty:
+        df_planes_copy = df_planes.copy()
+        df_planes_copy['ultima_ejecucion'] = pd.to_datetime(df_planes_copy['ultima_ejecucion'])
+        df_planes_copy['proxima_fecha'] = df_planes_copy['ultima_ejecucion'] + pd.to_timedelta(df_planes_copy['frecuencia_dias'], unit='D')
+        vencidos = len(df_planes_copy[df_planes_copy['proxima_fecha'] < now])
+        total_planes = len(df_planes_copy)
+        cumplimiento_planes = ((total_planes - vencidos) / total_planes * 100) if total_planes > 0 else 100
+    else:
+        cumplimiento_planes = None
+        total_planes = 0
+
+    # --- SCORECARDS ---
+    sc1, sc2, sc3, sc4 = st.columns(4)
+
+    # Color por valor de disponibilidad
+    if disponibilidad >= 90:
+        disp_color, disp_icono = "#10B981", "🟢"
+    elif disponibilidad >= 70:
+        disp_color, disp_icono = "#F59E0B", "🟡"
+    else:
+        disp_color, disp_icono = "#EF4444", "🔴"
+
+    # Color por % preventivo
+    if pct_preventivo >= 60:
+        prev_color = "#10B981"
+    elif pct_preventivo >= 30:
+        prev_color = "#F59E0B"
+    else:
+        prev_color = "#EF4444"
+
+    with sc1:
+        st.markdown(f"""
+        <div style="background:rgba(30,41,59,0.8);border:1px solid {disp_color};border-radius:12px;padding:20px;text-align:center;">
+            <div style="font-size:0.8rem;color:#9CA3AF;text-transform:uppercase;letter-spacing:1px;">Disponibilidad</div>
+            <div style="font-size:2.5rem;font-weight:800;color:{disp_color};margin:8px 0;">{disp_icono} {disponibilidad:.1f}%</div>
+            <div style="font-size:0.75rem;color:#6B7280;">MTBF/(MTBF+MTTR)</div>
+        </div>
+        """, unsafe_allow_html=True)
+
+    with sc2:
+        st.markdown(f"""
+        <div style="background:rgba(30,41,59,0.8);border:1px solid {prev_color};border-radius:12px;padding:20px;text-align:center;">
+            <div style="font-size:0.8rem;color:#9CA3AF;text-transform:uppercase;letter-spacing:1px;">Mantenimiento Preventivo</div>
+            <div style="font-size:2.5rem;font-weight:800;color:{prev_color};margin:8px 0;">{pct_preventivo:.1f}%</div>
+            <div style="font-size:0.75rem;color:#6B7280;">{preventivas} prev / {correctivas} corr</div>
+        </div>
+        """, unsafe_allow_html=True)
+
+    with sc3:
+        backlog_color = "#EF4444" if backlog_horas > 200 else "#F59E0B" if backlog_horas > 50 else "#10B981"
+        st.markdown(f"""
+        <div style="background:rgba(30,41,59,0.8);border:1px solid {backlog_color};border-radius:12px;padding:20px;text-align:center;">
+            <div style="font-size:0.8rem;color:#9CA3AF;text-transform:uppercase;letter-spacing:1px;">Backlog</div>
+            <div style="font-size:2.5rem;font-weight:800;color:{backlog_color};margin:8px 0;">{backlog_horas:.0f}h</div>
+            <div style="font-size:0.75rem;color:#6B7280;">{backlog_ordenes} órdenes pendientes</div>
+        </div>
+        """, unsafe_allow_html=True)
+
+    with sc4:
+        if cumplimiento_planes is not None:
+            comp_color = "#10B981" if cumplimiento_planes >= 90 else "#F59E0B" if cumplimiento_planes >= 70 else "#EF4444"
+            st.markdown(f"""
+            <div style="background:rgba(30,41,59,0.8);border:1px solid {comp_color};border-radius:12px;padding:20px;text-align:center;">
+                <div style="font-size:0.8rem;color:#9CA3AF;text-transform:uppercase;letter-spacing:1px;">Cumplimiento Plan</div>
+                <div style="font-size:2.5rem;font-weight:800;color:{comp_color};margin:8px 0;">{cumplimiento_planes:.1f}%</div>
+                <div style="font-size:0.75rem;color:#6B7280;">{total_planes} planes configurados</div>
+            </div>
+            """, unsafe_allow_html=True)
+        else:
+            st.markdown(f"""
+            <div style="background:rgba(30,41,59,0.8);border:1px solid #6B7280;border-radius:12px;padding:20px;text-align:center;">
+                <div style="font-size:0.8rem;color:#9CA3AF;text-transform:uppercase;letter-spacing:1px;">Tasa de Falla</div>
+                <div style="font-size:2.5rem;font-weight:800;color:#60A5FA;margin:8px 0;">{tasa_falla:.2f}</div>
+                <div style="font-size:0.75rem;color:#6B7280;">fallas por 1000h</div>
+            </div>
+            """, unsafe_allow_html=True)
 
     st.markdown("---")
-    col_m1, col_m2 = st.columns(2)
 
-    with col_m1:
-        st.markdown("<span class='chart-header'>⏱️ MTTR — Tiempo Medio de Reparación</span>", unsafe_allow_html=True)
-        st.caption("Menos horas = más fácil de reparar")
-        if not mttr.empty:
-            fig_mttr = px.bar(mttr, x='MTTR_horas', y='Activo', orientation='h',
-                              color='MTTR_horas', color_continuous_scale='Reds', text='MTTR_horas')
-            fig_mttr.update_layout(paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)',
-                                   font=dict(color='white'), height=300, showlegend=False,
-                                   coloraxis_showscale=False, margin=dict(l=0, r=0, t=10, b=0),
-                                   yaxis=dict(title=None), xaxis=dict(title="Horas promedio"))
-            fig_mttr.update_traces(texttemplate='%{text}h', textposition='outside')
-            st.plotly_chart(fig_mttr, use_container_width=True)
-        else:
-            st.info("Sin datos suficientes.")
+    # =====================================================================
+    # SECCIÓN 2: TABLA RESUMEN DE KPIs
+    # =====================================================================
+    st.markdown("#### 📋 Resumen de Indicadores")
+    col_tbl1, col_tbl2 = st.columns(2)
 
-    with col_m2:
-        st.markdown("<span class='chart-header'>🔁 MTBF — Tiempo Medio Entre Fallas</span>", unsafe_allow_html=True)
-        st.caption("Más horas = equipo más confiable")
-        if not mtbf.empty:
-            fig_mtbf = px.bar(mtbf, x='MTBF_horas', y='Activo', orientation='h',
-                              color='MTBF_horas', color_continuous_scale='Greens', text='MTBF_horas')
-            fig_mtbf.update_layout(paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)',
-                                   font=dict(color='white'), height=300, showlegend=False,
-                                   coloraxis_showscale=False, margin=dict(l=0, r=0, t=10, b=0),
-                                   yaxis=dict(title=None), xaxis=dict(title="Horas promedio"))
-            fig_mtbf.update_traces(texttemplate='%{text}h', textposition='outside')
-            st.plotly_chart(fig_mtbf, use_container_width=True)
-        else:
-            st.info("Sin datos suficientes para MTBF (se necesitan 2+ fallas por activo).")
+    with col_tbl1:
+        st.markdown("""
+        <div style="background:rgba(30,41,59,0.5);border-radius:10px;padding:15px;">
+            <h5 style="color:#F59E0B;margin:0 0 12px 0;">🔧 Fiabilidad</h5>
+        """, unsafe_allow_html=True)
+        kpi_data_fiab = [
+            ("⏱️ MTTR Promedio", f"{mttr_prom:.1f}h", "Tiempo medio de reparación"),
+            ("🔁 MTBF Promedio", f"{mtbf_prom:.1f}h" if not pd.isna(mtbf_prom) and mtbf_prom > 0 else "N/A", "Tiempo medio entre fallas"),
+            ("📊 Disponibilidad", f"{disponibilidad:.1f}%", "MTBF/(MTBF+MTTR)"),
+            ("💥 Tasa de Falla", f"{tasa_falla:.2f}", "Fallas por 1000 horas"),
+        ]
+        for nombre, valor, desc in kpi_data_fiab:
+            st.markdown(f"""
+            <div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid rgba(255,255,255,0.05);">
+                <div>
+                    <div style="color:#E5E7EB;font-size:0.9rem;">{nombre}</div>
+                    <div style="color:#6B7280;font-size:0.7rem;">{desc}</div>
+                </div>
+                <div style="color:#60A5FA;font-weight:700;font-size:1.1rem;">{valor}</div>
+            </div>
+            """, unsafe_allow_html=True)
+        st.markdown("</div>", unsafe_allow_html=True)
+
+    with col_tbl2:
+        st.markdown("""
+        <div style="background:rgba(30,41,59,0.5);border-radius:10px;padding:15px;">
+            <h5 style="color:#10B981;margin:0 0 12px 0;">📈 Gestión</h5>
+        """, unsafe_allow_html=True)
+        kpi_data_gest = [
+            ("🛡️ % Preventivo", f"{pct_preventivo:.1f}%", f"{preventivas} preventivas de {total_ordenes} total"),
+            ("📋 Órdenes Totales", str(total_ordenes), f"{concluidas} concluidas, {abiertas} abiertas"),
+            ("⏳ Backlog", f"{backlog_horas:.0f}h", f"{backlog_ordenes} órdenes sin cerrar"),
+            ("📐 Cumplimiento", f"{cumplimiento_planes:.1f}%" if cumplimiento_planes is not None else "N/A", f"{total_planes} planes de mantenimiento"),
+        ]
+        for nombre, valor, desc in kpi_data_gest:
+            st.markdown(f"""
+            <div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid rgba(255,255,255,0.05);">
+                <div>
+                    <div style="color:#E5E7EB;font-size:0.9rem;">{nombre}</div>
+                    <div style="color:#6B7280;font-size:0.7rem;">{desc}</div>
+                </div>
+                <div style="color:#60A5FA;font-weight:700;font-size:1.1rem;">{valor}</div>
+            </div>
+            """, unsafe_allow_html=True)
+        st.markdown("</div>", unsafe_allow_html=True)
+
+    st.markdown("---")
+
+    # =====================================================================
+    # SECCIÓN 3: GRÁFICOS DETALLADOS
+    # =====================================================================
+    if not df_k.empty:
+        df_k['Activo'] = df_k['activo_id'].map(map_act).fillna('Desconocido')
+
+        mttr = df_k.groupby('Activo')['duracion_horas'].mean().reset_index()
+        mttr.columns = ['Activo', 'MTTR_horas']
+        mttr = mttr.sort_values('MTTR_horas', ascending=False).head(10)
+        mttr['MTTR_horas'] = mttr['MTTR_horas'].round(1)
+
+        df_sorted = df_k.sort_values(['activo_id', 'fecha_creacion'])
+        df_sorted['tiempo_entre_fallas'] = (
+            df_sorted.groupby('activo_id')['fecha_creacion'].diff().dt.total_seconds() / 3600
+        )
+        mtbf = df_sorted.groupby('Activo')['tiempo_entre_fallas'].mean().reset_index()
+        mtbf.columns = ['Activo', 'MTBF_horas']
+        mtbf = mtbf.dropna().sort_values('MTBF_horas', ascending=False).head(10)
+        mtbf['MTBF_horas'] = mtbf['MTBF_horas'].round(1)
+
+        col_g1, col_g2 = st.columns(2)
+
+        with col_g1:
+            st.markdown("<span class='chart-header'>⏱️ MTTR — Top 10 más lentos</span>", unsafe_allow_html=True)
+            st.caption("Menos horas = más fácil de reparar")
+            if not mttr.empty:
+                fig_mttr = px.bar(mttr, x='MTTR_horas', y='Activo', orientation='h',
+                                  color='MTTR_horas', color_continuous_scale='Reds', text='MTTR_horas')
+                fig_mttr.update_layout(paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)',
+                                       font=dict(color='white'), height=300, showlegend=False,
+                                       coloraxis_showscale=False, margin=dict(l=0, r=0, t=10, b=0),
+                                       yaxis=dict(title=None), xaxis=dict(title="Horas promedio"))
+                fig_mttr.update_traces(texttemplate='%{text}h', textposition='outside')
+                st.plotly_chart(fig_mttr, use_container_width=True)
+
+        with col_g2:
+            st.markdown("<span class='chart-header'>🔁 MTBF — Top 10 más confiables</span>", unsafe_allow_html=True)
+            st.caption("Más horas = equipo más confiable")
+            if not mtbf.empty:
+                fig_mtbf = px.bar(mtbf, x='MTBF_horas', y='Activo', orientation='h',
+                                  color='MTBF_horas', color_continuous_scale='Greens', text='MTBF_horas')
+                fig_mtbf.update_layout(paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)',
+                                       font=dict(color='white'), height=300, showlegend=False,
+                                       coloraxis_showscale=False, margin=dict(l=0, r=0, t=10, b=0),
+                                       yaxis=dict(title=None), xaxis=dict(title="Horas promedio"))
+                fig_mtbf.update_traces(texttemplate='%{text}h', textposition='outside')
+                st.plotly_chart(fig_mtbf, use_container_width=True)
+
+        st.markdown("---")
+
+        # --- Gráfico de disponibilidad por activo ---
+        st.markdown("<span class='chart-header'>📊 Disponibilidad por Activo</span>", unsafe_allow_html=True)
+        st.caption("Verde = alta disponibilidad | Rojo = necesita atención")
+
+        df_disp = df_k.groupby('Activo').agg(
+            MTTR=('duracion_horas', 'mean'),
+            conteo=('id', 'count')
+        ).reset_index()
+
+        # Calcular MTBF por activo para disponibilidad
+        mtbf_por_activo = df_sorted.groupby('Activo')['tiempo_entre_fallas'].mean().reset_index()
+        mtbf_por_activo.columns = ['Activo', 'MTBF']
+        df_disp = df_disp.merge(mtbf_por_activo, on='Activo', how='left')
+        df_disp['Disponibilidad'] = (df_disp['MTBF'] / (df_disp['MTBF'] + df_disp['MTTR']) * 100).round(1)
+        df_disp = df_disp.dropna(subset=['Disponibilidad']).sort_values('Disponibilidad', ascending=True).tail(15)
+
+        if not df_disp.empty:
+            fig_disp = go.Figure()
+            colores_disp = ['#10B981' if d >= 90 else '#F59E0B' if d >= 70 else '#EF4444' for d in df_disp['Disponibilidad']]
+            fig_disp.add_trace(go.Bar(
+                y=df_disp['Activo'], x=df_disp['Disponibilidad'], orientation='h',
+                marker=dict(color=colores_disp),
+                text=[f"{d:.1f}%" for d in df_disp['Disponibilidad']],
+                textposition='outside', textfont=dict(color='white', size=11)
+            ))
+            fig_disp.add_vline(x=90, line_dash="dash", line_color="#10B981", annotation_text="Meta: 90%")
+            fig_disp.add_vline(x=70, line_dash="dash", line_color="#F59E0B", annotation_text="Mínimo: 70%")
+            fig_disp.update_layout(
+                paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)',
+                font=dict(color='white'), height=max(250, len(df_disp) * 30),
+                margin=dict(l=0, r=0, t=10, b=0), showlegend=False,
+                xaxis=dict(title="% Disponibilidad", range=[0, 105], showgrid=True, gridcolor='rgba(255,255,255,0.1)'),
+                yaxis=dict(title=None)
+            )
+            st.plotly_chart(fig_disp, use_container_width=True)
+
+        st.markdown("---")
+
+        # --- Distribución Preventivo vs Correctivo (Donut) ---
+        st.markdown("### 🧩 Composición del Mantenimiento")
+        col_comp1, col_comp2 = st.columns(2)
+
+        with col_comp1:
+            st.markdown("<span class='chart-header'>🛡️ Preventivo vs Correctivo</span>", unsafe_allow_html=True)
+            conteo_tipo = df_ordenes['tipo_mantenimiento'].value_counts().reset_index()
+            conteo_tipo.columns = ['Tipo', 'Cantidad']
+            colores_tipo = {"Preventivo": "#10B981", "Correctivo": "#EF4444", "Predictivo": "#60A5FA", "Mejora": "#8B5CF6"}
+            fig_comp = go.Figure(data=[go.Pie(
+                labels=conteo_tipo['Tipo'], values=conteo_tipo['Cantidad'], hole=.55,
+                marker=dict(colors=[colores_tipo.get(t, '#6B7280') for t in conteo_tipo['Tipo']],
+                           line=dict(color='#111827', width=2)),
+                textinfo='label+percent', textfont=dict(color='white', size=12)
+            )])
+            fig_comp.update_layout(
+                paper_bgcolor='rgba(0,0,0,0)', font=dict(color='white'),
+                height=280, showlegend=True,
+                legend=dict(font=dict(color='white')),
+                margin=dict(l=0, r=0, t=10, b=10)
+            )
+            st.plotly_chart(fig_comp, use_container_width=True)
+
+        with col_comp2:
+            st.markdown("<span class='chart-header'>📊 Score de Madurez</span>", unsafe_allow_html=True)
+            st.caption("¿Qué tan maduro es tu mantenimiento?")
+
+            # Score basado en % preventivo
+            if pct_preventivo >= 70:
+                nivel, color_nivel, emoji_nivel = "EXCELENTE", "#10B981", "🏆"
+            elif pct_preventivo >= 50:
+                nivel, color_nivel, emoji_nivel = "BUENO", "#3B82F6", "👍"
+            elif pct_preventivo >= 30:
+                nivel, color_nivel, emoji_nivel = "EN DESARROLLO", "#F59E0B", "📈"
+            else:
+                nivel, color_nivel, emoji_nivel = "REACTIVO", "#EF4444", "⚠️"
+
+            st.markdown(f"""
+            <div style="text-align:center;padding:20px;">
+                <div style="font-size:3rem;margin-bottom:10px;">{emoji_nivel}</div>
+                <div style="font-size:1.5rem;font-weight:800;color:{color_nivel};">{nivel}</div>
+                <div style="color:#9CA3AF;margin-top:5px;">{pct_preventivo:.1f}% Preventivo</div>
+                <div style="margin-top:15px;background:rgba(255,255,255,0.1);border-radius:10px;height:12px;overflow:hidden;">
+                    <div style="background:{color_nivel};width:{min(pct_preventivo, 100)}%;height:12px;border-radius:10px;transition:width 0.5s;"></div>
+                </div>
+                <div style="display:flex;justify-content:space-between;font-size:0.7rem;color:#6B7280;margin-top:4px;">
+                    <span>0%</span><span>Meta: 70%</span><span>100%</span>
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+
+    else:
+        st.info("Sin órdenes concluidas para calcular KPIs industriales.")
 
 
 # ==============================================================================
