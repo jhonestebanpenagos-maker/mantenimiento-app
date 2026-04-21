@@ -2506,45 +2506,44 @@ if 'jump_target' in st.session_state and st.session_state.jump_target:
                 orden_actual = res.data[0]
                 
                 with st.form(key=f"form_focus_orden_{target_id}"):
-                    # Todo lo que sigue dentro del form también lleva su nivel de sangría
                     c_edit1, c_edit2, c_edit3 = st.columns(3)
-                    # ... resto de tu código ...
+                    
+                    est_opts = ["Abierta", "Por Validar", "Concluida", "Cancelada"]
+                    # Buscamos el índice del estado actual para el selector
+                    idx_est = est_opts.index(orden_actual['estado']) if orden_actual['estado'] in est_opts else 0
+                    nuevo_estado = c_edit1.selectbox("Estado", est_opts, index=idx_est)
+                    
+                    # Selectores de Técnicos (Alineados exactamente igual)
+                    lista_tecnicos = df_users[df_users['rol'].isin(['Tecnico', 'Admin', 'Programador'])]
+                    tech_dict = dict(zip(lista_tecnicos['nombre'], lista_tecnicos['id']))
+                    tech_actual_id = str(orden_actual['tecnico_asignado'])
+                    nombre_tech = next((k for k, v in tech_dict.items() if str(v) == tech_actual_id), "Seleccionar...")
                         
-                        est_opts = ["Abierta", "Por Validar", "Concluida", "Cancelada"]
-                        idx_est = est_opts.index(orden_actual['estado']) if orden_actual['estado'] in est_opts else 0
-                        nuevo_estado = c_edit1.selectbox("Estado", est_opts, index=idx_est)
+                    # Selector de Activo (Para reasignar si es necesario)
+                    act_dict = dict(zip(df_act['nombre'], df_act['id']))
+                    act_actual_id = orden_actual['activo_id']
+                    nombre_act = next((k for k, v in act_dict.items() if v == act_actual_id), list(act_dict.keys())[0])
                         
-                        # Selectores de Técnicos
-                        lista_tecnicos = df_users[df_users['rol'].isin(['Tecnico', 'Admin', 'Programador'])]
-                        tech_dict = dict(zip(lista_tecnicos['nombre'], lista_tecnicos['id']))
-                        tech_actual_id = str(orden_actual['tecnico_asignado'])
-                        nombre_tech = next((k for k, v in tech_dict.items() if str(v) == tech_actual_id), "Seleccionar...")
+                    nuevo_act_nom = c_edit2.selectbox("Reasignar Activo", list(act_dict.keys()), index=list(act_dict.keys()).index(nombre_act))
+                    nuevo_tec_nom = c_edit3.selectbox("Técnico", list(tech_dict.keys()), index=list(tech_dict.keys()).index(nombre_tech) if nombre_tech in tech_dict else 0)
                         
-                        # Selector de Activo (Para reasignar si es necesario)
-                        act_dict = dict(zip(df_act['nombre'], df_act['id']))
-                        act_actual_id = orden_actual['activo_id']
-                        nombre_act = next((k for k, v in act_dict.items() if v == act_actual_id), list(act_dict.keys())[0])
+                    nueva_desc = st.text_area("Descripción / Reporte", value=orden_actual['descripcion'])
+                    nueva_crit = st.select_slider("Criticidad", ["Baja", "Media", "Alta", "Crítica"], value=orden_actual['criticidad'])
                         
-                        nuevo_act_nom = c_edit2.selectbox("Reasignar Activo", list(act_dict.keys()), index=list(act_dict.keys()).index(nombre_act))
-                        nuevo_tec_nom = c_edit3.selectbox("Técnico", list(tech_dict.keys()), index=list(tech_dict.keys()).index(nombre_tech) if nombre_tech in tech_dict else 0)
+                    st.markdown("<br>", unsafe_allow_html=True)
                         
-                        nueva_desc = st.text_area("Descripción / Reporte", value=orden_actual['descripcion'])
-                        nueva_crit = st.select_slider("Criticidad", ["Baja", "Media", "Alta", "Crítica"], value=orden_actual['criticidad'])
-                        
-                        st.markdown("<br>", unsafe_allow_html=True)
-                        
-                        if st.form_submit_button("💾 GUARDAR CAMBIOS Y REASIGNAR", type="primary", use_container_width=True):
-                            supabase.table("ordenes").update({
-                                "estado": nuevo_estado, 
-                                "tecnico_asignado": str(tech_dict[nuevo_tec_nom]),
-                                "activo_id": int(act_dict[nuevo_act_nom]), # Aquí guardamos el cambio de activo
-                                "criticidad": nueva_crit, 
-                                "descripcion": nueva_desc
-                            }).eq("id", target_id).execute()
+                    if st.form_submit_button("💾 GUARDAR CAMBIOS Y REASIGNAR", type="primary", use_container_width=True):
+                        supabase.table("ordenes").update({
+                            "estado": nuevo_estado, 
+                            "tecnico_asignado": str(tech_dict[nuevo_tec_nom]),
+                            "activo_id": int(act_dict[nuevo_act_nom]), # Aquí guardamos el cambio de activo
+                            "criticidad": nueva_crit, 
+                            "descripcion": nueva_desc
+                        }).eq("id", target_id).execute()
                             
-                            st.toast("✅ Orden actualizada. Si cambiaste el activo, ahora podrás borrar el original.")
-                            time.sleep(1.5)
-                            st.rerun()
+                        st.toast("✅ Orden actualizada. Si cambiaste el activo, ahora podrás borrar el original.")
+                        time.sleep(1.5)
+                        st.rerun()
 
                     # Botón de borrar fuera del form
                     st.markdown("### 🗑️ Opciones Críticas")
