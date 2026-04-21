@@ -412,6 +412,14 @@ def mostrar_metricas_inteligentes(df_ordenes, df_users, df_solicitudes):
 
 # --- GRÁFICOS (PLOTLY) ---
 def graficar_ordenes_por_tecnico(df_ordenes, df_users):
+    """Muestra la carga de trabajo por cada técnico."""
+    # ESCUDO: Aseguramos formato Pandas
+    df_ordenes = pd.DataFrame(df_ordenes) if not isinstance(df_ordenes, pd.DataFrame) else df_ordenes
+    df_users = pd.DataFrame(df_users) if not isinstance(df_users, pd.DataFrame) else df_users
+
+    if df_ordenes.empty or df_users.empty:
+        st.info("No hay datos suficientes para mostrar la carga por técnico.")
+        return:
     """Muestra gráfico compacto de órdenes por técnico"""
     if df_ordenes.empty or df_users.empty:
         st.info("No hay datos de técnicos")
