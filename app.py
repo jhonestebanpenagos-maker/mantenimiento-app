@@ -2456,16 +2456,22 @@ df_act = run_query("activos")
 df_mostrar = df_act.copy().fillna("")
 
 # 3. Usa el editor con una llave (key) única para evitar el bucle de estado:
-    edited_df = st.data_editor(
-        df_mostrar,
-        use_container_width=True,
-        hide_index=True,
-        key="editor_activos_unique"
-    )
+if tab == "Activos":
+        # 1. Carga de datos
+        df_act = run_query("activos")
+        df_mostrar = df_act.copy().fillna("")
 
-    # ESTAS LÍNEAS AHORA ESTÁN BIEN ALINEADAS:
-    df_users = run_query("usuarios")
-    df_ordenes = run_query("ordenes")
+        # 2. El editor (Alineado con df_act)
+        edited_df = st.data_editor(
+            df_mostrar,
+            use_container_width=True,
+            hide_index=True,
+            key="editor_activos_unique"
+        )
+
+        # 3. Consultas adicionales (Alineadas con edited_df)
+        df_users = run_query("usuarios")
+        df_ordenes = run_query("ordenes")
     # ==============================================================================
     # 🚀 INTERCEPTOR 3.0: GESTIÓN TOTAL (CON DATOS DISPONIBLES)
     # ==============================================================================
