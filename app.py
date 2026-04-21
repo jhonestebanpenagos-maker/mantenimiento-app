@@ -1118,10 +1118,10 @@ if st.session_state['usuario'] is None:
         """, unsafe_allow_html=True)
 
         st.markdown(f"""
-            <div class='card-style' style='padding: 10px; margin-top: 0px; margin-bottom: 30px; text-align: center; font-size: 0.85em; color: {#F59E0B}; border: none; box-shadow: none; background: transparent;'>
+            <div class='card-style' style='padding: 10px; margin-top: 0px; margin-bottom: 30px; text-align: center; font-size: 0.85em; color:#F59E0B; border: none; box-shadow: none; background: transparent;'>
                 <p style='margin: 0;'>Desarrollado por: <b>Jhonestebanpenagos@gmail.com</b></p>
             </div>
-            <hr style="border: none; height: 1px; background: linear-gradient(90deg, transparent, {"#F59E0B"}, transparent); margin-bottom: 30px;">
+            <hr style="border: none; height: 1px; background: linear-gradient(90deg, transparent, #F59E0B, transparent); margin-bottom: 30px;">
         """, unsafe_allow_html=True)
 
         st.markdown("<h3 style='text-align: center; margin-bottom: 20px;'>ACCESO DE USUARIOS</h3>", unsafe_allow_html=True)
