@@ -1213,6 +1213,7 @@ if 'usuario' not in st.session_state: st.session_state['usuario'] = None
 if 'rol' not in st.session_state: st.session_state['rol'] = None
 if 'user_doc' not in st.session_state:       st.session_state['user_doc'] = None
 if 'session_token' not in st.session_state:  st.session_state['session_token'] = None
+if 'sla_alertas_count' not in st.session_state: st.session_state['sla_alertas_count'] = 0
 
 # 2. Función Logout (Limpiando URL también)
 def logout():
@@ -1540,7 +1541,14 @@ if choice == "Tablero de Mando":
     df_act_sla = run_query("activos")
 
     # 2. Verificar SLA (se ejecuta una vez por sesión)
-    verificar_sla_y_alertar(df, df_users, df_act_sla) 
+    verificar_sla_y_alertar(df, df_users, df_act_sla)
+
+    # Mostrar toast si hay alertas pendientes
+    if st.session_state.get('sla_alertas_count', 0) > 0:
+        n = st.session_state['sla_alertas_count']
+        st.toast(f"⚠️ {n} órdenes superaron su tiempo límite", icon="🚨")
+        st.session_state['sla_alertas_count'] = 0  # limpiar para no repetir
+
     
     # 3. Métricas KPI
     mostrar_metricas_inteligentes(df, df_users, df_solicitudes)
