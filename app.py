@@ -183,8 +183,10 @@ def _run_query_live(table_name, filters, order_by):
     if filters:
         for key, value in filters.items():
             query = query.eq(key, value)
-    return query.order(order_by).execute()
-    """Función optimizada para consultas con cache de 1 segundo"""
+    # Agregamos .data para que devuelva una lista simple de diccionarios
+    response = query.order(order_by).execute()
+    return response.data
+    
     try:
         query = supabase.table(table_name).select("*")
         
