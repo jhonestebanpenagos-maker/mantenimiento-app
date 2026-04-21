@@ -923,7 +923,7 @@ def render_orion_svg(color):
             <style>
                 .star {{ fill: white; filter: drop-shadow(0 0 2px white); }}
                 .belt {{ stroke: {color}; filter: drop-shadow(0 0 5px {color}); stroke-width: 2; opacity: 0.8; }}
-                .line {{ stroke: {PRO_ORANGE}; stroke-width: 1; opacity: 0.4; }}
+                .line {{ stroke: {color}; stroke-width: 1; opacity: 0.4; }}
             </style>
             <path class="line" d="M100 150 L200 50 L300 150 L250 250 L150 250 L100 150 Z"/>
             <line class="belt" x1="160" y1="180" x2="200" y2="200"/>
