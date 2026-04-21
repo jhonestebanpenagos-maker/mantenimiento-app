@@ -1745,6 +1745,115 @@ def mostrar_kpis_industriales(df_ordenes, df_act):
         else:
             st.info("Sin datos suficientes para MTBF (se necesitan 2+ fallas por activo).")
 
+# ==============================================================================
+# 🚦 SEMÁFORO DE CARGA DE TÉCNICOS
+# ==============================================================================
+def semaforo_tecnicos(df_ordenes, df_users):
+    """Visualización rápida del estado de carga de cada técnico"""
+    
+    if df_ordenes.empty or df_users.empty:
+        return
+
+    LIMITE_OCUPADO      = 3   # más de 3 órdenes = Ocupado
+    LIMITE_SOBRECARGADO = 6   # más de 6 órdenes = Sobrecargado
+
+    abiertas = df_ordenes[df_ordenes['estado'] == 'Abierta']
+    conteo   = abiertas.groupby('tecnico_asignado').size().reset_index(name='ordenes_abiertas')
+    conteo['tecnico_asignado'] = conteo['tecnico_asignado'].astype(str)
+
+    st.markdown("### 🚦 Estado de Carga — Técnicos")
+    st.caption("Basado en órdenes con estado Abierta asignadas a cada persona.")
+
+    cols = st.columns(len(df_users))
+
+    for i, (_, user) in enumerate(df_users.iterrows()):
+        uid  = str(user['id'])
+        nom  = user['nombre']
+        rol_u = user['rol']
+        fila = conteo[conteo['tecnico_asignado'] == uid]
+        n    = int(fila['ordenes_abiertas'].values[0]) if not fila.empty else 0
+
+        if n == 0:
+            color  = "#10B981"
+            estado = "LIBRE"
+            icono  = "🟢"
+            barra  = 0
+        elif n <= LIMITE_OCUPADO:
+            color  = "#F59E0B"
+            estado = "OCUPADO"
+            icono  = "🟡"
+            barra  = 40
+        elif n <= LIMITE_SOBRECARGADO:
+            color  = "#EA580C"
+            estado = "CARGADO"
+            icono  = "🟠"
+            barra  = 70
+        else:
+            color  = "#EF4444"
+            estado = "CRÍTICO"
+            icono  = "🔴"
+            barra  = 100
+
+        with cols[i]:
+            st.markdown(f"""
+            <div style="
+                background-color: rgba(30,41,59,0.8);
+                border: 2px solid {color};
+                border-radius: 12px;
+                padding: 15px 10px;
+                text-align: center;
+                margin: 5px 0;
+            ">
+                <div style="font-size: 1.8rem; margin-bottom: 5px;">{icono}</div>
+                <div style="
+                    color: white;
+                    font-weight: 700;
+                    font-size: 0.9rem;
+                    margin-bottom: 2px;
+                    white-space: nowrap;
+                    overflow: hidden;
+                    text-overflow: ellipsis;
+                ">{nom.split()[0]}</div>
+                <div style="
+                    color: #9CA3AF;
+                    font-size: 0.75rem;
+                    margin-bottom: 8px;
+                ">{rol_u}</div>
+                <div style="
+                    color: {color};
+                    font-weight: 800;
+                    font-size: 1.8rem;
+                    line-height: 1;
+                ">{n}</div>
+                <div style="
+                    color: #9CA3AF;
+                    font-size: 0.7rem;
+                    margin-bottom: 8px;
+                ">órdenes</div>
+                <div style="
+                    background-color: rgba(255,255,255,0.1);
+                    border-radius: 4px;
+                    height: 4px;
+                    margin: 5px 0;
+                ">
+                    <div style="
+                        background-color: {color};
+                        width: {barra}%;
+                        height: 4px;
+                        border-radius: 4px;
+                        transition: width 0.3s;
+                    "></div>
+                </div>
+                <div style="
+                    color: {color};
+                    font-size: 0.7rem;
+                    font-weight: 700;
+                    letter-spacing: 1px;
+                    margin-top: 4px;
+                ">{estado}</div>
+            </div>
+            """, unsafe_allow_html=True)
+
 if choice == "Tablero de Mando":
     st.title("TABLERO DE MANDO")
     mostrar_notificaciones()
@@ -1825,6 +1934,11 @@ if choice == "Tablero de Mando":
         st.markdown("### 👥 Carga por Técnico")
         with st.container():
             graficar_ordenes_por_tecnico(df, df_users)
+        
+        st.markdown("---")
+        
+        # 8. SEMÁFORO
+        semaforo_tecnicos(df, df_users)
 
     else: 
         st.info("No hay órdenes registradas. El tablero se activará con datos.")
