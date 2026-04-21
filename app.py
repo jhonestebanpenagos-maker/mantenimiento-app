@@ -1214,6 +1214,8 @@ if 'rol' not in st.session_state: st.session_state['rol'] = None
 if 'user_doc' not in st.session_state:       st.session_state['user_doc'] = None
 if 'session_token' not in st.session_state:  st.session_state['session_token'] = None
 if 'sla_alertas_count' not in st.session_state: st.session_state['sla_alertas_count'] = 0
+if 'login_intentos'   not in st.session_state: st.session_state['login_intentos'] = 0
+if 'login_bloqueado'  not in st.session_state: st.session_state['login_bloqueado'] = None
 
 # 2. Función Logout (Limpiando URL también)
 def logout():
