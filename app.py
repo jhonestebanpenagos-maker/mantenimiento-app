@@ -2398,7 +2398,7 @@ elif choice == "Ordenes de Trabajo":
     # ---------------------------------------------------------
     # 1. CARGA DE DATOS (CRÍTICO: HACERLO ANTES DEL INTERCEPTOR)
     # ---------------------------------------------------------
-    df_act = pd.DataFrame(run_query("activos")))
+    df_act = pd.DataFrame(run_query("activos"))
     df_users = run_query("usuarios")
     df_ordenes = run_query("ordenes")
 
