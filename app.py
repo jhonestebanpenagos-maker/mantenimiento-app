@@ -3581,7 +3581,7 @@ elif choice == "Repuestos":
                 y=df_grafica['nombre'],
                 x=df_grafica['stock_actual'],
                 orientation='h',
-                marker=dict(color=#10B981),
+                marker=dict(color='#10B981'),
                 text=df_grafica['stock_actual'],
                 textposition='inside'
             ))
@@ -3590,7 +3590,7 @@ elif choice == "Repuestos":
                 y=df_grafica['nombre'],
                 x=df_grafica['stock_minimo'],
                 orientation='h',
-                marker=dict(color=#F59E0B, opacity=0.5),
+                marker=dict(color='#F59E0B', opacity=0.5),
                 text=df_grafica['stock_minimo'],
                 textposition='inside'
             ))
