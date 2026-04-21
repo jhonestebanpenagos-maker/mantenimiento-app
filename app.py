@@ -1096,6 +1096,74 @@ def render_orion_svg(PRO_ORANGE):
     """, unsafe_allow_html=True)
 
 # ==============================================================================
+# ⏱️ MOTOR DE ALERTAS SLA
+# ==============================================================================
+def verificar_sla_y_alertar(df_ordenes, df_users, df_act):
+    """
+    Revisa órdenes abiertas y envía alerta Telegram si superaron su SLA.
+    Se ejecuta una vez por sesión para no spamear.
+    """
+    if st.session_state.get('sla_verificado'):
+        return
+
+    LIMITES_SLA = {
+        "Crítica": 4,     # horas
+        "Alta":    24,
+        "Media":   72,
+        "Baja":    168    # 7 días
+    }
+
+    if df_ordenes.empty:
+        st.session_state['sla_verificado'] = True
+        return
+
+    ahora     = datetime.now()
+    df_abiertas = df_ordenes[df_ordenes['estado'] == 'Abierta'].copy()
+    
+    if df_abiertas.empty:
+        st.session_state['sla_verificado'] = True
+        return
+
+    df_abiertas['fecha_dt']      = pd.to_datetime(df_abiertas['fecha_creacion'])
+    df_abiertas['horas_abiertas'] = (ahora - df_abiertas['fecha_dt']).dt.total_seconds() / 3600
+
+    map_act  = dict(zip(df_act['id'], df_act['nombre']))            if not df_act.empty   else {}
+    map_user = dict(zip(df_users['id'].astype(str), df_users['nombre'])) if not df_users.empty else {}
+
+    alertas_enviadas = 0
+
+    for _, orden in df_abiertas.iterrows():
+        limite = LIMITES_SLA.get(orden['criticidad'], 999)
+        
+        if orden['horas_abiertas'] > limite:
+            nombre_activo  = map_act.get(orden['activo_id'], "Desconocido")
+            nombre_tecnico = map_user.get(str(orden['tecnico_asignado']), "Sin asignar")
+            horas_str      = f"{orden['horas_abiertas']:.0f}h"
+
+            mensaje = (
+                f"🚨 *ALERTA SLA — OT #{orden['id']}*\n\n"
+                f"📍 *Activo:* {nombre_activo}\n"
+                f"🔴 *Criticidad:* {orden['criticidad']}\n"
+                f"⏱️ *Tiempo abierta:* {horas_str} (límite: {limite}h)\n"
+                f"👷 *Técnico:* {nombre_tecnico}\n\n"
+                f"⚠️ Esta orden requiere atención inmediata."
+            )
+
+            chat_destino = orden.get('chat_id')
+            if chat_destino:
+                notificar_telegram(chat_destino, mensaje)
+            
+            alertas_enviadas += 1
+
+    if alertas_enviadas > 0:
+        st.toast(
+            f"⚠️ {alertas_enviadas} órdenes superaron su tiempo límite", 
+            icon="🚨"
+        )
+    
+    st.session_state['sla_verificado'] = True
+
+# ==============================================================================
 # 🚀 INTERCEPTOR PÚBLICO (ACCESO QR)
 # ==============================================================================
 query_params = st.query_params
