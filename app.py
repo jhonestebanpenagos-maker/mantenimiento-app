@@ -1103,8 +1103,8 @@ def verificar_sla_y_alertar(df_ordenes, df_users, df_act):
     Revisa órdenes abiertas y envía alerta Telegram si superaron su SLA.
     Se ejecuta una vez por sesión para no spamear.
     """
-  #  if st.session_state.get('sla_verificado'):
-      #  return
+    if st.session_state.get('sla_verificado'):
+        return
 
     LIMITES_SLA = {
         "Crítica": 4,     # horas
