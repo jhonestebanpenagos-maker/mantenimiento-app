@@ -822,6 +822,11 @@ def verificar_sla_y_alertar(df_ordenes, df_users, df_act):
     if st.session_state.get('sla_verificado'):
         return
 
+    # --- ESCUDO DE SEGURIDAD: Convertir a DataFrame si vienen como listas ---
+    df_ordenes = pd.DataFrame(df_ordenes) if not isinstance(df_ordenes, pd.DataFrame) else df_ordenes
+    df_users = pd.DataFrame(df_users) if not isinstance(df_users, pd.DataFrame) else df_users
+    df_act = pd.DataFrame(df_act) if not isinstance(df_act, pd.DataFrame) else df_act
+
     LIMITES_SLA = {
         "Crítica": 4,     # horas
         "Alta":    24,
@@ -829,12 +834,18 @@ def verificar_sla_y_alertar(df_ordenes, df_users, df_act):
         "Baja":    168    # 7 días
     }
 
+    # Ahora .empty funcionará siempre
     if df_ordenes.empty:
         st.session_state['sla_verificado'] = True
         return
 
-    ahora     = datetime.now()
-    df_abiertas = df_ordenes[df_ordenes['estado'] == 'Abierta'].copy()
+    ahora = datetime.now()
+    
+    # Aseguramos que la columna 'estado' exista antes de filtrar
+    if 'estado' in df_ordenes.columns:
+        df_abiertas = df_ordenes[df_ordenes['estado'] == 'Abierta'].copy()
+    else:
+        df_abiertas = pd.DataFrame()
     
     if df_abiertas.empty:
         st.session_state['sla_verificado'] = True
