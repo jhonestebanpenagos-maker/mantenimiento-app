@@ -417,13 +417,17 @@ def graficar_ordenes_por_tecnico(df_ordenes, df_users):
     df_ordenes = pd.DataFrame(df_ordenes) if not isinstance(df_ordenes, pd.DataFrame) else df_ordenes
     df_users = pd.DataFrame(df_users) if not isinstance(df_users, pd.DataFrame) else df_users
 
+def graficar_ordenes_por_tecnico(df_ordenes, df_users):
+    """Muestra gráfico compacto de órdenes por técnico."""
+    # ESCUDO: Aseguramos formato Pandas
+    df_ordenes = pd.DataFrame(df_ordenes) if not isinstance(df_ordenes, pd.DataFrame) else df_ordenes
+    df_users = pd.DataFrame(df_users) if not isinstance(df_users, pd.DataFrame) else df_users
+
     if df_ordenes.empty or df_users.empty:
         st.info("No hay datos suficientes para mostrar la carga por técnico.")
-        return:
-    """Muestra gráfico compacto de órdenes por técnico"""
-    if df_ordenes.empty or df_users.empty:
-        st.info("No hay datos de técnicos")
         return
+
+    # Aquí continúa el resto de tu lógica para crear el gráfico...
     
     # Crear mapeo de IDs a nombres de técnicos
     user_map = dict(zip(df_users['id'].astype(str), df_users['nombre']))
