@@ -161,8 +161,29 @@ def subir_archivo_generico(archivo):
             return None
     return None
 
-@st.cache_data(ttl=15)  # Cache de 1 segundo para datos en tiempo real
 def run_query(table_name, filters=None, order_by="id"):
+    """
+    Consulta datos de Supabase. 
+    Aplica caché solo a tablas maestras para optimizar velocidad sin perder tiempo real en procesos críticos.
+    """
+    # Tablas que NO cambian seguido (Maestras)
+    tablas_maestras = ["usuarios", "activos", "categorias", "ubicaciones"]
+    
+    if table_name in tablas_maestras:
+        return _run_query_cached(table_name, filters, order_by)
+    else:
+        return _run_query_live(table_name, filters, order_by)
+
+@st.cache_data(ttl=600) # Caché de 10 minutos para datos que casi nunca cambian
+def _run_query_cached(table_name, filters, order_by):
+    return _run_query_live(table_name, filters, order_by)
+
+def _run_query_live(table_name, filters, order_by):
+    query = supabase.table(table_name).select("*")
+    if filters:
+        for key, value in filters.items():
+            query = query.eq(key, value)
+    return query.order(order_by).execute()
     """Función optimizada para consultas con cache de 1 segundo"""
     try:
         query = supabase.table(table_name).select("*")
