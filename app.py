@@ -1103,8 +1103,8 @@ def verificar_sla_y_alertar(df_ordenes, df_users, df_act):
     Revisa órdenes abiertas y envía alerta Telegram si superaron su SLA.
     Se ejecuta una vez por sesión para no spamear.
     """
-    if st.session_state.get('sla_verificado'):
-        return
+  #  if st.session_state.get('sla_verificado'):
+      #  return
 
     LIMITES_SLA = {
         "Crítica": 4,     # horas
@@ -1538,16 +1538,18 @@ if choice == "Tablero de Mando":
     df = run_query("ordenes")
     df_users = run_query("usuarios")
     df_solicitudes = run_query("solicitudes")
-    df_act_sla = run_query("activos")
+    df_act_sla = run_query("activos")a
 
     # 2. Verificar SLA (se ejecuta una vez por sesión)
     verificar_sla_y_alertar(df, df_users, df_act_sla)
+    st.caption(f"DEBUG — sla_alertas_count: {st.session_state.get('sla_alertas_count', 0)}")
 
     # Mostrar toast si hay alertas pendientes
     if st.session_state.get('sla_alertas_count', 0) > 0:
         n = st.session_state['sla_alertas_count']
+        st.error(f"🚨 ALERTA SLA: {n} órdenes superaron su tiempo límite")
         st.toast(f"⚠️ {n} órdenes superaron su tiempo límite", icon="🚨")
-        st.session_state['sla_alertas_count'] = 0  # limpiar para no repetir
+        st.session_state['sla_alertas_count'] = 0
 
     
     # 3. Métricas KPI
