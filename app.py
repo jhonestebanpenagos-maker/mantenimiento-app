@@ -1159,22 +1159,26 @@ def logout():
 if st.session_state['usuario'] is None:
     query_params = st.query_params
     if "session_id" in query_params:
-        user_doc_url = query_params["session_id"]
-        try:
-            # Buscamos al usuario automáticamente
-            res = supabase.table("usuarios").select("*").eq("documento", user_doc_url).execute()
-            if res.data:
-                user = res.data[0]
-                st.session_state['usuario'] = user['nombre']
-                st.session_state['rol'] = user['rol']
+        token_url      = query_params["session_id"]
+        token_guardado = st.session_state.get('session_token')
+        doc_guardado   = st.session_state.get('user_doc')
+
+        if token_guardado and token_url == token_guardado and doc_guardado:
+            
+            try:
+                res = supabase.table("usuarios").select("*").eq("documento",doc_guardado).execute()
+                if res.data:
+                    user = res.data[0]
+                    st.session_state['usuario'] = user['nombre']
+                    st.session_state['rol'] = user['rol']
                 
                 # Recuperar la página donde estaba (si existe)
-                if "last_page" in query_params:
-                    st.session_state.current_page = query_params["last_page"]
+                    if "last_page" in query_params:
+                        st.session_state.current_page = query_params["last_page"]
                 
-                st.rerun() # Recargamos para entrar directo
-        except Exception as e:
-            st.error(f"Error recuperando sesión: {e}")
+                    st.rerun() # Recargamos para entrar directo
+            except Exception as e:
+                st.error(f"Error recuperando sesión: {e}")
 
 # ==============================================================================
 # 🔒 PANTALLA DE ACCESO (LOGIN)
