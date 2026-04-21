@@ -1901,6 +1901,92 @@ def semaforo_tecnicos(df_ordenes, df_users):
             </div>
             """, unsafe_allow_html=True)
 
+# ==============================================================================
+# 🤖 ASIGNACIÓN INTELIGENTE DE TÉCNICOS
+# ==============================================================================
+def sugerir_tecnico(df_ordenes, df_users):
+    """
+    Sugiere el técnico más disponible basándose en carga actual.
+    Retorna (id, nombre, n_ordenes) del técnico sugerido.
+    """
+    if df_users.empty:
+        return None, None, 0
+
+    # Solo técnicos y programadores (no admins para tareas de campo)
+    df_tec = df_users[df_users['rol'].isin(['Tecnico', 'Programador'])].copy()
+
+    if df_tec.empty:
+        df_tec = df_users.copy()
+
+    # Contar órdenes abiertas por técnico
+    abiertas = df_ordenes[df_ordenes['estado'] == 'Abierta'] if not df_ordenes.empty else pd.DataFrame()
+
+    conteo = {}
+    for _, u in df_tec.iterrows():
+        uid = str(u['id'])
+        if not abiertas.empty:
+            n = len(abiertas[abiertas['tecnico_asignado'] == uid])
+        else:
+            n = 0
+        conteo[uid] = {
+            'nombre': u['nombre'],
+            'ordenes': n,
+            'id': u['id']
+        }
+
+    # Ordenar por menor carga
+    ordenado = sorted(conteo.values(), key=lambda x: x['ordenes'])
+    mejor    = ordenado[0]
+
+    return mejor['id'], mejor['nombre'], mejor['ordenes']
+
+
+def render_sugerencia_tecnico(df_ordenes, df_users):
+    """
+    Muestra una tarjeta visual con el técnico sugerido.
+    Retorna el nombre sugerido para preseleccionar el selectbox.
+    """
+    id_sug, nom_sug, n_sug = sugerir_tecnico(df_ordenes, df_users)
+
+    if not nom_sug:
+        return None
+
+    # Color según carga
+    if n_sug == 0:
+        color, estado = "#10B981", "LIBRE"
+    elif n_sug <= 3:
+        color, estado = "#F59E0B", "DISPONIBLE"
+    else:
+        color, estado = "#EA580C", "CARGADO"
+
+    st.markdown(f"""
+    <div style="
+        background-color: rgba(16, 185, 129, 0.1);
+        border: 1px solid {color};
+        border-radius: 8px;
+        padding: 12px 16px;
+        margin-bottom: 10px;
+        display: flex;
+        align-items: center;
+        gap: 15px;
+    ">
+        <div style="font-size: 1.5rem;">🤖</div>
+        <div>
+            <div style="color: {color}; font-weight: 700; font-size: 0.85rem;">
+                SUGERENCIA AUTOMÁTICA
+            </div>
+            <div style="color: white; font-size: 1rem; font-weight: 600;">
+                {nom_sug}
+            </div>
+            <div style="color: #9CA3AF; font-size: 0.8rem;">
+                {n_sug} órdenes abiertas — {estado}
+            </div>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    return nom_sug
+
 if choice == "Tablero de Mando":
     st.title("TABLERO DE MANDO")
     mostrar_notificaciones()
@@ -3114,12 +3200,19 @@ elif choice == "Ordenes de Trabajo":
                             with cols_val[2]:
                                 tech_options = {u['nombre']: u['id'] for i, u in df_users.iterrows()}
                                 
-                                asignar_a = st.selectbox(
-                                    "Asignar a", 
-                                    list(tech_options.keys()), 
-                                    index=None,
-                                    placeholder="Seleccionar técnico..."
-                                )
+                                # Sugerencia automática
+                            _, nom_sug_b, _ = sugerir_tecnico(df_ordenes, df_users)
+                            idx_sug_b = 0
+                            tech_keys_b = list(tech_options.keys())
+                            if nom_sug_b and nom_sug_b in tech_keys_b:
+                                idx_sug_b = tech_keys_b.index(nom_sug_b)
+
+                            asignar_a = st.selectbox(
+                                "Asignar a",
+                                tech_keys_b,
+                                index=idx_sug_b,
+                                help="🤖 Preseleccionado por menor carga actual"
+                            )
                                 
                                 sug = sol['prioridad_sugerida']
                                 val_defecto = sug if sug in ["Baja", "Media", "Alta", "Crítica"] else "Media"
@@ -3436,21 +3529,34 @@ elif choice == "Ordenes de Trabajo":
             st.info("Creación rápida: Los campos se limpiarán automáticamente al guardar.")
             
             if not df_act.empty:
-                act_dict = dict(zip(df_act['nombre'], df_act['id']))
-                
-                # Usamos clear_on_submit=True para limpiar todo al terminar
-                with st.form("ot_directa", clear_on_submit=True):
-                    
-                    sel_act_dir = st.selectbox("Activo", sorted(act_dict.keys())) 
-                    
-                    c1, c2 = st.columns(2)
-                    tipo_d = c1.selectbox("Tipo", ["Correctivo", "Preventivo", "Predictivo", "Mejora"])
-                    crit_d = c2.select_slider("Criticidad", ["Baja", "Media", "Alta", "Crítica"])
-                    
-                    desc_d = st.text_area("Descripción")
-                    
-                    tech_opts_d = {u['nombre']: u['id'] for i, u in df_users.iterrows()}
-                    asig_d = st.selectbox("Asignar", list(tech_opts_d.keys()))
+            act_dict = dict(zip(df_act['nombre'], df_act['id']))
+
+            # Sugerencia FUERA del form para que se vea antes de llenar
+            nom_sugerido = render_sugerencia_tecnico(df_ordenes, df_users)
+
+            with st.form("ot_directa", clear_on_submit=True):
+
+                sel_act_dir = st.selectbox("Activo", sorted(act_dict.keys()))
+
+                c1, c2 = st.columns(2)
+                tipo_d = c1.selectbox("Tipo", ["Correctivo", "Preventivo", "Predictivo", "Mejora"])
+                crit_d = c2.select_slider("Criticidad", ["Baja", "Media", "Alta", "Crítica"])
+
+                desc_d = st.text_area("Descripción")
+
+                tech_opts_d = {u['nombre']: u['id'] for i, u in df_users.iterrows()}
+
+                # Preseleccionar el técnico sugerido
+                idx_sug = 0
+                if nom_sugerido and nom_sugerido in list(tech_opts_d.keys()):
+                    idx_sug = list(tech_opts_d.keys()).index(nom_sugerido)
+
+                asig_d = st.selectbox(
+                    "Asignar Técnico",
+                    list(tech_opts_d.keys()),
+                    index=idx_sug,
+                    help="🤖 Preseleccionado automáticamente por menor carga"
+                )
                     
                     st.markdown("---")
                     st.markdown("##### 📎 Adjuntos Iniciales")
