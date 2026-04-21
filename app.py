@@ -3529,7 +3529,7 @@ elif choice == "Ordenes de Trabajo":
             st.info("Creación rápida: Los campos se limpiarán automáticamente al guardar.")
             
             if not df_act.empty:
-            act_dict = dict(zip(df_act['nombre'], df_act['id']))
+                act_dict = dict(zip(df_act['nombre'], df_act['id']))
 
             # Sugerencia FUERA del form para que se vea antes de llenar
             nom_sugerido = render_sugerencia_tecnico(df_ordenes, df_users)
