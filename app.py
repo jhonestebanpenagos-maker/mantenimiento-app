@@ -3215,8 +3215,8 @@ elif choice == "Ordenes de Trabajo":
                             )
                                 
                             sug = sol['prioridad_sugerida']
-                                val_defecto = sug if sug in ["Baja", "Media", "Alta", "Crítica"] else "Media"
-                                criticidad_final = st.select_slider("Definir Criticidad", options=["Baja", "Media", "Alta", "Crítica"], value=val_defecto)
+                            val_defecto = sug if sug in ["Baja", "Media", "Alta", "Crítica"] else "Media"
+                            criticidad_final = st.select_slider("Definir Criticidad", options=["Baja", "Media", "Alta", "Crítica"], value=val_defecto)
                             
                             with cols_val[3]:
                                 st.markdown("<br>", unsafe_allow_html=True)
