@@ -826,7 +826,7 @@ def graficar_estado_barras(df):
     if df.empty: return
     conteo = df['estado'].value_counts().reset_index()
     conteo.columns = ['Estado', 'Cantidad']
-    colores = {"Abierta": #F59E0B, "Concluida": #10B981}
+    colores = {"Abierta": "#F59E0B", "Concluida": "#10B981"}
     fig = px.bar(conteo, x='Cantidad', y='Estado', orientation='h', 
                  color='Estado', color_discrete_map=colores, text='Cantidad')
     fig.update_layout(
