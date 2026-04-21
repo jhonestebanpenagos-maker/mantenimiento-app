@@ -917,7 +917,7 @@ def graficar_alternativas_visuales(df_ordenes, df_users):
     st.plotly_chart(fig_race, use_container_width=True)
 
 # --- FUNCIÓN AISLADA PARA EL SVG ---
-def render_orion_svg(PRO_ORANGE):
+def render_orion_svg("#F59E0B"):
     ORION_SVG = f"""
         <svg width="250" height="250" viewBox="0 0 400 400" fill="none" xmlns="http://www.w3.org/2000/svg">
             <style>
