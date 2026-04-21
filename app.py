@@ -2448,7 +2448,20 @@ elif choice == "Ordenes de Trabajo":
     # ---------------------------------------------------------
     # 1. CARGA DE DATOS (CRÍTICO: HACERLO ANTES DEL INTERCEPTOR)
     # ---------------------------------------------------------
-    df_act = run_query("activos")
+    # 1. Carga limpia (sin doble pd.DataFrame)
+df_act = run_query("activos")
+
+# 2. Antes de mostrar el editor (alrededor de la línea 2420), 
+# asegúrate de que no haya nulos que rompan a React:
+df_mostrar = df_act.copy().fillna("")
+
+# 3. Usa el editor con una llave (key) única para evitar el bucle de estado:
+edited_df = st.data_editor(
+    df_mostrar,
+    use_container_width=True,
+    hide_index=True,
+    key="editor_activos_unique" # Esto evita el error de React #185
+)
     df_users = run_query("usuarios")
     df_ordenes = run_query("ordenes")
 
