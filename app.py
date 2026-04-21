@@ -1334,13 +1334,15 @@ with st.sidebar:
         menu = [
             ("📊", "Tablero"),
             ("📦", "Inventario Activos"), 
-            ("🛠️", "Órdenes de Trabajo"), 
+            ("🛠️", "Órdenes de Trabajo"),
+            ("🔩", "Repuestos"),
             ("👤", "Usuarios")
         ]
         valores = [
             "Tablero de Mando",
             "Inventario Activos", 
-            "Ordenes de Trabajo", 
+            "Ordenes de Trabajo",
+            "Repuestos",
             "Usuarios"
         ]
     elif rol == "Programador":
