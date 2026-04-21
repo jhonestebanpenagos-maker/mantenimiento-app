@@ -1223,6 +1223,8 @@ def logout():
     st.session_state['rol'] = None
     st.session_state['user_doc']      = None
     st.session_state['session_token'] = None
+    st.session_state['sla_verificado'] = False  # ← LÍNEA NUEVA
+    st.session_state['sla_alertas_count'] = 0   # ← LÍNEA NUEVA
     st.query_params.clear() # Limpia la URL para que no se vuelva a loguear solo
     st.rerun()
 
@@ -3199,24 +3201,24 @@ elif choice == "Ordenes de Trabajo":
                             
                             with cols_val[2]:
                                 tech_options = {u['nombre']: u['id'] for i, u in df_users.iterrows()}
-                                
-                            # Sugerencia automática
-                            _, nom_sug_b, _ = sugerir_tecnico(df_ordenes, df_users)
-                            idx_sug_b = 0
-                            tech_keys_b = list(tech_options.keys())
-                            if nom_sug_b and nom_sug_b in tech_keys_b:
-                                idx_sug_b = tech_keys_b.index(nom_sug_b)
 
-                            asignar_a = st.selectbox(
-                                "Asignar a",
-                                tech_keys_b,
-                                index=idx_sug_b,
-                                help="🤖 Preseleccionado por menor carga actual"
-                            )
-                                
-                            sug = sol['prioridad_sugerida']
-                            val_defecto = sug if sug in ["Baja", "Media", "Alta", "Crítica"] else "Media"
-                            criticidad_final = st.select_slider("Definir Criticidad", options=["Baja", "Media", "Alta", "Crítica"], value=val_defecto)
+                                # Sugerencia automática
+                                _, nom_sug_b, _ = sugerir_tecnico(df_ordenes, df_users)
+                                idx_sug_b = 0
+                                tech_keys_b = list(tech_options.keys())
+                                if nom_sug_b and nom_sug_b in tech_keys_b:
+                                    idx_sug_b = tech_keys_b.index(nom_sug_b)
+
+                                asignar_a = st.selectbox(
+                                    "Asignar a",
+                                    tech_keys_b,
+                                    index=idx_sug_b,
+                                    help="🤖 Preseleccionado por menor carga actual"
+                                )
+
+                                sug = sol['prioridad_sugerida']
+                                val_defecto = sug if sug in ["Baja", "Media", "Alta", "Crítica"] else "Media"
+                                criticidad_final = st.select_slider("Definir Criticidad", options=["Baja", "Media", "Alta", "Crítica"], value=val_defecto)
                             
                             with cols_val[3]:
                                 st.markdown("<br>", unsafe_allow_html=True)
