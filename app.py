@@ -1156,11 +1156,8 @@ def verificar_sla_y_alertar(df_ordenes, df_users, df_act):
             alertas_enviadas += 1
 
     if alertas_enviadas > 0:
-        st.toast(
-            f"⚠️ {alertas_enviadas} órdenes superaron su tiempo límite", 
-            icon="🚨"
-        )
-    
+        st.session_state['sla_alertas_count'] = alertas_enviadas
+               
     st.session_state['sla_verificado'] = True
 
 # ==============================================================================
