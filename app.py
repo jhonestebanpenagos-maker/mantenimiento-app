@@ -2513,7 +2513,7 @@ if 'jump_target' in st.session_state and st.session_state.jump_target:
                     idx_est = est_opts.index(orden_actual['estado']) if orden_actual['estado'] in est_opts else 0
                     nuevo_estado = c_edit1.selectbox("Estado", est_opts, index=idx_est)
                     
-                    # Selectores de Técnicos (Alineados exactamente igual)
+                    # Selectores de Técnicos
                     lista_tecnicos = df_users[df_users['rol'].isin(['Tecnico', 'Admin', 'Programador'])]
                     tech_dict = dict(zip(lista_tecnicos['nombre'], lista_tecnicos['id']))
                     tech_actual_id = str(orden_actual['tecnico_asignado'])
@@ -2536,28 +2536,24 @@ if 'jump_target' in st.session_state and st.session_state.jump_target:
                         supabase.table("ordenes").update({
                             "estado": nuevo_estado, 
                             "tecnico_asignado": str(tech_dict[nuevo_tec_nom]),
-                            "activo_id": int(act_dict[nuevo_act_nom]), # Aquí guardamos el cambio de activo
+                            "activo_id": int(act_dict[nuevo_act_nom]),
                             "criticidad": nueva_crit, 
                             "descripcion": nueva_desc
                         }).eq("id", target_id).execute()
                             
-                        st.toast("✅ Orden actualizada. Si cambiaste el activo, ahora podrás borrar el original.")
-                        time.sleep(1.5)
+                        st.toast("✅ Orden actualizada correctamente.")
+                        time.sleep(1.2)
                         st.rerun()
 
-                    # Botón de borrar fuera del form
-                    st.markdown("### 🗑️ Opciones Críticas")
-                    if st.button("ELIMINAR ORDEN DEFINITIVAMENTE", type="secondary", use_container_width=True, key="btn_focus_del"):
-                        supabase.table("ordenes").delete().eq("id", target_id).execute()
-                        st.toast("🗑️ Orden eliminada.")
-                        st.session_state.current_page = "Inventario Activos"
-                        st.session_state.jump_target = None
-                        time.sleep(1.5)
-                        st.rerun()
-                else:
-                    st.error("Orden no encontrada.")
-            except Exception as e:
-                st.error(f"Error: {e}")
+                # Botón de borrar fuera del form (Alineado con el "with")
+                st.markdown("### 🗑️ Opciones Críticas")
+                if st.button("ELIMINAR ORDEN DEFINITIVAMENTE", type="secondary", use_container_width=True, key="btn_focus_del"):
+                    supabase.table("ordenes").delete().eq("id", target_id).execute()
+                    st.toast("🗑️ Orden eliminada.")
+                    st.session_state.current_page = "Inventario Activos"
+                    st.session_state.jump_target = None
+                    time.sleep(1.2)
+                    st.rerun()
 
         # --- CASO 2: PLAN PREVENTIVO (MEJORADO) ---
         elif target_type == "preventivo":
