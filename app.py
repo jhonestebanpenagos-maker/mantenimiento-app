@@ -1830,7 +1830,7 @@ elif choice == "Inventario Activos":
         "Refrigeración Industrial", "Ventilacion"
     ])
 
-    df_act = run_query("activos")
+    df_act = pd.DataFrame(run_query("activos"))
     
     if 'specs_data' not in st.session_state:
         st.session_state.specs_data = pd.DataFrame(columns=["Componente/Dato", "Valor"])
@@ -2398,7 +2398,7 @@ elif choice == "Ordenes de Trabajo":
     # ---------------------------------------------------------
     # 1. CARGA DE DATOS (CRÍTICO: HACERLO ANTES DEL INTERCEPTOR)
     # ---------------------------------------------------------
-    df_act = run_query("activos")
+    df_act = pd.DataFrame(run_query("activos")))
     df_users = run_query("usuarios")
     df_ordenes = run_query("ordenes")
 
@@ -2548,7 +2548,7 @@ elif choice == "Ordenes de Trabajo":
         st.stop()
         
     # Cargar datos necesarios
-    df_act = run_query("activos")
+    df_act = pd.DataFrame(run_query("activos"))
     df_users = run_query("usuarios")
     df_ordenes = run_query("ordenes")
     
