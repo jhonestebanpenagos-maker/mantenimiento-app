@@ -589,7 +589,7 @@ def graficar_ordenes_por_tecnico(df_ordenes, df_users):
         y=df_final['Técnico'],
         x=df_final['Concluidas'],
         orientation='h',
-        marker=dict(color=PRO_GREEN, line=dict(width=0)),
+        marker=dict(color=#10B981, line=dict(width=0)),
         text=df_final['Concluidas'],
         textposition='inside',
         # CORRECCIÓN: Eliminamos "weight='bold'" que causaba el error
@@ -603,7 +603,7 @@ def graficar_ordenes_por_tecnico(df_ordenes, df_users):
         y=df_final['Técnico'],
         x=df_final['Abiertas'],
         orientation='h',
-        marker=dict(color=PRO_ORANGE, line=dict(width=0)),
+        marker=dict(color=#F59E0B, line=dict(width=0)),
         text=df_final['Abiertas'],
         textposition='inside',
         # CORRECCIÓN: Eliminamos "weight='bold'" que causaba el error
@@ -826,7 +826,7 @@ def graficar_estado_barras(df):
     if df.empty: return
     conteo = df['estado'].value_counts().reset_index()
     conteo.columns = ['Estado', 'Cantidad']
-    colores = {"Abierta": PRO_ORANGE, "Concluida": PRO_GREEN}
+    colores = {"Abierta": #F59E0B, "Concluida": #10B981}
     fig = px.bar(conteo, x='Cantidad', y='Estado', orientation='h', 
                  color='Estado', color_discrete_map=colores, text='Cantidad')
     fig.update_layout(
@@ -1118,10 +1118,10 @@ if st.session_state['usuario'] is None:
         """, unsafe_allow_html=True)
 
         st.markdown(f"""
-            <div class='card-style' style='padding: 10px; margin-top: 0px; margin-bottom: 30px; text-align: center; font-size: 0.85em; color: {PRO_ORANGE}; border: none; box-shadow: none; background: transparent;'>
+            <div class='card-style' style='padding: 10px; margin-top: 0px; margin-bottom: 30px; text-align: center; font-size: 0.85em; color: {#F59E0B}; border: none; box-shadow: none; background: transparent;'>
                 <p style='margin: 0;'>Desarrollado por: <b>Jhonestebanpenagos@gmail.com</b></p>
             </div>
-            <hr style="border: none; height: 1px; background: linear-gradient(90deg, transparent, {PRO_ORANGE}, transparent); margin-bottom: 30px;">
+            <hr style="border: none; height: 1px; background: linear-gradient(90deg, transparent, {#F59E0B}, transparent); margin-bottom: 30px;">
         """, unsafe_allow_html=True)
 
         st.markdown("<h3 style='text-align: center; margin-bottom: 20px;'>ACCESO DE USUARIOS</h3>", unsafe_allow_html=True)
@@ -3581,7 +3581,7 @@ elif choice == "Repuestos":
                 y=df_grafica['nombre'],
                 x=df_grafica['stock_actual'],
                 orientation='h',
-                marker=dict(color=PRO_GREEN),
+                marker=dict(color=#10B981),
                 text=df_grafica['stock_actual'],
                 textposition='inside'
             ))
@@ -3590,7 +3590,7 @@ elif choice == "Repuestos":
                 y=df_grafica['nombre'],
                 x=df_grafica['stock_minimo'],
                 orientation='h',
-                marker=dict(color=PRO_ORANGE, opacity=0.5),
+                marker=dict(color=#F59E0B, opacity=0.5),
                 text=df_grafica['stock_minimo'],
                 textposition='inside'
             ))
