@@ -1716,7 +1716,10 @@ if choice == "Tablero de Mando":
     df_act_sla = run_query("activos")
 
     # 2. Verificar SLA (se ejecuta una vez por sesión)
-    verificar_sla_y_alertar(df, df_users, df_act_sla)
+    # Asegúrate de que los datos se conviertan a DataFrame antes de enviarlos a la función
+    data_ordenes = run_query("ordenes")
+    df_convertido = pd.DataFrame(data_ordenes) 
+    verificar_sla_y_alertar(df_convertido, df_users, df_act_sla)
     
 
     # Mostrar toast si hay alertas pendientes
