@@ -711,8 +711,17 @@ def graficar_estado_barras(df):
 # 🚀 NUEVAS GRÁFICAS: FLUJO & CARRERA
 # ==============================================================================
 def graficar_alternativas_visuales(df_ordenes, df_users):
-    """Genera las gráficas de Flujo (Sankey/Parallel) y Carrera (Strip)"""
-    if df_ordenes.empty: return
+    """Genera visualizaciones avanzadas de la gestión."""
+    # ESCUDO: Aseguramos formato Pandas
+    df_ordenes = pd.DataFrame(df_ordenes) if not isinstance(df_ordenes, pd.DataFrame) else df_ordenes
+    df_users = pd.DataFrame(df_users) if not isinstance(df_users, pd.DataFrame) else df_users
+
+    if df_ordenes.empty:
+        st.info("No hay datos para graficar.")
+        return
+
+    # Ahora el mapeo funcionará sin errores
+    map_user = dict(zip(df_users['id'].astype(str), df_users['nombre'])) if not df_users.empty else {}
 
     # 1. Preparación de Datos
     df_vis = df_ordenes.copy()
