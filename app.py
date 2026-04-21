@@ -1530,6 +1530,79 @@ def render_tab_preventivos(df_act, df_users):
         else:
             st.info("👍 Todo al día. No hay mantenimientos pendientes para hoy.")
 
+# ==============================================================================
+# 📊 GENERADOR DE EXCEL
+# ==============================================================================
+def generar_excel_historial(df_ordenes, df_act, df_users):
+    """Genera un Excel completo con el historial de órdenes"""
+    buffer = io.BytesIO()
+    
+    df_export = df_ordenes.copy()
+    
+    # Enriquecer con nombres en lugar de IDs
+    map_act  = dict(zip(df_act['id'], df_act['nombre']))            if not df_act.empty  else {}
+    map_user = dict(zip(df_users['id'].astype(str), df_users['nombre'])) if not df_users.empty else {}
+    
+    df_export['Activo']   = df_export['activo_id'].map(map_act).fillna('Desconocido')
+    df_export['Tecnico']  = df_export['tecnico_asignado'].map(map_user).fillna('Sin asignar')
+    
+    # Calcular duración en horas
+    df_export['fecha_creacion'] = pd.to_datetime(df_export['fecha_creacion'])
+    df_export['fecha_cierre']   = pd.to_datetime(df_export['fecha_cierre'])
+    df_export['Duracion_Horas'] = (
+        df_export['fecha_cierre'] - df_export['fecha_creacion']
+    ).dt.total_seconds() / 3600
+    df_export['Duracion_Horas'] = df_export['Duracion_Horas'].round(1)
+    
+    # Columnas finales ordenadas
+    cols = [
+        'id', 
+        'fecha_creacion', 
+        'fecha_cierre',
+        'Duracion_Horas',
+        'Activo', 
+        'Tecnico',
+        'tipo_mantenimiento', 
+        'criticidad',
+        'estado', 
+        'descripcion', 
+        'comentarios_cierre'
+    ]
+    
+    # Renombrar columnas para que se vean bien en Excel
+    nombres_col = {
+        'id':                  'ID Orden',
+        'fecha_creacion':      'Fecha Apertura',
+        'fecha_cierre':        'Fecha Cierre',
+        'Duracion_Horas':      'Duración (Horas)',
+        'Activo':              'Activo',
+        'Tecnico':             'Técnico',
+        'tipo_mantenimiento':  'Tipo',
+        'criticidad':          'Criticidad',
+        'estado':              'Estado',
+        'descripcion':         'Descripción',
+        'comentarios_cierre':  'Informe de Cierre'
+    }
+    
+    df_final = df_export[cols].rename(columns=nombres_col)
+    df_final = df_final.sort_values('ID Orden', ascending=False)
+    
+    # Escribir Excel con formato
+    with pd.ExcelWriter(buffer, engine='openpyxl') as writer:
+        df_final.to_excel(writer, index=False, sheet_name='Historial OTs')
+        
+        # Autoajustar ancho de columnas
+        worksheet = writer.sheets['Historial OTs']
+        for col in worksheet.columns:
+            max_len = max(
+                len(str(col[0].value)),
+                *[len(str(cell.value)) if cell.value else 0 for cell in col[1:]]
+            )
+            worksheet.column_dimensions[col[0].column_letter].width = min(max_len + 3, 50)
+    
+    buffer.seek(0)
+    return buffer
+
 if choice == "Tablero de Mando":
     st.title("TABLERO DE MANDO")
     mostrar_notificaciones()
@@ -1553,6 +1626,22 @@ if choice == "Tablero de Mando":
     
     # 3. Métricas KPI
     mostrar_metricas_inteligentes(df, df_users, df_solicitudes)
+    
+    # Botón de exportación Excel
+    if not df.empty:
+        col_exp1, col_exp2, col_exp3 = st.columns([3, 1, 1])
+        with col_exp3:
+            try:
+                buffer_excel = generar_excel_historial(df, df_act_sla, df_users)
+                st.download_button(
+                    label="📊 Exportar Excel",
+                    data=buffer_excel,
+                    file_name=f"Historial_OTs_{datetime.now().strftime('%Y%m%d')}.xlsx",
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    use_container_width=True
+                )
+            except Exception as e:
+                st.caption(f"Excel no disponible: {e}")
     
     st.write("") 
 
