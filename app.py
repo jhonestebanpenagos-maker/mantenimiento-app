@@ -2456,15 +2456,16 @@ df_act = run_query("activos")
 df_mostrar = df_act.copy().fillna("")
 
 # 3. Usa el editor con una llave (key) única para evitar el bucle de estado:
-edited_df = st.data_editor(
-    df_mostrar,
-    use_container_width=True,
-    hide_index=True,
-    key="editor_activos_unique" # Esto evita el error de React #185
-)
+    edited_df = st.data_editor(
+        df_mostrar,
+        use_container_width=True,
+        hide_index=True,
+        key="editor_activos_unique"
+    )
+
+    # ESTAS LÍNEAS AHORA ESTÁN BIEN ALINEADAS:
     df_users = run_query("usuarios")
     df_ordenes = run_query("ordenes")
-
     # ==============================================================================
     # 🚀 INTERCEPTOR 3.0: GESTIÓN TOTAL (CON DATOS DISPONIBLES)
     # ==============================================================================
