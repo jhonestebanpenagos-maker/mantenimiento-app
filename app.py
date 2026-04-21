@@ -3200,7 +3200,7 @@ elif choice == "Ordenes de Trabajo":
                             with cols_val[2]:
                                 tech_options = {u['nombre']: u['id'] for i, u in df_users.iterrows()}
                                 
-                                # Sugerencia automática
+                            # Sugerencia automática
                             _, nom_sug_b, _ = sugerir_tecnico(df_ordenes, df_users)
                             idx_sug_b = 0
                             tech_keys_b = list(tech_options.keys())
@@ -3214,7 +3214,7 @@ elif choice == "Ordenes de Trabajo":
                                 help="🤖 Preseleccionado por menor carga actual"
                             )
                                 
-                                sug = sol['prioridad_sugerida']
+                            sug = sol['prioridad_sugerida']
                                 val_defecto = sug if sug in ["Baja", "Media", "Alta", "Crítica"] else "Media"
                                 criticidad_final = st.select_slider("Definir Criticidad", options=["Baja", "Media", "Alta", "Crítica"], value=val_defecto)
                             
