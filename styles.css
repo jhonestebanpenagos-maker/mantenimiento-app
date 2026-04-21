@@ -1,1 +1,70 @@
+:root {
+    --pro-orange: #F59E0B;
+    --pro-green: #10B981;
+    --bg-dark-clean: #0e1117;
+    --bg-sidebar: #161b22;
+    --bg-card: rgba(30, 41, 59, 0.7);
+    --text-white: #E5E7EB;
+}
 
+/* =========================================
+   1. OPTIMIZACIÓN MÓVIL Y OCULTAMIENTO
+   ========================================= */
+#MainMenu {visibility: hidden;}
+footer {visibility: hidden;}
+header {visibility: hidden;}
+
+@media (max-width: 768px) {
+    .block-container {
+        padding-top: 1.5rem !important;
+        padding-left: 0.5rem !important;
+        padding-right: 0.5rem !important;
+        padding-bottom: 1rem !important;
+    }
+    div[data-testid="metric-container"] { padding: 5% !important; }
+    h1 { font-size: 1.8rem !important; }
+    h2 { font-size: 1.5rem !important; }
+    h3 { font-size: 1.2rem !important; }
+    img { max-width: 100% !important; height: auto !important; }
+    [data-testid="stSidebarNavItems"] .nav-link span { display: none; }
+}
+
+/* =========================================
+   2. ESTILOS GENERALES Y COLORES
+   ========================================= */
+.stApp { background-color: var(--bg-dark-clean); color: var(--text-white); }
+
+/* BARRA LATERAL */
+[data-testid="stSidebar"] { background-color: var(--bg-sidebar); border-right: 1px solid #30363d; }
+[data-testid="stSidebarNav"] span { color: #E5E7EB !important; font-weight: 500; }
+[data-testid="stSidebarNav"] a[aria-current="page"] { background-color: rgba(245, 158, 11, 0.1); border-left: 3px solid var(--pro-orange); }
+
+/* BOTONES DE SALIR / RECHAZAR / ELIMINAR (ROJOS) */
+section[data-testid="stSidebar"] button[kind="secondary"] { background-color: transparent !important; border: 1px solid #fca5a5 !important; }
+section[data-testid="stSidebar"] button[kind="secondary"] p { color: #fca5a5 !important; }
+section[data-testid="stSidebar"] button[kind="secondary"]:hover { background-color: rgba(239, 68, 68, 0.15) !important; }
+section[data-testid="stMain"] button[kind="secondary"] { background-color: #fca5a5 !important; border: 1px solid #ef4444 !important; transition: transform 0.1s; }
+section[data-testid="stMain"] button[kind="secondary"] * { color: #000000 !important; font-weight: 800 !important; }
+section[data-testid="stMain"] button[kind="secondary"] p { color: #000000 !important; }
+section[data-testid="stMain"] button[kind="secondary"]:hover { background-color: #f87171 !important; transform: scale(1.02); border-color: #b91c1c !important; }
+
+/* TEXTOS Y TARJETAS */
+h1, h2, h3 { background: linear-gradient(90deg, var(--pro-orange), var(--pro-green)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; font-weight: 800 !important; text-transform: uppercase; }
+.card-style { background: var(--bg-card); backdrop-filter: blur(12px); border-radius: 12px; padding: 25px; border: 1px solid rgba(255, 255, 255, 0.08); box-shadow: 0 4px 6px rgba(0, 0, 0, 0.2); margin-bottom: 20px; }
+.chart-header { font-size: 1.1rem; font-weight: 700; color: var(--pro-orange); margin-bottom: 15px; border-bottom: 1px solid #30363d; padding-bottom: 8px; display: block; }
+
+/* INPUTS Y BOTONES PRINCIPALES */
+.stTextInput input, .stTextArea textarea, .stSelectbox > div > div { background-color: #0d1117 !important; color: #e6edf3 !important; border: 1px solid #30363d !important; border-radius: 6px; }
+.stTextInput input:focus, .stTextArea textarea:focus { border-color: var(--pro-orange) !important; box-shadow: 0 0 0 1px var(--pro-orange) !important; }
+.stTextInput label, .stSelectbox label, .stTextArea label { color: #E5E7EB !important; font-weight: 600 !important; }
+div.stButton > button:first-child { background: linear-gradient(90deg, var(--pro-orange) 0%, var(--pro-green) 100%) !important; color: white !important; border: none; font-weight: 600; border-radius: 6px; }
+div.stButton > button:first-child:hover { transform: translateY(-2px); opacity: 0.9; }
+
+/* MÉTRICAS Y PESTAÑAS */
+[data-testid="stMetric"] { background: rgba(30, 41, 59, 0.5); border-left: 4px solid var(--pro-green); border-radius: 8px; padding: 15px; }
+[data-testid="stMetricLabel"] { color: #9CA3AF !important; }
+[data-testid="stMetricValue"] { color: #F3F4F6 !important; }
+.stTabs [data-baseweb="tab"] { color: #9CA3AF; font-weight: 600; }
+.stTabs [aria-selected="true"] { color: var(--pro-orange) !important; background-color: transparent !important; border-bottom-color: var(--pro-orange) !important; }
+div[data-testid="stVerticalBlock"] > div:empty { height: 0 !important; margin: 0 !important; }
+[data-testid="stSidebarNav"] { padding-top: 10px !important; }
