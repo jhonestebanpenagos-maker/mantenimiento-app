@@ -672,7 +672,8 @@ def _render_gestion_global(df_act, df_users, df_ordenes):
     if filtro_ot_externo:
         # Búsqueda directa por ID — sin paginación
         try:
-            res = supabase.table("ordenes").select("*").eq("id", int(filtro_ot_externo)).execute()
+            oid_filtro = int(filtro_ot_externo)
+            res = supabase.table("ordenes").select("*").eq("id", oid_filtro).execute()
             if res.data:
                 df_display = pd.DataFrame(res.data)
                 total = 1
