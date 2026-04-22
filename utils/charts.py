@@ -1,5 +1,5 @@
 # ==============================================================================
-# utils/charts.py — OPTIMIZADO
+# utils/charts.py — OPTIMIZADO Y CORREGIDO
 # ==============================================================================
 import streamlit as st
 import pandas as pd
@@ -13,7 +13,7 @@ from datetime import datetime
 # 🧮 CÁLCULOS CACHEADOS
 # ==============================================================================
 @st.cache_data(ttl=60, show_spinner=False)
-def _calcular_datos_tecnicos(df_ordenes_hash, df_ordenes_data, df_users_data):
+def _calcular_datos_tecnicos(ordenes_hash, df_ordenes_data, df_users_data):
     """Cachea el procesamiento de datos por técnico."""
     df_ordenes = pd.DataFrame(df_ordenes_data)
     df_users = pd.DataFrame(df_users_data)
@@ -32,15 +32,15 @@ def _calcular_datos_tecnicos(df_ordenes_hash, df_ordenes_data, df_users_data):
     datos = []
     for tecnico in df['tecnico_nombre'].unique():
         a = abiertas[abiertas['tecnico_nombre'] == tecnico]['cantidad'].sum()
-        c = concluidas[concluidas['tecnico.append({'Técnico': tecnico, 'Abiertas': a, 'Concluidas': c, 'Total': a + c})
+        c = concluidas[concluidas['tecnico_nombre'] == tecnico]['cantidad'].sum()
+        datos.append({'Técnico': tecnico, 'Abiertas': int(a), 'Concluidas': int(c), 'Total': int(a + c)})
     return datos
 
 
 @st.cache_data(ttl=60, show_spinner=False)
-def _calcular_kpis(df_ordenes_data, df_act_data, df_planes_data):
+def _calcular_kpis(ordenes_hash, df_ordenes_data, df_act_data, df_planes_data):
     """Cachea todos los cálculos KPI de una vez."""
-    df_ordenes = pd.DataFrame(df_ordenes_data_nombre'] == tecnico]['cantidad'].sum()
-        datos)
+    df_ordenes = pd.DataFrame(df_ordenes_data)
     df_act = pd.DataFrame(df_act_data)
 
     if df_ordenes.empty:
@@ -49,7 +49,6 @@ def _calcular_kpis(df_ordenes_data, df_act_data, df_planes_data):
     now = datetime.now()
     map_act = dict(zip(df_act['id'], df_act['nombre'])) if not df_act.empty else {}
 
-    # ── Conteos básicos ──
     total = len(df_ordenes)
     df_k = df_ordenes[df_ordenes['estado'] == 'Concluida'].copy()
     concluidas = len(df_k)
@@ -60,7 +59,6 @@ def _calcular_kpis(df_ordenes_data, df_act_data, df_planes_data):
     correctivas = len(df_ordenes[df_ordenes['tipo_mantenimiento'] == 'Correctivo'])
     pct_preventivo = (preventivas / total * 100) if total > 0 else 0
 
-    # ── Backlog ──
     df_abiertas = df_ordenes[df_ordenes['estado'] == 'Abierta'].copy()
     if not df_abiertas.empty:
         df_abiertas['fecha_creacion'] = pd.to_datetime(df_abiertas['fecha_creacion'])
@@ -70,7 +68,6 @@ def _calcular_kpis(df_ordenes_data, df_act_data, df_planes_data):
         backlog_horas = 0
         backlog_ordenes = 0
 
-    # ── MTTR / MTBF (calculado una sola vez) ──
     mttr_prom = mtbf_prom = disponibilidad = tasa_falla = 0
     mttr_por_activo = []
     mtbf_por_activo = []
@@ -84,12 +81,10 @@ def _calcular_kpis(df_ordenes_data, df_act_data, df_planes_data):
 
         df_k['Activo'] = df_k['activo_id'].map(map_act).fillna('Desconocido')
 
-        # MTTR por activo
         mttr_df = df_k.groupby('Activo')['duracion_horas'].mean().round(1).reset_index()
         mttr_df.columns = ['Activo', 'MTTR_horas']
         mttr_por_activo = mttr_df.sort_values('MTTR_horas', ascending=False).head(10).to_dict('records')
 
-        # MTBF por activo (solo una vez)
         df_sorted = df_k.sort_values(['activo_id', 'fecha_creacion']).copy()
         df_sorted['Activo'] = df_sorted['activo_id'].map(map_act).fillna('Desconocido')
         df_sorted['tiempo_entre_fallas'] = (
@@ -104,14 +99,12 @@ def _calcular_kpis(df_ordenes_data, df_act_data, df_planes_data):
             disponibilidad = (mtbf_prom / (mtbf_prom + mttr_prom)) * 100
             tasa_falla = 1000 / mtbf_prom
 
-        # MTBF top 10
         mtbf_top = mtbf_activo.dropna().sort_values('MTBF', ascending=False).head(10)
         mtbf_por_activo = [
             {'Activo': r['Activo'], 'MTBF_horas': round(r['MTBF'], 1)}
             for _, r in mtbf_top.iterrows()
         ]
 
-        # Disponibilidad por activo
         df_disp = df_k.groupby('Activo')['duracion_horas'].mean().reset_index()
         df_disp.columns = ['Activo', 'MTTR']
         df_disp = df_disp.merge(mtbf_activo, on='Activo', how='left')
@@ -119,7 +112,6 @@ def _calcular_kpis(df_ordenes_data, df_act_data, df_planes_data):
         df_disp = df_disp.dropna(subset=['Disponibilidad']).sort_values('Disponibilidad', ascending=True).tail(15)
         disponibilidad_por_activo = df_disp.to_dict('records')
 
-    # ── Cumplimiento de planes ──
     cumplimiento_planes = None
     total_planes = 0
     if df_planes_data:
@@ -142,8 +134,7 @@ def _calcular_kpis(df_ordenes_data, df_act_data, df_planes_data):
     }
 
 
-@st.cache_data(ttl=60, show_spinner=False)
-def _calcular_tops(df_ordenes_data):
+@st.cache_data(ttl=60enes_hash, df_ordenes_data):
     """Cachea cálculos de tops (más antiguas, críticas)."""
     df = pd.DataFrame(df_ordenes_data)
     if df.empty:
@@ -175,7 +166,7 @@ def _calcular_tops(df_ordenes_data):
 
 
 @st.cache_data(ttl=60, show_spinner=False)
-def _calcular_flujo_datos(df_ordenes_data, df_users_data):
+def _calcular_flujo_datos(ordenes_hash, df_ordenes_data, df_users_data):
     """Cachea datos para gráfico de flujo y tiempos."""
     df = pd.DataFrame(df_ordenes_data)
     df_users = pd.DataFrame(df_users_data)
@@ -194,16 +185,68 @@ def _calcular_flujo_datos(df_ordenes_data, df_users_data):
     return df[['Tecnico', 'criticidad', 'estado', 'Dias_Activa', 'id', 'descripcion']]
 
 
+@st.cache_data(ttl=60, show_spinner=False)
+def _calcular_semaforo(ordenes_hash, df_ordenes_data, df_users_data):
+    """Cachea los datos del semáforo de técnicos."""
+    df_ordenes = pd.DataFrame(df_ordenes_data)
+    df_users = pd.DataFrame(df_users_data)
+
+    if df_ordenes.empty or df_users.empty, show_spinner=False)
+def _calcular_tops(ord:
+        return []
+
+    LIMITE_OCUPADO = 3
+    LIMITE_SOBRECARGADO = 6
+
+    abiertas = df_ordenes[df_ordenes['estado'] == 'Abierta']
+    conteo = abiertas.groupby('tecnico_asignado').size().reset_index(name='ordenes_abiertas')
+    conteo['tecnico_asignado'] = conteo['tecnico_asignado'].astype(str)
+
+    resultado = []
+    for _, user in df_users.iterrows():
+        uid = str(user['id'])
+        fila = conteo[conteo['tecnico_asignado'] == uid]
+        n = int(fila['ordenes_abiertas'].values[0]) if not fila.empty else 0
+
+        if n == 0:
+            color, estado, icono, barra = "#10B981", "LIBRE", "🟢", 0
+        elif n <= LIMITE_OCUPADO:
+            color, estado, icono, barra = "#F59E0B", "OCUPADO", "🟡", 40
+        elif n <= LIMITE_SOBRECARGADO:
+            color, estado, icono, barra = "#EA580C", "CARGADO", "🟠", 70
+        else:
+            color, estado, icono, barra = "#EF4444", "CRÍTICO", "🔴", 100
+
+        resultado.append({
+            'id': uid, 'nombre': user['nombre'], 'rol': user['rol'],
+            'ordenes': n, 'color': color, 'estado': estado,
+            'icono': icono, 'barra': barra
+        })
+    return resultado
+
+
+# ==============================================================================
+# 🛠️ HELPERS
+# ==============================================================================
+def _df_to_records(df):
+    """Convierte DataFrame a lista de dicts para caché."""
+    if hasattr(df, 'to_dict'):
+        return df.to_dict('records')
+    return list(df) if df is not None else []
+
+
+def _df_hash(df):
+    """Hash simple para invalidar caché cuando cambian los datos."""
+    return len(df) if hasattr(df, '__len__') else 0
+
+
 # ==============================================================================
 # 📊 GRÁFICOS
 # ==============================================================================
 
 def graficar_ordenes_por_tecnico(df_ordenes, df_users):
-    """Muestra gráfico compacto de órdenes por técnico."""
     datos = _calcular_datos_tecnicos(
-        len(df_ordenes) if hasattr(df_ordenes, '__len__') else 0,
-        df_ordenes.to_dict('records') if hasattr(df_ordenes, 'to_dict') else list(df_ordenes),
-        df_users.to_dict('records') if hasattr(df_users, 'to_dict') else list(df_users)
+        _df_hash(df_ordenes), _df_to_records(df_ordenes), _df_to_records(df_users)
     )
 
     if not datos:
@@ -256,7 +299,17 @@ def graficar_criticidad(df):
                  category_orders={"Nivel": orden_oficial})
     fig.update_layout(
         paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)',
-       :
+        font=dict(color='white'), showlegend=False,
+        margin=dict(l=0, r=0, t=10, b=0), height=250,
+        xaxis=dict(title=None),
+        yaxis=dict(showgrid=True, gridcolor='rgba(255,255,255,0.1)')
+    )
+    fig.update_traces(textfont_size=14, textposition='outside', marker_line_width=0)
+    st.plotly_chart(fig, use_container_width=True)
+
+
+def graficar_torta_tipo(df):
+    if df.empty:
         return
     conteo = df['tipo_mantenimiento'].value_counts().reset_index()
     conteo.columns = ['Tipo', 'Cantidad']
@@ -292,17 +345,14 @@ def graficar_estado_barras(df):
 
 
 def graficar_alternativas_visuales(df_ordenes, df_users):
-    """Versión optimizada: solo renderiza si hay datos y limita puntos."""
     df_vis = _calcular_flujo_datos(
-        df_ordenes.to_dict('records') if hasattr(df_ordenes, 'to_dict') else list(df_ordenes),
-        df_users.to_dict('records') if hasattr(df_users, 'to_dict') else list(df_users)
+        _df_hash(df_ordenes), _df_to_records(df_ordenes), _df_to_records(df_users)
     )
 
     if df_vis.empty:
         st.info("No hay datos para graficar.")
         return
 
-    # Limitar a 200 puntos máximo para parallel_categories (es muy lento con más)
     df_limitado = df_vis.head(200) if len(df_vis) > 200 else df_vis
 
     st.markdown("### 🌊 Flujo de Distribución")
@@ -322,17 +372,7 @@ def graficar_alternativas_visuales(df_ordenes, df_users):
     st.markdown("### 🏎️ Tiempos de Respuesta (La Carrera)")
     st.caption("Cada punto es una Orden. Izquierda = Reciente/Rápido. Derecha = Antiguo/Lento.")
 
-    color_map_crit = {"Alta": "#EF4444",.plotly_chart(fig, use_container_width=True)
-
-
-def graf font=dict(color='white'), showlegend=False,
-        margin=dict(l=0, r=0, t=10, b=0), height=250,
-        xaxis=dict(title=None),
-        yaxis=dict(showgrid=True, gridcolor='rgba(255,255,255,0.1)')
-    )
-    fig.update_traces(textfont_size=14, textposition='outside', marker_line_width=0)
-    sticar_torta_tipo(df):
-    if df.empty "Media": "#10B981", "Crítica": "#7F1D1D"}
+    color_map_crit = {"Alta": "#EF4444", "Media": "#F59E0B", "Baja": "#10B981", "Crítica": "#7F1D1D"}
     fig_race = px.strip(
         df_vis, x="Dias_Activa", y="Tecnico", color="criticidad",
         color_discrete_map=color_map_crit, orientation="h", stripmode="overlay",
@@ -351,7 +391,7 @@ def graf font=dict(color='white'), showlegend=False,
 
 def mostrar_tops_ordenes(df_ordenes):
     top_antiguas, top_criticas = _calcular_tops(
-        df_ordenes.to_dict('records') if hasattr(df_ordenes, 'to_dict') else list(df_ordenes)
+        _df_hash(df_ordenes), _df_to_records(df_ordenes)
     )
 
     if not top_antiguas and not top_criticas:
@@ -409,33 +449,39 @@ def mostrar_tops_ordenes(df_ordenes):
 
 
 # ==============================================================================
-# 🏭 KPIs INDUSTRIALES — UN SOLO CÁLCULO CACHEADO
+# 🏭 KPIs INDUSTRIALES
 # ==============================================================================
 def mostrar_kpis_industriales(df_ordenes, df_act, df_planes=None):
     kpis = _calcular_kpis(
-        df_ordenes.to_dict('records') if hasattr(df_ordenes, 'to_dict') else list(df_ordenes),
-        df_act.to_dict('records') if hasattr(df_act, 'to_dict') else list(df_act),
-        df_planes.to_dict('records') if df_planes is not None and hasattr(df_planes, 'to_dict') else (list(df_planes) if df_planes is not None else None)
+        _df_hash(df_ordenes),
+        _df_to_records(df_ordenes),
+        _df_to_records(df_act),
+        _df_to_records(df_planes) if df_planes is not None else None
     )
 
     if kpis is None:
         st.info("No hay órdenes suficientes para calcular KPIs.")
         return
 
-    # Desempaquetar
-    (total, concluidas, abiertas, por_validar, preventivas, correctivas,
-     pct_preventivo, backlog_horas, backlog_ordenes, mttr_prom, mtbf_prom,
-     disponibilidad, tasa_falla, cumplimiento_planes, total_planes,
-     mttr_por_activo, mtbf_por_activo, disponibilidad_por_activo) = (
-        kpis['total'], kpis['concluidas'], kpis['abiertas'], kpis['por_validar'],
-        kpis['preventivas'], kpis['correctivas'], kpis['pct_preventivo'],
-        kpis['backlog_horas'], kpis['backlog_ordenes'], kpis['mttr_prom'],
-        kpis['mtbf_prom'], kpis['disponibilidad'], kpis['tasa_falla'],
-        kpis['cumplimiento_planes'], kpis['total_planes'],
-        kpis['mttr_por_activo'], kpis['mtbf_por_activo'], kpis['disponibilidad_por_activo']
-    )
+    total = kpis['total']
+    concluidas = kpis['concluidas']
+    abiertas = kpis['abiertas']
+    por_validar = kpis['por_validar']
+    preventivas = kpis['preventivas']
+    correctivas = kpis['correctivas']
+    pct_preventivo = kpis['pct_preventivo']
+    backlog_horas = kpis['backlog_horas']
+    backlog_ordenes = kpis['backlog_ordenes']
+    mttr_prom = kpis['mttr_prom']
+    mtbf_prom = kpis['mtbf_prom']
+    disponibilidad = kpis['disponibilidad']
+    tasa_falla = kpis['tasa_falla']
+    cumplimiento_planes = kpis['cumplimiento_planes']
+    total_planes = kpis['total_planes']
+    mttr_por_activo = kpis['mttr_por_activo']
+    mtbf_por_activo = kpis['mtbf_por_activo']
+    disponibilidad_por_activo = kpis['disponibilidad_por_activo']
 
-    # ── Scorecards ──
     st.markdown("### 🏭 Panel de KPIs Industriales")
     st.caption("Indicadores clave de rendimiento del mantenimiento")
 
@@ -499,7 +545,6 @@ def mostrar_kpis_industriales(df_ordenes, df_act, df_planes=None):
 
     st.markdown("---")
 
-    # ── Tabla resumen ──
     st.markdown("#### 📋 Resumen de Indicadores")
     col_tbl1, col_tbl2 = st.columns(2)
 
@@ -543,7 +588,6 @@ def mostrar_kpis_industriales(df_ordenes, df_act, df_planes=None):
 
     st.markdown("---")
 
-    # ── Gráficos MTTR/MTBF (usando datos ya cacheados) ──
     if mttr_por_activo or mtbf_por_activo:
         col_g1, col_g2 = st.columns(2)
 
@@ -577,7 +621,6 @@ def mostrar_kpis_industriales(df_ordenes, df_act, df_planes=None):
 
         st.markdown("---")
 
-        # ── Disponibilidad por activo ──
         st.markdown("<span class='chart-header'>📊 Disponibilidad por Activo</span>", unsafe_allow_html=True)
         st.caption("Verde = alta disponibilidad | Rojo = necesita atención")
 
@@ -604,7 +647,6 @@ def mostrar_kpis_industriales(df_ordenes, df_act, df_planes=None):
 
         st.markdown("---")
 
-        # ── Composición ──
         st.markdown("### 🧩 Composición del Mantenimiento")
         col_comp1, col_comp2 = st.columns(2)
 
@@ -663,49 +705,9 @@ def mostrar_kpis_industriales(df_ordenes, df_act, df_planes=None):
 # ==============================================================================
 # 🚦 SEMÁFORO DE CARGA DE TÉCNICOS
 # ==============================================================================
-@st.cache_data(ttl=60, show_spinner=False)
-def _calcular_semaforo(df_ordenes_data, df_users_data):
-    """Cachea los datos del semáforo de técnicos."""
-    df_ordenes = pd.DataFrame(df_ordenes_data)
-    df_users = pd.DataFrame(df_users_data)
-
-    if df_ordenes.empty or df_users.empty:
-        return []
-
-    LIMITE_OCUPADO = 3
-    LIMITE_SOBRECARGADO = 6
-
-    abiertas = df_ordenes[df_ordenes['estado'] == 'Abierta']
-    conteo = abiertas.groupby('tecnico_asignado').size().reset_index(name='ordenes_abiertas')
-    conteo['tecnico_asignado'] = conteo['tecnico_asignado'].astype(str)
-
-    resultado = []
-    for _, user in df_users.iterrows():
-        uid = str(user['id'])
-        fila = conteo[conteo['tecnico_asignado'] == uid]
-        n = int(fila['ordenes_abiertas'].values[0]) if not fila.empty else 0
-
-        if n == 0:
-            color, estado, icono, barra = "#10B981", "LIBRE", "🟢", 0
-        elif n <= LIMITE_OCUPADO:
-            color, estado, icono, barra = "#F59E0B", "OCUPADO", "🟡", 40
-        elif n <= LIMITE_SOBRECARGADO:
-            color, estado, icono, barra = "#EA580C", "CARGADO", "🟠", 70
-        else:
-            color, estado, icono, barra = "#EF4444", "CRÍTICO", "🔴", 100
-
-        resultado.append({
-            'id': uid, 'nombre': user['nombre'], 'rol': user['rol'],
-            'ordenes': n, 'color': color, 'estado': estado,
-            'icono': icono, 'barra': barra
-        })
-    return resultado
-
-
 def semaforo_tecnicos(df_ordenes, df_users):
     datos = _calcular_semaforo(
-        df_ordenes.to_dict('records') if hasattr(df_ordenes, 'to_dict') else list(df_ordenes),
-        df_users.to_dict('records') if hasattr(df_users, 'to_dict') else list(df_users)
+        _df_hash(df_ordenes), _df_to_records(df_ordenes), _df_to_records(df_users)
     )
 
     if not datos:
@@ -730,7 +732,7 @@ def semaforo_tecnicos(df_ordenes, df_users):
                 <div style="color:{tec['color']};font-size:0.7rem;font-weight:700;letter-spacing:1px;margin-top:4px;">{tec['estado']}</div>
             </div>
             """, unsafe_allow_html=True)
-            if st.button(f"Ver órdenes", key=f"sem_tec_{tec['id']}", use_container_width=True):
+            if st.button("Ver órdenes", key=f"sem_tec_{tec['id']}", use_container_width=True):
                 st.session_state.current_page = "Ordenes de Trabajo"
                 st.session_state.jump_target = "ordenes_por_activo"
                 st.session_state.jump_id = None
