@@ -89,43 +89,44 @@ def _render_lista(df_act):
 
         if not df_filtered.empty:
             st.markdown(f"###### 🧬 Resultados: {len(df_filtered)}")
-            st.info("👆 **Haga clic en una fila** para ver Foto y QR a la derecha.")
             altura_final = min(max(len(df_filtered) * 35 + 38, 100), 600)
-            c_tabla, c_detalle = st.columns([2, 1])
-            with c_tabla:
-                event = st.dataframe(
-                    df_filtered[['id', 'foto_url', 'nombre', 'categoria', 'area', 'ubicacion', 'qr_url']],
-                    column_config={
-                        "foto_url": st.column_config.ImageColumn("Foto", width="small"),
-                        "qr_url": st.column_config.ImageColumn("QR", width="small"),
-                        "id": st.column_config.NumberColumn("ID", format="%d", width="small"),
-                        "nombre": st.column_config.TextColumn("Nombre", width="medium"),
-                        "categoria": st.column_config.TextColumn("Categoría", width="small"),
-                        "area": st.column_config.TextColumn("Área", width="small"),
-                        "ubicacion": st.column_config.TextColumn("Ubicación", width="medium"),
-                    },
-                    use_container_width=True, hide_index=True, height=altura_final,
-                    selection_mode="single-row", on_select="rerun", key="tabla_maestra_activos"
-                )
-            with c_detalle:
-                if len(event.selection.rows) > 0:
-                    idx = event.selection.rows[0]
-                    sel = df_filtered.iloc[idx]
-                    st.markdown(f"**{sel['nombre']}**")
-                    st.caption(f"{sel['area']} / {sel['ubicacion']}")
+            st.dataframe(
+                df_filtered[['id', 'nombre', 'categoria', 'area', 'ubicacion']],
+                column_config={
+                    "id": st.column_config.NumberColumn("ID", format="%d", width="small"),
+                    "nombre": st.column_config.TextColumn("Nombre", width="medium"),
+                    "categoria": st.column_config.TextColumn("Categoría", width="small"),
+                    "area": st.column_config.TextColumn("Área", width="small"),
+                    "ubicacion": st.column_config.TextColumn("Ubicación", width="medium"),
+                },
+                use_container_width=True, hide_index=True, height=altura_final
+            )
+
+            st.markdown("---")
+            st.markdown("#### 📸 Ver Detalle de Activo")
+            nombres_activos = df_filtered['nombre'].tolist()
+            sel_nombre = st.selectbox("Seleccionar activo", nombres_activos, key="visor_select_activo")
+            if sel_nombre:
+                sel = df_filtered[df_filtered['nombre'] == sel_nombre].iloc[0]
+                c_foto, c_qr = st.columns(2)
+                with c_foto:
+                    st.markdown("**Fotografía**")
                     if isinstance(sel['foto_url'], str) and sel['foto_url'].startswith("http"):
                         st.markdown(
-                            f'<img src="{sel["foto_url"]}" style="width:100%;border-radius:8px;border:1px solid #444;margin-top:8px;" />',
+                            f'<img src="{sel["foto_url"]}" style="width:100%;border-radius:8px;border:1px solid #444;" />',
                             unsafe_allow_html=True
                         )
+                    else:
+                        st.warning("Sin foto")
+                with c_qr:
+                    st.markdown("**Código QR**")
                     if isinstance(sel['qr_url'], str) and sel['qr_url'].startswith("http"):
-                        st.markdown("**QR**")
                         st.markdown(
-                            f'<img src="{sel["qr_url"]}" style="width:150px;border-radius:6px;" />',
+                            f'<img src="{sel["qr_url"]}" style="width:200px;border-radius:6px;" />',
                             unsafe_allow_html=True
                         )
-                else:
-                    st.caption("Seleccione una fila")
+                    else:
+                        st.warning("Sin QR")
         else:
             if search_term or filtro_area != "Todas" or filtro_cat != "Todas":
                 st.warning("⚠️ No se encontraron activos con estos filtros.")
