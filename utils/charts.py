@@ -718,9 +718,9 @@ def mostrar_metricas_inteligentes(df_ordenes, df_users, df_solicitudes):
         color_sol = "normal" if n_solicitudes == 0 else "inverse"
         st.metric("📬 Solicitudes Pendientes", n_solicitudes, "en Buzón", delta_color=color_sol)
         if st.button("Ver solicitudes", key="nav_solicitudes", use_container_width=True):
-            st.session_state['_filtro_estado_ots'] = None
             st.session_state.current_page = "Ordenes de Trabajo"
-            st.toast("📬 Ir a la pestaña Buzón de Solicitudes", icon="📥")
+            st.session_state.ordenes_tab = "kanban"
+            st.session_state.kanban_filtro_solicitudes = True
             st.rerun()
     with c2:
         delta_text = str(devueltas_calidad) + " Devueltas" if devueltas_calidad > 0 else None
