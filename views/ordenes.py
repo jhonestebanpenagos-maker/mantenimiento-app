@@ -949,13 +949,13 @@ def _render_preventivos(df_act, df_users):
                 nuevo_val = c_item.text_input(
                     f"Paso {i+1}",
                     value=item,
-                    key=f"checklist_item_{i}",
+                    key=f"prev_check_item_{i}",
                     placeholder=f"Ej: Verificar temperatura del motor",
                     label_visibility="collapsed"
                 )
                 st.session_state.checklist_items[i] = nuevo_val
                 if len(st.session_state.checklist_items) > 1:
-                    if c_del.button("🗑️", key=f"del_check_{i}", help="Eliminar paso"):
+                    if c_del.button("🗑️", key=f"prev_del_check_{i}", help="Eliminar paso"):
                         items_a_eliminar.append(i)
 
             for idx in sorted(items_a_eliminar, reverse=True):
