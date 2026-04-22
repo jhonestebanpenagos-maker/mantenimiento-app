@@ -89,44 +89,40 @@ def _render_lista(df_act):
 
         if not df_filtered.empty:
             st.markdown(f"###### 🧬 Resultados: {len(df_filtered)}")
-            altura_final = min(max(len(df_filtered) * 35 + 38, 100), 600)
-            st.dataframe(
-                df_filtered[['id', 'nombre', 'categoria', 'area', 'ubicacion']],
-                column_config={
-                    "id": st.column_config.NumberColumn("ID", format="%d", width="small"),
-                    "nombre": st.column_config.TextColumn("Nombre", width="medium"),
-                    "categoria": st.column_config.TextColumn("Categoría", width="small"),
-                    "area": st.column_config.TextColumn("Área", width="small"),
-                    "ubicacion": st.column_config.TextColumn("Ubicación", width="medium"),
-                },
-                use_container_width=True, hide_index=True, height=altura_final
-            )
 
-            st.markdown("---")
-            st.markdown("#### 📸 Ver Detalle de Activo")
-            nombres_activos = df_filtered['nombre'].tolist()
-            sel_nombre = st.selectbox("Seleccionar activo", nombres_activos, key="visor_select_activo")
-            if sel_nombre:
-                sel = df_filtered[df_filtered['nombre'] == sel_nombre].iloc[0]
-                c_foto, c_qr = st.columns(2)
-                with c_foto:
-                    st.markdown("**Fotografía**")
-                    if isinstance(sel['foto_url'], str) and sel['foto_url'].startswith("http"):
-                        st.markdown(
-                            f'<img src="{sel["foto_url"]}" style="width:100%;border-radius:8px;border:1px solid #444;" />',
-                            unsafe_allow_html=True
-                        )
-                    else:
-                        st.warning("Sin foto")
-                with c_qr:
-                    st.markdown("**Código QR**")
-                    if isinstance(sel['qr_url'], str) and sel['qr_url'].startswith("http"):
-                        st.markdown(
-                            f'<img src="{sel["qr_url"]}" style="width:200px;border-radius:6px;" />',
-                            unsafe_allow_html=True
-                        )
-                    else:
-                        st.warning("Sin QR")
+            # Renderizar como tarjetas HTML (sin st.dataframe para evitar error React #185)
+            cards = []
+            for _, row in df_filtered.iterrows():
+                if isinstance(row.get("foto_url"), str) and row["foto_url"].startswith("http"):
+                    foto = '<img src="' + row["foto_url"] + '" style="width:100%;height:160px;object-fit:cover;border-radius:6px;" />'
+                else:
+                    foto = '<div style="width:100%;height:160px;background:#1F2937;border-radius:6px;display:flex;align-items:center;justify-content:center;color:#6B7280;font-size:2rem;">📷</div>'
+                if isinstance(row.get("qr_url"), str) and row["qr_url"].startswith("http"):
+                    qr = '<img src="' + row["qr_url"] + '" style="width:60px;height:60px;border-radius:4px;" />'
+                else:
+                    qr = ""
+                nombre = str(row["nombre"])
+                act_id = str(row["id"])
+                cat = str(row.get("categoria", "N/A"))
+                area = str(row.get("area", ""))
+                ubic = str(row.get("ubicacion", ""))
+                card = (
+                    '<div style="background:#1F2937;border:1px solid #374151;border-radius:10px;overflow:hidden;">'
+                    + foto
+                    + '<div style="padding:12px;">'
+                    + '<div style="display:flex;justify-content:space-between;align-items:start;">'
+                    + '<div>'
+                    + '<div style="color:#F3F4F6;font-weight:600;font-size:0.95rem;">' + nombre + '</div>'
+                    + '<div style="color:#9CA3AF;font-size:0.8rem;margin-top:2px;">ID: ' + act_id + ' · ' + cat + '</div>'
+                    + '</div>'
+                    + qr
+                    + '</div>'
+                    + '<div style="margin-top:8px;font-size:0.8rem;color:#6B7280;">📍 ' + area + ' / ' + ubic + '</div>'
+                    + '</div></div>'
+                )
+                cards.append(card)
+            grid = '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:16px;">' + "".join(cards) + "</div>"
+            st.markdown(grid, unsafe_allow_html=True)
         else:
             if search_term or filtro_area != "Todas" or filtro_cat != "Todas":
                 st.warning("⚠️ No se encontraron activos con estos filtros.")
