@@ -1,5 +1,5 @@
 # ==============================================================================
-# views/dashboard.py — OPTIMIZADO
+# views/dashboard.py — LIMPIO (caché ya está en db.py)
 # ==============================================================================
 import streamlit as st
 import pandas as pd
@@ -16,55 +16,25 @@ from utils.charts import (
 from utils.excel_gen import generar_excel_historial
 
 
-# ==============================================================================
-# 📦 QUERIES CACHEADAS (TTL 60s — se actualiza cada minuto)
-# ==============================================================================
-@st.cache_data(ttl=60, show_spinner=False)
-def cargar_ordenes():
-    return run_query("ordenes")
-
-@st.cache_data(ttl=60, show_spinner=False)
-def cargar_usuarios():
-    return run_query("usuarios")
-
-@st.cache_data(ttl=60, show_spinner=False)
-def cargar_solicitudes():
-    return run_query("solicitudes")
-
-@st.cache_data(ttl=60, show_spinner=False)
-def cargar_activos():
-    return run_query("activos")
-
-@st.cache_data(ttl=60, show_spinner=False)
-def cargar_planes():
-    return run_query("planes_mantenimiento")
-
-
-# ==============================================================================
-# 📦 EXCEL CACHEADO — solo se genera cuando los datos cambian
-# ==============================================================================
 @st.cache_data(ttl=60, show_spinner="Generando Excel...")
-def generar_excel_cached(df_hash, df_ordenes, df_activos, df_usuarios):
-    """Cacheado por hash de los datos. Solo regenera si los datos cambian."""
+def generar_excel_cached(df_len, df_ordenes, df_activos, df_usuarios):
+    """Cacheado por tamaño de datos. Solo regenera si cambian."""
     return generar_excel_historial(df_ordenes, df_activos, df_usuarios)
 
 
-# ==============================================================================
-# 🎯 RENDER PRINCIPAL
-# ==============================================================================
 def render():
     st.title("TABLERO DE MANDO")
     mostrar_notificaciones()
 
-    # ── Cargar datos (con caché) ──
-    df = cargar_ordenes()
-    df_users = cargar_usuarios()
-    df_solicitudes = cargar_solicitudes()
-    df_act_sla = cargar_activos()
-    df_planes = cargar_planes()
+    # ── Cargar datos (run_query ya tiene caché interno) ──
+    df = run_query("ordenes")
+    df_users = run_query("usuarios")
+    df_solicitudes = run_query("solicitudes")
+    df_act_sla = run_query("activos")
+    df_planes = run_query("planes_mantenimiento")
 
     # ── Verificar SLA ──
-    verificar_sla_y_alertar(pd.DataFrame(df), df_users, df_act_sla)
+    verificar_sla_y_alertar(df, df_users, df_act_sla)
 
     if st.session_state.get('sla_alertas_count', 0) > 0:
         n = st.session_state['sla_alertas_count']
@@ -103,13 +73,11 @@ def render():
 
     st.markdown("---")
 
-    # ── Exportar Excel (lazy — solo genera cuando el usuario descarga) ──
+    # ── Exportar Excel ──
     col_exp1, col_exp2, col_exp3 = st.columns([3, 1, 1])
     with col_exp3:
         try:
-            # Hash simple de los datos para invalidar caché solo si cambian
-            data_hash = hash((len(df), len(df_act_sla), len(df_users)))
-            buffer_excel = generar_excel_cached(data_hash, df, df_act_sla, df_users)
+            buffer_excel = generar_excel_cached(len(df), df, df_act_sla, df_users)
             st.download_button(
                 label="📊 Exportar Excel",
                 data=buffer_excel,
@@ -131,7 +99,6 @@ def render():
     mostrar_kpis_industriales(df, df_act_sla, df_planes)
     st.markdown("---")
 
-    # ── Análisis Global ──
     st.markdown("### 📊 Análisis Global")
     c_left, c_mid, c_right = st.columns(3)
 
@@ -148,7 +115,6 @@ def render():
         graficar_torta_tipo(df)
         st.markdown("</div>", unsafe_allow_html=True)
 
-    # ── Carga por Técnico ──
     st.markdown("### 👥 Carga por Técnico")
     with st.container():
         graficar_ordenes_por_tecnico(df, df_users)
