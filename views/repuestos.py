@@ -4,7 +4,7 @@ import plotly.graph_objects as go
 import time
 from datetime import datetime
 from utils.db import supabase, run_query
-from utils.helpers import mostrar_notificaciones, agregar_notificacion
+from utils.helpers import mostrar_notificaciones, agregar_notificacion, error_amigable
 from utils.uploads import subir_imagen
 from utils.notifications import notificar_telegram
 
@@ -151,7 +151,7 @@ def _render_nuevo_repuesto():
                     agregar_notificacion('success', f'Repuesto {nom_r} registrado correctamente.')
                     st.rerun()
                 except Exception as e:
-                    agregar_notificacion('error', f'Error: {e}')
+                    error_amigable(e)
 
 
 # ==============================================================================
@@ -205,7 +205,7 @@ def _render_movimientos(df_rep, df_ord, df_mov, df_users):
                     agregar_notificacion('success', f'{tipo_mov} de {cantidad} {rep_actual["unidad"]} de {rep_sel} registrada.')
                     st.rerun()
             except Exception as e:
-                agregar_notificacion('error', f'Error: {e}')
+                error_amigable(e)
 
     st.markdown("---")
     st.markdown("#### 📜 Historial de Movimientos")

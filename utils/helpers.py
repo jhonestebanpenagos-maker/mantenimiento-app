@@ -65,7 +65,8 @@ def validar_usuario_unico(nuevo_documento, id_ignorar=None):
             return False
         return True
     except Exception as e:
-        st.error(f"Error validando usuario: {e}")
+        _logger.error(f"Error validando usuario: {e}")
+        st.error("⚠️ No se pudo verificar el usuario. Intente nuevamente.")
         return False
 
 
@@ -80,6 +81,78 @@ def check_open_orders(user_id):
     except Exception as e:
         print(f"Error checking orders: {e}")
         return False
+
+
+# ==============================================================================
+# 🛠️ MANEJO DE ERRORES AMIGABLE
+# ==============================================================================
+import logging
+
+# Logger centralizado
+_logger = logging.getLogger("orion")
+if not _logger.handlers:
+    _logger.setLevel(logging.DEBUG)
+    try:
+        _log_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "logs")
+        os.makedirs(_log_dir, exist_ok=True)
+        _fh = logging.FileHandler(os.path.join(_log_dir, "orion.log"), encoding="utf-8")
+        _fh.setLevel(logging.DEBUG)
+        _fh.setFormatter(logging.Formatter("[%(asctime)s] %(levelname)s — %(message)s"))
+        _logger.addHandler(_fh)
+    except Exception:
+        pass  # Si falla el archivo, al menos loguea a consola
+
+
+# Mapeo de excepciones conocidas a mensajes amigables
+_ERROR_MAP = {
+    "ConnectionRefusedError": "No se pudo conectar al servidor. Verifique su conexión a internet.",
+    "TimeoutError": "La operación tardó demasiado. Intente nuevamente.",
+    "requests.exceptions.ConnectionError": "No hay conexión al servidor. Verifique su red.",
+    "requests.exceptions.Timeout": "El servidor tardó demasiado en responder.",
+    "KeyError": "Faltan datos obligatorios en la solicitud.",
+    "ValueError": "Los datos ingresados no son válidos.",
+    "PermissionError": "No tiene permisos para realizar esta acción.",
+}
+
+
+def manejar_error(e: Exception, contexto: str = "", mostrar_usuario: bool = True) -> str:
+    """
+    Maneja una excepción de forma amigable.
+    - Loguea el error real internamente (para debugging)
+    - Retorna un mensaje amigable para el usuario
+    - Si mostrar_usuario=True, muestra el mensaje en Streamlit automáticamente
+    """
+    error_tipo = type(e).__name__
+    error_msg = str(e)
+
+    # Log interno siempre (para ti, no para el usuario)
+    _logger.error(f"[{contexto}] {error_tipo}: {error_msg}", exc_info=True)
+
+    # Mensaje amigable
+    mensaje = _ERROR_MAP.get(error_tipo)
+    if not mensaje:
+        # Buscar coincidencias parciales en el mapeo
+        for clave, msg_amigable in _ERROR_MAP.items():
+            if clave.lower() in error_msg.lower() or clave in error_tipo:
+                mensaje = msg_amigable
+                break
+
+    if not mensaje:
+        if contexto:
+            mensaje = f"Ocurrió un problema al procesar: {contexto}. Intente nuevamente."
+        else:
+            mensaje = "Ocurrió un problema inesperado. Intente nuevamente."
+
+    if mostrar_usuario:
+        st.error(f"⚠️ {mensaje}")
+
+    return mensaje
+
+
+# Alias corto para usar inline
+def error_amigable(e: Exception, contexto: str = ""):
+    """Atajo: maneja error y lo muestra al usuario."""
+    return manejar_error(e, contexto, mostrar_usuario=True)
 
 
 # ==============================================================================

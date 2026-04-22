@@ -3,7 +3,7 @@ import pandas as pd
 import time
 from datetime import datetime
 from utils.db import supabase, run_query
-from utils.helpers import mostrar_notificaciones, agregar_notificacion, registrar_accion_critica
+from utils.helpers import mostrar_notificaciones, agregar_notificacion, registrar_accion_critica, error_amigable
 from utils.uploads import subir_imagen
 from utils.qr import generar_qr_activo
 from pdf_utils import generar_hoja_vida_pdf
@@ -428,7 +428,7 @@ def _guardar_edicion_activo(dat, edit_nom, edit_area, edit_sub, edit_det, edit_c
             time.sleep(1.5)
             st.rerun()
     except Exception as e:
-        st.error(f"Error al actualizar: {e}")
+        error_amigable(e, "actualizar activo")
 
 
 def _render_zona_peligro_activo(dat, id_suffix):
@@ -483,7 +483,7 @@ def _render_zona_peligro_activo(dat, id_suffix):
                             use_container_width=True
                         )
                 except Exception as e:
-                    st.error(f"Error generando PDF: {e}")
+                    error_amigable(e, "generar PDF")
             else:
                 st.toast("✅ Equipo limpio (Sin historial).")
 
@@ -501,4 +501,4 @@ def _render_zona_peligro_activo(dat, id_suffix):
                     time.sleep(1.5)
                     st.rerun()
                 except Exception as e:
-                    st.error(f"Error técnico: {e}")
+                    error_amigable(e, "eliminar activo")

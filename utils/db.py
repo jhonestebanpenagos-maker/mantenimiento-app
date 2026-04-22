@@ -13,10 +13,11 @@ def init_supabase():
         key = st.secrets["SUPABASE_KEY"]
         return create_client(url, key)
     except KeyError as e:
-        st.error(f"❌ ERROR CRÍTICO: La clave {e} no se encuentra en secrets.toml.")
+        st.error(f"❌ Configuración incompleta: falta la clave {e} en secrets.toml.")
         return None
     except Exception as e:
-        st.error(f"❌ Error desconocido al conectar a Supabase: {e}")
+        st.error("❌ No se pudo conectar a la base de datos. Contacte al administrador.")
+        print(f"Error conectando Supabase: {e}")
         return None
 
 
@@ -54,5 +55,6 @@ def _run_query_live_data(table_name, filters, order_by):
         res = query.order(order_by).execute()
         return res.data if res.data else []
     except Exception as e:
-        st.error(f"Error en consulta {table_name}: {e}")
+        print(f"Error en consulta {table_name}: {e}")
+        st.error(f"⚠️ No se pudieron cargar los datos de {table_name}. Intente nuevamente.")
         return []

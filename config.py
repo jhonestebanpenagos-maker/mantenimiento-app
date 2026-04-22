@@ -16,7 +16,8 @@ def init_cloudinary():
     except KeyError:
         st.warning("⚠️ ADVERTENCIA: No se encontraron las credenciales de Cloudinary en secrets.toml.")
     except Exception as e:
-        st.error(f"Error configurando Cloudinary: {e}")
+        st.error("⚠️ No se pudo configurar el servicio de imágenes. Contacte al administrador.")
+        print(f"Error configurando Cloudinary: {e}")
 
 
 # ==============================================================================

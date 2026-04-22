@@ -4,7 +4,7 @@ import uuid
 import pandas as pd
 from datetime import datetime, timedelta
 from utils.db import supabase
-from utils.helpers import hashear_password, verificar_password, migrar_password_si_sha256, agregar_notificacion, registrar_login
+from utils.helpers import hashear_password, verificar_password, migrar_password_si_sha256, agregar_notificacion, registrar_login, error_amigable
 
 # Duración máxima de sesión (horas)
 SESSION_MAX_HOURS = 8
@@ -136,7 +136,7 @@ def try_restore_session():
                         st.session_state.current_page = query_params["last_page"]
                     st.rerun()
             except Exception as e:
-                st.error("Error de conexión. Intente nuevamente.")
+                error_amigable(e, "restaurar sesión")
 
 
 # ==============================================================================
@@ -220,8 +220,8 @@ def show_login():
                             registrar_login(documento, exito=False, motivo="Credenciales inválidas")
                             _manejar_intento_fallido(MAX_INTENTOS, BLOQUEO_MINUTOS)
                     except Exception as e:
-                        registrar_login(documento, exito=False, motivo=f"Error: {e}")
-                        st.error(f"Error de conexión. Intente nuevamente.")
+                        registrar_login(documento, exito=False, motivo=f"Error: {type(e).__name__}")
+                        error_amigable(e, "iniciar sesión")
     st.stop()
 
 

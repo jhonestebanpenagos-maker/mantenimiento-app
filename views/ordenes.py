@@ -3,7 +3,7 @@ import pandas as pd
 import time
 from datetime import datetime
 from utils.db import supabase, run_query
-from utils.helpers import mostrar_notificaciones, agregar_notificacion, registrar_accion_critica
+from utils.helpers import mostrar_notificaciones, agregar_notificacion, registrar_accion_critica, error_amigable
 from utils.uploads import subir_archivo_generico
 from utils.notifications import notificar_telegram
 from utils.charts import sugerir_tecnico, render_sugerencia_tecnico
@@ -127,7 +127,7 @@ def _interceptor_orden(target_id, df_act, df_users):
         else:
             st.error("Orden no encontrada.")
     except Exception as e:
-        st.error(f"Error: {e}")
+        error_amigable(e)
 
 
 def _interceptor_preventivo(target_id, df_act, df_users):
@@ -164,7 +164,7 @@ def _interceptor_preventivo(target_id, df_act, df_users):
                 st.session_state.jump_target = None
                 st.rerun()
     except Exception as e:
-        st.error(f"Error en preventivo: {e}")
+        error_amigable(e, "gestión de preventivos")
 
 
 # ==============================================================================
@@ -198,7 +198,7 @@ def _render_mis_gestiones(df_act, df_users, df_ordenes):
                     st.toast("Registro actualizado.")
                     st.rerun()
                 except Exception as e:
-                    st.error(f"Error al guardar: {e}")
+                    error_amigable(e, "guardar avance")
 
     usuario = st.session_state.get('usuario', '')
     mi_id_admin = None
@@ -270,7 +270,7 @@ def _render_orden_gestion(row, nombre_activo, df_users, usuario):
             else:
                 st.caption("No hay avances registrados aún.")
         except Exception as e:
-            st.error(f"Error cargando historial: {e}")
+            error_amigable(e, "cargar historial")
 
         st.divider()
         st.markdown("##### ➕ Registrar Nuevo Avance")
@@ -408,7 +408,7 @@ def _render_buzon(df_act, df_users, df_ordenes, df_solicitudes):
                             else:
                                 st.error("Error: No se generó el ID de la orden.")
                         except Exception as e:
-                            st.error(f"Error: {e}")
+                            error_amigable(e)
 
                 if btn_rechazar:
                     supabase.table("solicitudes").update({"estado": "Rechazada"}).eq("id", sol['id']).execute()
@@ -565,7 +565,7 @@ def _render_orden_detalle(id_orden_selec, orden_actual, df_display, idx_tabla, d
                     time.sleep(1)
                     st.rerun()
                 except Exception as e:
-                    st.error(f"Error al actualizar: {e}")
+                    error_amigable(e, "actualizar orden")
 
         if orden_actual['estado'] in ['Concluida', 'Cancelada']:
             st.markdown("---")
@@ -585,7 +585,7 @@ def _render_orden_detalle(id_orden_selec, orden_actual, df_display, idx_tabla, d
                     time.sleep(1)
                     st.rerun()
                 except Exception as e:
-                    st.error(f"Error al re-abrir: {e}")
+                    error_amigable(e, "reabrir orden")
 
         with st.expander("🗑️ Zona de Peligro (Eliminar)"):
             if st.button("ELIMINAR DEFINITIVAMENTE", key=f"del_g_{id_orden_selec}", type="secondary", use_container_width=True):
@@ -624,7 +624,7 @@ def _render_bitacora(id_orden_selec):
             else:
                 st.info("No hay registros en la bitácora para esta orden.")
         except Exception as e:
-            st.error(f"Error cargando bitácora: {e}")
+            st.error("⚠️ No se pudo cargar la bitácora de esta orden.")
 
 
 # ==============================================================================
@@ -687,7 +687,7 @@ def _render_crear_directa(df_act, df_users, df_ordenes):
                         else:
                             st.error("No se pudo obtener el ID de la nueva orden.")
                     except Exception as e:
-                        st.error(f"Error al crear: {e}")
+                        error_amigable(e, "crear orden")
     else:
         st.warning("No hay activos registrados.")
 
@@ -731,7 +731,7 @@ def _render_preventivos(df_act, df_users):
                     st.toast("Plan guardado.")
                     st.rerun()
                 except Exception as e:
-                    st.error(f"Error: {e}")
+                    error_amigable(e)
 
     st.divider()
 
@@ -805,7 +805,7 @@ def _render_preventivos(df_act, df_users):
                     }).eq("id", plan['id']).execute()
                     contador += 1
                 except Exception as e:
-                    st.error(f"Error en plan {plan['id']}: {e}")
+                    error_amigable(e, f"generar preventivo del plan #{plan['id']}")
             progress_bar.progress((idx + 1) / len(df_planes))
 
         if contador > 0:

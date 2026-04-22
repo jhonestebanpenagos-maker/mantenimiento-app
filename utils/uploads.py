@@ -2,6 +2,7 @@ import streamlit as st
 import os
 import time
 import cloudinary.uploader
+from utils.helpers import error_amigable
 
 
 # ==============================================================================
@@ -24,7 +25,7 @@ def subir_imagen(archivo, carpeta="orion_evidencias"):
             )
             return respuesta.get("secure_url")
         except Exception as e:
-            st.error(f"Error al subir imagen a la nube: {e}")
+            error_amigable(e, "subir imagen")
             return None
     return None
 
@@ -66,6 +67,6 @@ def subir_archivo_generico(archivo):
             )
             return respuesta.get("secure_url")
         except Exception as e:
-            st.error(f"Error subiendo archivo: {e}")
+            error_amigable(e, "subir archivo")
             return None
     return None
