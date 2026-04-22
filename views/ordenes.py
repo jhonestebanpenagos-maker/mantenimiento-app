@@ -43,30 +43,58 @@ def render():
             _render_crear_para_activo(df_act, df_users, df_ordenes)
             return
 
-    tab_mis_gestiones, tab_kanban, tab_buzon, tab_calidad, tab_gestion, tab_crear_directa, tab_preventivos = st.tabs([
+    # ── Tabs con navegación programática ──
+    TABS_LIST = [
         "📂 Mis Gestiones", "📋 Kanban", "📥 Buzón Solicitudes", "🧐 Control Calidad",
         "🎛️ Gestión Global", "➕ Crear Directa", "🗓️ Preventivos"
-    ])
+    ]
 
-    with tab_mis_gestiones:
+    # Determinar tab activo desde session_state
+    tab_activa = st.session_state.get('ordenes_tab', 'kanban' if st.session_state.pop('kanban_filtro_solicitudes', False) else None)
+    if tab_activa is None:
+        tab_activa = st.session_state.get('_ordenes_tab_activa', 'mis_gestiones')
+
+    tab_map = {
+        'mis_gestiones': 0, 'kanban': 1, 'buzon': 2, 'calidad': 3,
+        'gestion': 4, 'crear': 5, 'preventivos': 6
+    }
+    idx_default = tab_map.get(tab_activa, 0)
+
+    # Usar radio horizontal como tabs (soporta index por defecto)
+    tab_seleccionada_key = st.radio(
+        "Navegación",
+        TABS_LIST,
+        index=idx_default,
+        horizontal=True,
+        label_visibility="collapsed",
+        key="_ordenes_tab_radio"
+    )
+
+    # Guardar tab activa para persistencia
+    st.session_state['_ordenes_tab_activa'] = {v: k for k, v in tab_map.items()}[
+        TABS_LIST.index(tab_seleccionada_key)
+    ] if tab_seleccionada_key in TABS_LIST else 'mis_gestiones'
+
+    # Limpiar ordenes_tab después de usarlo
+    if 'ordenes_tab' in st.session_state:
+        del st.session_state['ordenes_tab']
+
+    # Renderizar contenido según tab seleccionada
+    tab_idx = TABS_LIST.index(tab_seleccionada_key)
+
+    if tab_idx == 0:
         _render_mis_gestiones(df_act, df_users, df_ordenes)
-
-    with tab_kanban:
+    elif tab_idx == 1:
         _render_kanban(df_act, df_users, df_ordenes, df_solicitudes)
-
-    with tab_buzon:
+    elif tab_idx == 2:
         _render_buzon(df_act, df_users, df_ordenes, df_solicitudes)
-
-    with tab_calidad:
+    elif tab_idx == 3:
         _render_calidad(df_act, df_users)
-
-    with tab_gestion:
+    elif tab_idx == 4:
         _render_gestion_global(df_act, df_users, df_ordenes)
-
-    with tab_crear_directa:
+    elif tab_idx == 5:
         _render_crear_directa(df_act, df_users, df_ordenes)
-
-    with tab_preventivos:
+    elif tab_idx == 6:
         _render_preventivos(df_act, df_users)
 
 
@@ -385,7 +413,9 @@ def _render_kanban(df_act, df_users, df_ordenes, df_solicitudes=None):
     st.caption("Vista visual de todas las órdenes. Haz clic en una tarjeta para gestionarla.")
 
     # ── Solicitudes pendientes (viene del tablero) ──
-    mostrar_solicitudes = st.session_state.pop('kanban_filtro_solicitudes', False)
+    mostrar_solicitudes = st.session_state.get('kanban_filtro_solicitudes', False)
+    if mostrar_solicitudes:
+        st.session_state.pop('kanban_filtro_solicitudes', None)
     if mostrar_solicitudes and df_solicitudes is not None and not df_solicitudes.empty:
         solicitudes_pend = df_solicitudes[df_solicitudes['estado'] == 'Pendiente']
         if not solicitudes_pend.empty:
