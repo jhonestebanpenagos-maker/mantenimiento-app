@@ -2,7 +2,7 @@ import streamlit as st
 import pandas as pd
 import time
 from datetime import datetime
-from utils.db import supabase, run_query
+from utils.db import supabase, run_query, run_query_paginated, render_paginacion
 from utils.helpers import mostrar_notificaciones, agregar_notificacion, registrar_accion_critica, error_amigable
 from utils.uploads import subir_archivo_generico
 from utils.notifications import notificar_telegram
@@ -491,20 +491,56 @@ def _render_gestion_global(df_act, df_users, df_ordenes):
         st.session_state.jump_id = None
 
     col_filtros = st.columns(3)
-    filtro_estado = col_filtros[0].selectbox("Filtrar Estado", ["Todas", "Abierta", "Por Validar", "Concluida"], index=0)
+    filtro_estado = col_filtros[0].selectbox("Filtrar Estado", ["Todas", "Abierta", "Por Validar", "Concluida", "Cancelada"], index=0)
 
-    df_display = df_ordenes.copy()
+    # Paginación
+    if 'gestion_pagina' not in st.session_state:
+        st.session_state.gestion_pagina = 1
+
+    # Construir filtros para query paginada
+    query_filters = {}
     if filtro_estado != "Todas":
-        df_display = df_display[df_display['estado'] == filtro_estado]
+        query_filters['estado'] = filtro_estado
+
+    PER_PAGE = 20
+
     if filtro_ot_externo:
-        df_display = df_display[df_display['id'].astype(str) == str(filtro_ot_externo)]
+        # Búsqueda directa por ID — sin paginación
+        try:
+            res = supabase.table("ordenes").select("*").eq("id", int(filtro_ot_externo)).execute()
+            if res.data:
+                df_display = pd.DataFrame(res.data)
+                total = 1
+                total_pag = 1
+            else:
+                df_display = pd.DataFrame()
+                total = 0
+                total_pag = 1
+        except Exception:
+            df_display = pd.DataFrame()
+            total = 0
+            total_pag = 1
+    else:
+        df_display, total, total_pag = run_query_paginated(
+            "ordenes",
+            page=st.session_state.gestion_pagina,
+            per_page=PER_PAGE,
+            filters=query_filters if query_filters else None,
+            order_by="id",
+            desc=True
+        )
 
     if not df_display.empty:
         map_act = dict(zip(df_act['id'], df_act['nombre'])) if not df_act.empty else {}
         map_user = dict(zip(df_users['id'].astype(str), df_users['nombre'])) if not df_users.empty else {}
         df_display['Activo Nombre'] = df_display['activo_id'].map(map_act).fillna("Desconocido")
         df_display['Técnico Nombre'] = df_display['tecnico_asignado'].map(map_user).fillna("Sin Asignar")
-        df_display = df_display.sort_values('id', ascending=False)
+
+        # Controles de paginación arriba
+        nueva_pag = render_paginacion("gestion_ordenes", st.session_state.gestion_pagina, total_pag, total)
+        if nueva_pag != st.session_state.gestion_pagina:
+            st.session_state.gestion_pagina = nueva_pag
+            st.rerun()
 
         event = st.dataframe(
             df_display[['id', 'estado', 'Activo Nombre', 'descripcion', 'Técnico Nombre', 'criticidad', 'fecha_creacion']],
@@ -514,8 +550,19 @@ def _render_gestion_global(df_act, df_users, df_ordenes):
         if len(event.selection.rows) > 0:
             idx_tabla = event.selection.rows[0]
             id_orden_selec = df_display.iloc[idx_tabla]['id']
-            orden_actual = df_ordenes[df_ordenes['id'] == id_orden_selec].iloc[0]
+            # Cargar datos completos de la orden seleccionada
+            try:
+                res_sel = supabase.table("ordenes").select("*").eq("id", int(id_orden_selec)).execute()
+                if res_sel.data:
+                    orden_actual = pd.Series(res_sel.data[0])
+                else:
+                    orden_actual = df_display.iloc[idx_tabla]
+            except Exception:
+                orden_actual = df_display.iloc[idx_tabla]
             _render_orden_detalle(id_orden_selec, orden_actual, df_display, idx_tabla, df_users)
+
+        # Controles de paginación abajo
+        render_paginacion("gestion_ordenes_bottom", st.session_state.gestion_pagina, total_pag, total)
     else:
         st.info("No hay órdenes registradas con los filtros actuales.")
 
