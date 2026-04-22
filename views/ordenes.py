@@ -943,30 +943,24 @@ def _render_preventivos(df_act, df_users):
                 st.session_state.checklist_items = ["", ""]
 
             # Mostrar items actuales
-            items_a_eliminar = []
-            for i, item in enumerate(st.session_state.checklist_items):
+            for i in range(len(st.session_state.checklist_items)):
                 c_item, c_del = st.columns([5, 1])
                 nuevo_val = c_item.text_input(
                     f"Paso {i+1}",
-                    value=item,
-                    key=f"prev_check_item_{i}",
+                    value=st.session_state.checklist_items[i],
+                    key=f"prev_ci_{i}",
                     placeholder=f"Ej: Verificar temperatura del motor",
                     label_visibility="collapsed"
                 )
                 st.session_state.checklist_items[i] = nuevo_val
                 if len(st.session_state.checklist_items) > 1:
-                    if c_del.button("🗑️", key=f"prev_del_check_{i}", help="Eliminar paso"):
-                        items_a_eliminar.append(i)
-
-            for idx in sorted(items_a_eliminar, reverse=True):
-                st.session_state.checklist_items.pop(idx)
-                st.rerun()
+                    c_del.button("🗑️", key=f"prev_dc_{i}", help="Eliminar paso",
+                                 on_click=lambda idx=i: st.session_state.checklist_items.pop(idx))
 
             c_add1, c_add2 = st.columns(2)
             with c_add1:
                 if st.form_submit_button("➕ Agregar paso"):
                     st.session_state.checklist_items.append("")
-                    st.rerun()
 
             enviado = st.form_submit_button("GUARDAR PLAN")
 
