@@ -1,8 +1,197 @@
+# ==============================================================================
+# utils/charts.py — OPTIMIZADO
+# ==============================================================================
 import streamlit as st
 import pandas as pd
+import numpy as np
 import plotly.express as px
 import plotly.graph_objects as go
 from datetime import datetime
+
+
+# ==============================================================================
+# 🧮 CÁLCULOS CACHEADOS
+# ==============================================================================
+@st.cache_data(ttl=60, show_spinner=False)
+def _calcular_datos_tecnicos(df_ordenes_hash, df_ordenes_data, df_users_data):
+    """Cachea el procesamiento de datos por técnico."""
+    df_ordenes = pd.DataFrame(df_ordenes_data)
+    df_users = pd.DataFrame(df_users_data)
+
+    if df_ordenes.empty or df_users.empty:
+        return []
+
+    user_map = dict(zip(df_users['id'].astype(str), df_users['nombre']))
+    df = df_ordenes.copy()
+    df['tecnico_nombre'] = df['tecnico_asignado'].astype(str).map(user_map).fillna('Sin asignar')
+
+    conteo = df.groupby(['tecnico_nombre', 'estado']).size().reset_index(name='cantidad')
+    abiertas = conteo[conteo['estado'] == 'Abierta']
+    concluidas = conteo[conteo['estado'] == 'Concluida']
+
+    datos = []
+    for tecnico in df['tecnico_nombre'].unique():
+        a = abiertas[abiertas['tecnico_nombre'] == tecnico]['cantidad'].sum()
+        c = concluidas[concluidas['tecnico.append({'Técnico': tecnico, 'Abiertas': a, 'Concluidas': c, 'Total': a + c})
+    return datos
+
+
+@st.cache_data(ttl=60, show_spinner=False)
+def _calcular_kpis(df_ordenes_data, df_act_data, df_planes_data):
+    """Cachea todos los cálculos KPI de una vez."""
+    df_ordenes = pd.DataFrame(df_ordenes_data_nombre'] == tecnico]['cantidad'].sum()
+        datos)
+    df_act = pd.DataFrame(df_act_data)
+
+    if df_ordenes.empty:
+        return None
+
+    now = datetime.now()
+    map_act = dict(zip(df_act['id'], df_act['nombre'])) if not df_act.empty else {}
+
+    # ── Conteos básicos ──
+    total = len(df_ordenes)
+    df_k = df_ordenes[df_ordenes['estado'] == 'Concluida'].copy()
+    concluidas = len(df_k)
+    abiertas = len(df_ordenes[df_ordenes['estado'] == 'Abierta'])
+    por_validar = len(df_ordenes[df_ordenes['estado'] == 'Por Validar'])
+
+    preventivas = len(df_ordenes[df_ordenes['tipo_mantenimiento'] == 'Preventivo'])
+    correctivas = len(df_ordenes[df_ordenes['tipo_mantenimiento'] == 'Correctivo'])
+    pct_preventivo = (preventivas / total * 100) if total > 0 else 0
+
+    # ── Backlog ──
+    df_abiertas = df_ordenes[df_ordenes['estado'] == 'Abierta'].copy()
+    if not df_abiertas.empty:
+        df_abiertas['fecha_creacion'] = pd.to_datetime(df_abiertas['fecha_creacion'])
+        backlog_horas = ((now - df_abiertas['fecha_creacion']).dt.total_seconds() / 3600).sum()
+        backlog_ordenes = len(df_abiertas)
+    else:
+        backlog_horas = 0
+        backlog_ordenes = 0
+
+    # ── MTTR / MTBF (calculado una sola vez) ──
+    mttr_prom = mtbf_prom = disponibilidad = tasa_falla = 0
+    mttr_por_activo = []
+    mtbf_por_activo = []
+    disponibilidad_por_activo = []
+
+    if not df_k.empty:
+        df_k['fecha_creacion'] = pd.to_datetime(df_k['fecha_creacion'])
+        df_k['fecha_cierre'] = pd.to_datetime(df_k['fecha_cierre'])
+        df_k['duracion_horas'] = (df_k['fecha_cierre'] - df_k['fecha_creacion']).dt.total_seconds() / 3600
+        mttr_prom = df_k['duracion_horas'].mean()
+
+        df_k['Activo'] = df_k['activo_id'].map(map_act).fillna('Desconocido')
+
+        # MTTR por activo
+        mttr_df = df_k.groupby('Activo')['duracion_horas'].mean().round(1).reset_index()
+        mttr_df.columns = ['Activo', 'MTTR_horas']
+        mttr_por_activo = mttr_df.sort_values('MTTR_horas', ascending=False).head(10).to_dict('records')
+
+        # MTBF por activo (solo una vez)
+        df_sorted = df_k.sort_values(['activo_id', 'fecha_creacion']).copy()
+        df_sorted['Activo'] = df_sorted['activo_id'].map(map_act).fillna('Desconocido')
+        df_sorted['tiempo_entre_fallas'] = (
+            df_sorted.groupby('activo_id')['fecha_creacion'].diff().dt.total_seconds() / 3600
+        )
+        mtbf_activo = df_sorted.groupby('Activo')['tiempo_entre_fallas'].mean().reset_index()
+        mtbf_activo.columns = ['Activo', 'MTBF']
+
+        mtbf_prom = df_sorted['tiempo_entre_fallas'].mean()
+
+        if not pd.isna(mtbf_prom) and mtbf_prom > 0:
+            disponibilidad = (mtbf_prom / (mtbf_prom + mttr_prom)) * 100
+            tasa_falla = 1000 / mtbf_prom
+
+        # MTBF top 10
+        mtbf_top = mtbf_activo.dropna().sort_values('MTBF', ascending=False).head(10)
+        mtbf_por_activo = [
+            {'Activo': r['Activo'], 'MTBF_horas': round(r['MTBF'], 1)}
+            for _, r in mtbf_top.iterrows()
+        ]
+
+        # Disponibilidad por activo
+        df_disp = df_k.groupby('Activo')['duracion_horas'].mean().reset_index()
+        df_disp.columns = ['Activo', 'MTTR']
+        df_disp = df_disp.merge(mtbf_activo, on='Activo', how='left')
+        df_disp['Disponibilidad'] = (df_disp['MTBF'] / (df_disp['MTBF'] + df_disp['MTTR']) * 100).round(1)
+        df_disp = df_disp.dropna(subset=['Disponibilidad']).sort_values('Disponibilidad', ascending=True).tail(15)
+        disponibilidad_por_activo = df_disp.to_dict('records')
+
+    # ── Cumplimiento de planes ──
+    cumplimiento_planes = None
+    total_planes = 0
+    if df_planes_data:
+        df_planes = pd.DataFrame(df_planes_data)
+        if not df_planes.empty:
+            df_planes['ultima_ejecucion'] = pd.to_datetime(df_planes['ultima_ejecucion'])
+            df_planes['proxima'] = df_planes['ultima_ejecucion'] + pd.to_timedelta(df_planes['frecuencia_dias'], unit='D')
+            vencidos = len(df_planes[df_planes['proxima'] < now])
+            total_planes = len(df_planes)
+            cumplimiento_planes = ((total_planes - vencidos) / total_planes * 100) if total_planes > 0 else 100
+
+    return {
+        'total': total, 'concluidas': concluidas, 'abiertas': abiertas, 'por_validar': por_validar,
+        'preventivas': preventivas, 'correctivas': correctivas, 'pct_preventivo': pct_preventivo,
+        'backlog_horas': backlog_horas, 'backlog_ordenes': backlog_ordenes,
+        'mttr_prom': mttr_prom, 'mtbf_prom': mtbf_prom, 'disponibilidad': disponibilidad,
+        'tasa_falla': tasa_falla, 'cumplimiento_planes': cumplimiento_planes, 'total_planes': total_planes,
+        'mttr_por_activo': mttr_por_activo, 'mtbf_por_activo': mtbf_por_activo,
+        'disponibilidad_por_activo': disponibilidad_por_activo,
+    }
+
+
+@st.cache_data(ttl=60, show_spinner=False)
+def _calcular_tops(df_ordenes_data):
+    """Cachea cálculos de tops (más antiguas, críticas)."""
+    df = pd.DataFrame(df_ordenes_data)
+    if df.empty:
+        return [], []
+
+    now = datetime.now()
+    df['fecha_dt'] = pd.to_datetime(df['fecha_creacion'])
+    df_abiertas = df[df['estado'] != 'Concluida'].copy()
+
+    if df_abiertas.empty:
+        return [], []
+
+    df_abiertas['dias_abierta'] = (now - df_abiertas['fecha_dt']).dt.days
+
+    top_antiguas = df_abiertas.sort_values('dias_abierta', ascending=False).head(10)
+    top_antiguas_list = [
+        {'id': r['id'], 'dias': int(r['dias_abierta']), 'desc': (r.get('descripcion', '') or '')[:45]}
+        for _, r in top_antiguas.iterrows()
+    ]
+
+    top_criticas = df_abiertas[df_abiertas['criticidad'].isin(['Alta', 'Crítica'])].sort_values('fecha_dt').head(10)
+    top_criticas_list = [
+        {'id': r['id'], 'criticidad': r.get('criticidad', '?'), 'estado': r.get('estado', '?'),
+         'desc': (r.get('descripcion', '') or '')[:45]}
+        for _, r in top_criticas.iterrows()
+    ]
+
+    return top_antiguas_list, top_criticas_list
+
+
+@st.cache_data(ttl=60, show_spinner=False)
+def _calcular_flujo_datos(df_ordenes_data, df_users_data):
+    """Cachea datos para gráfico de flujo y tiempos."""
+    df = pd.DataFrame(df_ordenes_data)
+    df_users = pd.DataFrame(df_users_data)
+
+    if df.empty:
+        return pd.DataFrame()
+
+    map_user = dict(zip(df_users['id'].astype(str), df_users['nombre'])) if not df_users.empty else {}
+    now = datetime.now()
+
+    df['Tecnico'] = df['tecnico_asignado'].astype(str).map(map_user).fillna("Sin Asignar")
+    df['Inicio'] = pd.to_datetime(df['fecha_creacion'])
+    df['Cierre_Calc'] = pd.to_datetime(df['fecha_cierre']).fillna(now)
+    df['Dias_Activa'] = ((df['Cierre_Calc'] - df['Inicio']).dt.total_seconds() / 86400).round(1)
+
+    return df[['Tecnico', 'criticidad', 'estado', 'Dias_Activa', 'id', 'descripcion']]
 
 
 # ==============================================================================
@@ -11,33 +200,17 @@ from datetime import datetime
 
 def graficar_ordenes_por_tecnico(df_ordenes, df_users):
     """Muestra gráfico compacto de órdenes por técnico."""
-    df_ordenes = pd.DataFrame(df_ordenes) if not isinstance(df_ordenes, pd.DataFrame) else df_ordenes
-    df_users = pd.DataFrame(df_users) if not isinstance(df_users, pd.DataFrame) else df_users
+    datos = _calcular_datos_tecnicos(
+        len(df_ordenes) if hasattr(df_ordenes, '__len__') else 0,
+        df_ordenes.to_dict('records') if hasattr(df_ordenes, 'to_dict') else list(df_ordenes),
+        df_users.to_dict('records') if hasattr(df_users, 'to_dict') else list(df_users)
+    )
 
-    if df_ordenes.empty or df_users.empty:
+    if not datos:
         st.info("No hay datos suficientes para mostrar la carga por técnico.")
         return
 
-    user_map = dict(zip(df_users['id'].astype(str), df_users['nombre']))
-    df_tecnicos = df_ordenes.copy()
-    df_tecnicos['tecnico_nombre'] = df_tecnicos['tecnico_asignado'].astype(str).map(user_map).fillna('Sin asignar')
-
-    conteo_tecnicos = df_tecnicos.groupby(['tecnico_nombre', 'estado']).size().reset_index(name='cantidad')
-    abiertas = conteo_tecnicos[conteo_tecnicos['estado'] == 'Abierta']
-    concluidas = conteo_tecnicos[conteo_tecnicos['estado'] == 'Concluida']
-    tecnicos_unicos = df_tecnicos['tecnico_nombre'].unique()
-
-    datos_final = []
-    for tecnico in tecnicos_unicos:
-        abierta_count = abiertas[abiertas['tecnico_nombre'] == tecnico]['cantidad'].sum()
-        concluida_count = concluidas[concluidas['tecnico_nombre'] == tecnico]['cantidad'].sum()
-        total_tecnico = abierta_count + concluida_count
-        datos_final.append({
-            'Técnico': tecnico, 'Abiertas': abierta_count,
-            'Concluidas': concluida_count, 'Total': total_tecnico
-        })
-
-    df_final = pd.DataFrame(datos_final).sort_values('Total', ascending=True)
+    df_final = pd.DataFrame(datos).sort_values('Total', ascending=True)
 
     fig = go.Figure()
     fig.add_trace(go.Bar(
@@ -83,115 +256,7 @@ def graficar_criticidad(df):
                  category_orders={"Nivel": orden_oficial})
     fig.update_layout(
         paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)',
-        font=dict(color='white'), showlegend=False,
-        margin=dict(l=0, r=0, t=10, b=0), height=250,
-        xaxis=dict(title=None),
-        yaxis=dict(showgrid=True, gridcolor='rgba(255,255,255,0.1)')
-    )
-    fig.update_traces(textfont_size=14, textposition='outside', marker_line_width=0)
-    st.plotly_chart(fig, use_container_width=True)
-
-
-def graficar_gantt_mantenimiento(df_ordenes, df_users):
-    if df_ordenes.empty:
-        st.info("No hay datos para generar el calendario.")
-        return
-
-    df_gantt = df_ordenes.copy()
-    map_user = dict(zip(df_users['id'].astype(str), df_users['nombre'])) if not df_users.empty else {}
-    df_gantt['Tecnico'] = df_gantt['tecnico_asignado'].map(map_user).fillna("Sin Asignar")
-    df_gantt['Inicio'] = pd.to_datetime(df_gantt['fecha_creacion'])
-    now = datetime.now()
-    df_gantt['Final_Real'] = pd.to_datetime(df_gantt['fecha_cierre'])
-    df_gantt['Final_Visual'] = df_gantt['Final_Real'].fillna(now)
-    df_gantt['Duracion_Horas'] = ((df_gantt['Final_Visual'] - df_gantt['Inicio'])
-                                  .dt.total_seconds() / 3600).round(1)
-
-    fig = px.timeline(
-        df_gantt, x_start="Inicio", x_end="Final_Visual", y="Tecnico",
-        color="criticidad",
-        color_discrete_map={"Alta": "#EF4444", "Media": "#F59E0B", "Baja": "#10B981", "Crítica": "#7F1D1D"},
-        hover_data=["id", "descripcion", "estado", "Duracion_Horas"],
-        title="📅 Línea de Tiempo de Ejecución", height=400
-    )
-    fig.update_yaxes(categoryorder="total ascending", title=None)
-    fig.update_xaxes(title="Tiempo de Ejecución")
-    fig.update_layout(
-        paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(255,255,255,0.05)',
-        font=dict(color='white'), legend=dict(orientation="h", y=1.1),
-        margin=dict(l=10, r=10, t=40, b=10)
-    )
-    st.plotly_chart(fig, use_container_width=True)
-
-
-def mostrar_tops_ordenes(df_ordenes):
-    if df_ordenes.empty:
-        return
-    now = datetime.now()
-    df_ordenes['fecha_dt'] = pd.to_datetime(df_ordenes['fecha_creacion'])
-    df_abiertas = df_ordenes[df_ordenes['estado'] != 'Concluida'].copy()
-
-    if df_abiertas.empty:
-        st.toast("¡Increíble! No hay órdenes pendientes antiguas.")
-        return
-
-    df_abiertas['dias_abierta'] = (now - df_abiertas['fecha_dt']).dt.days
-
-    c1, c2 = st.columns(2)
-    with c1:
-        st.markdown("### 🐢 Top 10 Más Antiguas")
-        df_old = df_abiertas.sort_values('dias_abierta', ascending=False).head(10)
-        for _, row in df_old.iterrows():
-            col_info, col_btn = st.columns([4, 1])
-            with col_info:
-                dias = int(row['dias_abierta'])
-                color_bar = "#EF4444" if dias > 14 else "#F59E0B" if dias > 7 else "#60A5FA"
-                st.markdown(f"""
-                <div style="background:rgba(255,255,255,0.03);border-left:3px solid {color_bar};padding:6px 10px;border-radius:0 4px 4px 0;margin-bottom:3px;">
-                    <div style="display:flex;justify-content:space-between;font-size:0.8rem;">
-                        <span style="color:#E5E7EB;font-weight:600;">OT #{row['id']}</span>
-                        <span style="color:{color_bar};font-weight:700;">{dias} días</span>
-                    </div>
-                    <div style="color:#9CA3AF;font-size:0.7rem;">{(row.get('descripcion', '') or '')[:45]}...</div>
-                </div>
-                """, unsafe_allow_html=True)
-            with col_btn:
-                if st.button("⚙️", key=f"top_old_{row['id']}", help="Gestionar"):
-                    st.session_state.current_page = "Ordenes de Trabajo"
-                    st.session_state.jump_target = "orden"
-                    st.session_state.jump_id = row['id']
-                    st.rerun()
-
-    with c2:
-        st.markdown("### 🔥 Top Críticas Pendientes")
-        df_crit = df_abiertas[df_abiertas['criticidad'].isin(['Alta', 'Crítica'])] \
-            .sort_values('fecha_dt').head(10)
-        if df_crit.empty:
-            st.info("No hay órdenes críticas pendientes.")
-        else:
-            for _, row in df_crit.iterrows():
-                crit_icon = "🔴" if row['criticidad'] == 'Crítica' else "🟠"
-                col_info, col_btn = st.columns([4, 1])
-                with col_info:
-                    st.markdown(f"""
-                    <div style="background:rgba(255,255,255,0.03);border-left:3px solid #EF4444;padding:6px 10px;border-radius:0 4px 4px 0;margin-bottom:3px;">
-                        <div style="display:flex;justify-content:space-between;font-size:0.8rem;">
-                            <span style="color:#E5E7EB;font-weight:600;">{crit_icon} OT #{row['id']}</span>
-                            <span style="color:#9CA3AF;">{row.get('estado', '?')}</span>
-                        </div>
-                        <div style="color:#9CA3AF;font-size:0.7rem;">{(row.get('descripcion', '') or '')[:45]}...</div>
-                    </div>
-                    """, unsafe_allow_html=True)
-                with col_btn:
-                    if st.button("⚙️", key=f"top_crit_{row['id']}", help="Gestionar"):
-                        st.session_state.current_page = "Ordenes de Trabajo"
-                        st.session_state.jump_target = "orden"
-                        st.session_state.jump_id = row['id']
-                        st.rerun()
-
-
-def graficar_torta_tipo(df):
-    if df.empty:
+       :
         return
     conteo = df['tipo_mantenimiento'].value_counts().reset_index()
     conteo.columns = ['Tipo', 'Cantidad']
@@ -227,28 +292,23 @@ def graficar_estado_barras(df):
 
 
 def graficar_alternativas_visuales(df_ordenes, df_users):
-    df_ordenes = pd.DataFrame(df_ordenes) if not isinstance(df_ordenes, pd.DataFrame) else df_ordenes
-    df_users = pd.DataFrame(df_users) if not isinstance(df_users, pd.DataFrame) else df_users
+    """Versión optimizada: solo renderiza si hay datos y limita puntos."""
+    df_vis = _calcular_flujo_datos(
+        df_ordenes.to_dict('records') if hasattr(df_ordenes, 'to_dict') else list(df_ordenes),
+        df_users.to_dict('records') if hasattr(df_users, 'to_dict') else list(df_users)
+    )
 
-    if df_ordenes.empty:
+    if df_vis.empty:
         st.info("No hay datos para graficar.")
         return
 
-    map_user = dict(zip(df_users['id'].astype(str), df_users['nombre'])) if not df_users.empty else {}
-    df_vis = df_ordenes.copy()
-    df_vis['Tecnico'] = df_vis['tecnico_asignado'].map(map_user).fillna("Sin Asignar")
-    now = datetime.now()
-    df_vis['Inicio'] = pd.to_datetime(df_vis['fecha_creacion'])
-    df_vis['Cierre_Calc'] = pd.to_datetime(df_vis['fecha_cierre']).fillna(now)
-    df_vis['Dias_Activa'] = ((df_vis['Cierre_Calc'] - df_vis['Inicio'])
-                              .dt.total_seconds() / 86400).round(1)
-
-    color_map_crit = {"Alta": "#EF4444", "Media": "#F59E0B", "Baja": "#10B981", "Crítica": "#7F1D1D"}
+    # Limitar a 200 puntos máximo para parallel_categories (es muy lento con más)
+    df_limitado = df_vis.head(200) if len(df_vis) > 200 else df_vis
 
     st.markdown("### 🌊 Flujo de Distribución")
     st.caption("Sigue las líneas: Técnico ➔ Criticidad ➔ Estado actual.")
     fig_flow = px.parallel_categories(
-        df_vis, dimensions=['Tecnico', 'criticidad', 'estado'],
+        df_limitado, dimensions=['Tecnico', 'criticidad', 'estado'],
         color="Dias_Activa", color_continuous_scale=px.colors.sequential.Inferno,
         labels={'Tecnico': 'Personal', 'criticidad': 'Urgencia', 'estado': 'Situación'}
     )
@@ -261,6 +321,18 @@ def graficar_alternativas_visuales(df_ordenes, df_users):
     st.markdown("---")
     st.markdown("### 🏎️ Tiempos de Respuesta (La Carrera)")
     st.caption("Cada punto es una Orden. Izquierda = Reciente/Rápido. Derecha = Antiguo/Lento.")
+
+    color_map_crit = {"Alta": "#EF4444",.plotly_chart(fig, use_container_width=True)
+
+
+def graf font=dict(color='white'), showlegend=False,
+        margin=dict(l=0, r=0, t=10, b=0), height=250,
+        xaxis=dict(title=None),
+        yaxis=dict(showgrid=True, gridcolor='rgba(255,255,255,0.1)')
+    )
+    fig.update_traces(textfont_size=14, textposition='outside', marker_line_width=0)
+    sticar_torta_tipo(df):
+    if df.empty "Media": "#10B981", "Crítica": "#7F1D1D"}
     fig_race = px.strip(
         df_vis, x="Dias_Activa", y="Tecnico", color="criticidad",
         color_discrete_map=color_map_crit, orientation="h", stripmode="overlay",
@@ -277,93 +349,96 @@ def graficar_alternativas_visuales(df_ordenes, df_users):
     st.plotly_chart(fig_race, use_container_width=True)
 
 
+def mostrar_tops_ordenes(df_ordenes):
+    top_antiguas, top_criticas = _calcular_tops(
+        df_ordenes.to_dict('records') if hasattr(df_ordenes, 'to_dict') else list(df_ordenes)
+    )
+
+    if not top_antiguas and not top_criticas:
+        st.toast("¡Increíble! No hay órdenes pendientes.")
+        return
+
+    c1, c2 = st.columns(2)
+    with c1:
+        st.markdown("### 🐢 Top 10 Más Antiguas")
+        for item in top_antiguas:
+            dias = item['dias']
+            color_bar = "#EF4444" if dias > 14 else "#F59E0B" if dias > 7 else "#60A5FA"
+            col_info, col_btn = st.columns([4, 1])
+            with col_info:
+                st.markdown(f"""
+                <div style="background:rgba(255,255,255,0.03);border-left:3px solid {color_bar};padding:6px 10px;border-radius:0 4px 4px 0;margin-bottom:3px;">
+                    <div style="display:flex;justify-content:space-between;font-size:0.8rem;">
+                        <span style="color:#E5E7EB;font-weight:600;">OT #{item['id']}</span>
+                        <span style="color:{color_bar};font-weight:700;">{dias} días</span>
+                    </div>
+                    <div style="color:#9CA3AF;font-size:0.7rem;">{item['desc']}...</div>
+                </div>
+                """, unsafe_allow_html=True)
+            with col_btn:
+                if st.button("⚙️", key=f"top_old_{item['id']}", help="Gestionar"):
+                    st.session_state.current_page = "Ordenes de Trabajo"
+                    st.session_state.jump_target = "orden"
+                    st.session_state.jump_id = item['id']
+                    st.rerun()
+
+    with c2:
+        st.markdown("### 🔥 Top Críticas Pendientes")
+        if not top_criticas:
+            st.info("No hay órdenes críticas pendientes.")
+        else:
+            for item in top_criticas:
+                crit_icon = "🔴" if item['criticidad'] == 'Crítica' else "🟠"
+                col_info, col_btn = st.columns([4, 1])
+                with col_info:
+                    st.markdown(f"""
+                    <div style="background:rgba(255,255,255,0.03);border-left:3px solid #EF4444;padding:6px 10px;border-radius:0 4px 4px 0;margin-bottom:3px;">
+                        <div style="display:flex;justify-content:space-between;font-size:0.8rem;">
+                            <span style="color:#E5E7EB;font-weight:600;">{crit_icon} OT #{item['id']}</span>
+                            <span style="color:#9CA3AF;">{item['estado']}</span>
+                        </div>
+                        <div style="color:#9CA3AF;font-size:0.7rem;">{item['desc']}...</div>
+                    </div>
+                    """, unsafe_allow_html=True)
+                with col_btn:
+                    if st.button("⚙️", key=f"top_crit_{item['id']}", help="Gestionar"):
+                        st.session_state.current_page = "Ordenes de Trabajo"
+                        st.session_state.jump_target = "orden"
+                        st.session_state.jump_id = item['id']
+                        st.rerun()
+
+
 # ==============================================================================
-# 🏭 KPIs INDUSTRIALES — MTTR & MTBF
+# 🏭 KPIs INDUSTRIALES — UN SOLO CÁLCULO CACHEADO
 # ==============================================================================
 def mostrar_kpis_industriales(df_ordenes, df_act, df_planes=None):
-    df_ordenes = pd.DataFrame(df_ordenes) if not isinstance(df_ordenes, pd.DataFrame) else df_ordenes
-    df_act = pd.DataFrame(df_act) if not isinstance(df_act, pd.DataFrame) else df_act
+    kpis = _calcular_kpis(
+        df_ordenes.to_dict('records') if hasattr(df_ordenes, 'to_dict') else list(df_ordenes),
+        df_act.to_dict('records') if hasattr(df_act, 'to_dict') else list(df_act),
+        df_planes.to_dict('records') if df_planes is not None and hasattr(df_planes, 'to_dict') else (list(df_planes) if df_planes is not None else None)
+    )
 
-    if df_ordenes.empty:
+    if kpis is None:
         st.info("No hay órdenes suficientes para calcular KPIs.")
         return
 
-    map_act = dict(zip(df_act['id'], df_act['nombre'])) if not df_act.empty else {}
-    df_k = df_ordenes[df_ordenes['estado'] == 'Concluida'].copy()
-    now = datetime.now()
+    # Desempaquetar
+    (total, concluidas, abiertas, por_validar, preventivas, correctivas,
+     pct_preventivo, backlog_horas, backlog_ordenes, mttr_prom, mtbf_prom,
+     disponibilidad, tasa_falla, cumplimiento_planes, total_planes,
+     mttr_por_activo, mtbf_por_activo, disponibilidad_por_activo) = (
+        kpis['total'], kpis['concluidas'], kpis['abiertas'], kpis['por_validar'],
+        kpis['preventivas'], kpis['correctivas'], kpis['pct_preventivo'],
+        kpis['backlog_horas'], kpis['backlog_ordenes'], kpis['mttr_prom'],
+        kpis['mtbf_prom'], kpis['disponibilidad'], kpis['tasa_falla'],
+        kpis['cumplimiento_planes'], kpis['total_planes'],
+        kpis['mttr_por_activo'], kpis['mtbf_por_activo'], kpis['disponibilidad_por_activo']
+    )
 
-    # =====================================================================
-    # SECCIÓN 1: SCORECARDS EJECUTIVOS (los 7 KPIs nuevos)
-    # =====================================================================
+    # ── Scorecards ──
     st.markdown("### 🏭 Panel de KPIs Industriales")
     st.caption("Indicadores clave de rendimiento del mantenimiento")
 
-    # --- Cálculos base ---
-    total_ordenes = len(df_ordenes)
-    concluidas = len(df_k)
-    abiertas = len(df_ordenes[df_ordenes['estado'] == 'Abierta'])
-    por_validar = len(df_ordenes[df_ordenes['estado'] == 'Por Validar'])
-
-    # Conteo por tipo
-    preventivas = len(df_ordenes[df_ordenes['tipo_mantenimiento'] == 'Preventivo'])
-    correctivas = len(df_ordenes[df_ordenes['tipo_mantenimiento'] == 'Correctivo'])
-    otros = total_ordenes - preventivas - correctivas
-    pct_preventivo = (preventivas / total_ordenes * 100) if total_ordenes > 0 else 0
-
-    # Backlog: horas acumuladas de trabajo pendiente
-    df_abiertas = df_ordenes[df_ordenes['estado'] == 'Abierta'].copy()
-    if not df_abiertas.empty:
-        df_abiertas['fecha_creacion'] = pd.to_datetime(df_abiertas['fecha_creacion'])
-        df_abiertas['horas_acumuladas'] = (now - df_abiertas['fecha_creacion']).dt.total_seconds() / 3600
-        backlog_horas = df_abiertas['horas_acumuladas'].sum()
-        backlog_ordenes = len(df_abiertas)
-    else:
-        backlog_horas = 0
-        backlog_ordenes = 0
-
-    # MTTR / MTBF para disponibilidad
-    if not df_k.empty:
-        df_k['fecha_creacion'] = pd.to_datetime(df_k['fecha_creacion'])
-        df_k['fecha_cierre'] = pd.to_datetime(df_k['fecha_cierre'])
-        df_k['duracion_horas'] = ((df_k['fecha_cierre'] - df_k['fecha_creacion']).dt.total_seconds() / 3600)
-        mttr_prom = df_k['duracion_horas'].mean()
-
-        df_sorted = df_k.sort_values(['activo_id', 'fecha_creacion'])
-        df_sorted['tiempo_entre_fallas'] = (
-            df_sorted.groupby('activo_id')['fecha_creacion'].diff().dt.total_seconds() / 3600
-        )
-        mtbf_prom = df_sorted['tiempo_entre_fallas'].mean()
-
-        # Disponibilidad = MTBF / (MTBF + MTTR)
-        if not pd.isna(mtbf_prom) and mtbf_prom > 0:
-            disponibilidad = (mtbf_prom / (mtbf_prom + mttr_prom)) * 100
-        else:
-            disponibilidad = 0
-
-        # Tasa de falla (fallas por 1000 horas)
-        tasa_falla = (1000 / mtbf_prom) if not pd.isna(mtbf_prom) and mtbf_prom > 0 else 0
-    else:
-        mttr_prom = 0
-        mtbf_prom = 0
-        disponibilidad = 0
-        tasa_falla = 0
-
-    # Cumplimiento de preventivos
-    if df_planes is not None and not df_planes.empty:
-        df_planes_copy = df_planes.copy()
-        df_planes_copy['ultima_ejecucion'] = pd.to_datetime(df_planes_copy['ultima_ejecucion'])
-        df_planes_copy['proxima_fecha'] = df_planes_copy['ultima_ejecucion'] + pd.to_timedelta(df_planes_copy['frecuencia_dias'], unit='D')
-        vencidos = len(df_planes_copy[df_planes_copy['proxima_fecha'] < now])
-        total_planes = len(df_planes_copy)
-        cumplimiento_planes = ((total_planes - vencidos) / total_planes * 100) if total_planes > 0 else 100
-    else:
-        cumplimiento_planes = None
-        total_planes = 0
-
-    # --- SCORECARDS ---
-    sc1, sc2, sc3, sc4 = st.columns(4)
-
-    # Color por valor de disponibilidad
     if disponibilidad >= 90:
         disp_color, disp_icono = "#10B981", "🟢"
     elif disponibilidad >= 70:
@@ -371,13 +446,10 @@ def mostrar_kpis_industriales(df_ordenes, df_act, df_planes=None):
     else:
         disp_color, disp_icono = "#EF4444", "🔴"
 
-    # Color por % preventivo
-    if pct_preventivo >= 60:
-        prev_color = "#10B981"
-    elif pct_preventivo >= 30:
-        prev_color = "#F59E0B"
-    else:
-        prev_color = "#EF4444"
+    prev_color = "#10B981" if pct_preventivo >= 60 else "#F59E0B" if pct_preventivo >= 30 else "#EF4444"
+    backlog_color = "#EF4444" if backlog_horas > 200 else "#F59E0B" if backlog_horas > 50 else "#10B981"
+
+    sc1, sc2, sc3, sc4 = st.columns(4)
 
     with sc1:
         st.markdown(f"""
@@ -398,7 +470,6 @@ def mostrar_kpis_industriales(df_ordenes, df_act, df_planes=None):
         """, unsafe_allow_html=True)
 
     with sc3:
-        backlog_color = "#EF4444" if backlog_horas > 200 else "#F59E0B" if backlog_horas > 50 else "#10B981"
         st.markdown(f"""
         <div style="background:rgba(30,41,59,0.8);border:1px solid {backlog_color};border-radius:12px;padding:20px;text-align:center;">
             <div style="font-size:0.8rem;color:#9CA3AF;text-transform:uppercase;letter-spacing:1px;">Backlog</div>
@@ -428,9 +499,7 @@ def mostrar_kpis_industriales(df_ordenes, df_act, df_planes=None):
 
     st.markdown("---")
 
-    # =====================================================================
-    # SECCIÓN 2: TABLA RESUMEN DE KPIs
-    # =====================================================================
+    # ── Tabla resumen ──
     st.markdown("#### 📋 Resumen de Indicadores")
     col_tbl1, col_tbl2 = st.columns(2)
 
@@ -439,19 +508,15 @@ def mostrar_kpis_industriales(df_ordenes, df_act, df_planes=None):
         <div style="background:rgba(30,41,59,0.5);border-radius:10px;padding:15px;">
             <h5 style="color:#F59E0B;margin:0 0 12px 0;">🔧 Fiabilidad</h5>
         """, unsafe_allow_html=True)
-        kpi_data_fiab = [
+        for nombre, valor, desc in [
             ("⏱️ MTTR Promedio", f"{mttr_prom:.1f}h", "Tiempo medio de reparación"),
             ("🔁 MTBF Promedio", f"{mtbf_prom:.1f}h" if not pd.isna(mtbf_prom) and mtbf_prom > 0 else "N/A", "Tiempo medio entre fallas"),
             ("📊 Disponibilidad", f"{disponibilidad:.1f}%", "MTBF/(MTBF+MTTR)"),
             ("💥 Tasa de Falla", f"{tasa_falla:.2f}", "Fallas por 1000 horas"),
-        ]
-        for nombre, valor, desc in kpi_data_fiab:
+        ]:
             st.markdown(f"""
             <div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid rgba(255,255,255,0.05);">
-                <div>
-                    <div style="color:#E5E7EB;font-size:0.9rem;">{nombre}</div>
-                    <div style="color:#6B7280;font-size:0.7rem;">{desc}</div>
-                </div>
+                <div><div style="color:#E5E7EB;font-size:0.9rem;">{nombre}</div><div style="color:#6B7280;font-size:0.7rem;">{desc}</div></div>
                 <div style="color:#60A5FA;font-weight:700;font-size:1.1rem;">{valor}</div>
             </div>
             """, unsafe_allow_html=True)
@@ -462,19 +527,15 @@ def mostrar_kpis_industriales(df_ordenes, df_act, df_planes=None):
         <div style="background:rgba(30,41,59,0.5);border-radius:10px;padding:15px;">
             <h5 style="color:#10B981;margin:0 0 12px 0;">📈 Gestión</h5>
         """, unsafe_allow_html=True)
-        kpi_data_gest = [
-            ("🛡️ % Preventivo", f"{pct_preventivo:.1f}%", f"{preventivas} preventivas de {total_ordenes} total"),
-            ("📋 Órdenes Totales", str(total_ordenes), f"{concluidas} concluidas, {abiertas} abiertas"),
+        for nombre, valor, desc in [
+            ("🛡️ % Preventivo", f"{pct_preventivo:.1f}%", f"{preventivas} preventivas de {total} total"),
+            ("📋 Órdenes Totales", str(total), f"{concluidas} concluidas, {abiertas} abiertas"),
             ("⏳ Backlog", f"{backlog_horas:.0f}h", f"{backlog_ordenes} órdenes sin cerrar"),
             ("📐 Cumplimiento", f"{cumplimiento_planes:.1f}%" if cumplimiento_planes is not None else "N/A", f"{total_planes} planes de mantenimiento"),
-        ]
-        for nombre, valor, desc in kpi_data_gest:
+        ]:
             st.markdown(f"""
             <div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid rgba(255,255,255,0.05);">
-                <div>
-                    <div style="color:#E5E7EB;font-size:0.9rem;">{nombre}</div>
-                    <div style="color:#6B7280;font-size:0.7rem;">{desc}</div>
-                </div>
+                <div><div style="color:#E5E7EB;font-size:0.9rem;">{nombre}</div><div style="color:#6B7280;font-size:0.7rem;">{desc}</div></div>
                 <div style="color:#60A5FA;font-weight:700;font-size:1.1rem;">{valor}</div>
             </div>
             """, unsafe_allow_html=True)
@@ -482,33 +543,16 @@ def mostrar_kpis_industriales(df_ordenes, df_act, df_planes=None):
 
     st.markdown("---")
 
-    # =====================================================================
-    # SECCIÓN 3: GRÁFICOS DETALLADOS
-    # =====================================================================
-    if not df_k.empty:
-        df_k['Activo'] = df_k['activo_id'].map(map_act).fillna('Desconocido')
-
-        mttr = df_k.groupby('Activo')['duracion_horas'].mean().reset_index()
-        mttr.columns = ['Activo', 'MTTR_horas']
-        mttr = mttr.sort_values('MTTR_horas', ascending=False).head(10)
-        mttr['MTTR_horas'] = mttr['MTTR_horas'].round(1)
-
-        df_sorted = df_k.sort_values(['activo_id', 'fecha_creacion'])
-        df_sorted['tiempo_entre_fallas'] = (
-            df_sorted.groupby('activo_id')['fecha_creacion'].diff().dt.total_seconds() / 3600
-        )
-        mtbf = df_sorted.groupby('Activo')['tiempo_entre_fallas'].mean().reset_index()
-        mtbf.columns = ['Activo', 'MTBF_horas']
-        mtbf = mtbf.dropna().sort_values('MTBF_horas', ascending=False).head(10)
-        mtbf['MTBF_horas'] = mtbf['MTBF_horas'].round(1)
-
+    # ── Gráficos MTTR/MTBF (usando datos ya cacheados) ──
+    if mttr_por_activo or mtbf_por_activo:
         col_g1, col_g2 = st.columns(2)
 
         with col_g1:
             st.markdown("<span class='chart-header'>⏱️ MTTR — Top 10 más lentos</span>", unsafe_allow_html=True)
             st.caption("Menos horas = más fácil de reparar")
-            if not mttr.empty:
-                fig_mttr = px.bar(mttr, x='MTTR_horas', y='Activo', orientation='h',
+            if mttr_por_activo:
+                df_mttr = pd.DataFrame(mttr_por_activo)
+                fig_mttr = px.bar(df_mttr, x='MTTR_horas', y='Activo', orientation='h',
                                   color='MTTR_horas', color_continuous_scale='Reds', text='MTTR_horas')
                 fig_mttr.update_layout(paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)',
                                        font=dict(color='white'), height=300, showlegend=False,
@@ -520,8 +564,9 @@ def mostrar_kpis_industriales(df_ordenes, df_act, df_planes=None):
         with col_g2:
             st.markdown("<span class='chart-header'>🔁 MTBF — Top 10 más confiables</span>", unsafe_allow_html=True)
             st.caption("Más horas = equipo más confiable")
-            if not mtbf.empty:
-                fig_mtbf = px.bar(mtbf, x='MTBF_horas', y='Activo', orientation='h',
+            if mtbf_por_activo:
+                df_mtbf = pd.DataFrame(mtbf_por_activo)
+                fig_mtbf = px.bar(df_mtbf, x='MTBF_horas', y='Activo', orientation='h',
                                   color='MTBF_horas', color_continuous_scale='Greens', text='MTBF_horas')
                 fig_mtbf.update_layout(paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)',
                                        font=dict(color='white'), height=300, showlegend=False,
@@ -532,23 +577,12 @@ def mostrar_kpis_industriales(df_ordenes, df_act, df_planes=None):
 
         st.markdown("---")
 
-        # --- Gráfico de disponibilidad por activo ---
+        # ── Disponibilidad por activo ──
         st.markdown("<span class='chart-header'>📊 Disponibilidad por Activo</span>", unsafe_allow_html=True)
         st.caption("Verde = alta disponibilidad | Rojo = necesita atención")
 
-        df_disp = df_k.groupby('Activo').agg(
-            MTTR=('duracion_horas', 'mean'),
-            conteo=('id', 'count')
-        ).reset_index()
-
-        # Calcular MTBF por activo para disponibilidad
-        mtbf_por_activo = df_sorted.groupby('Activo')['tiempo_entre_fallas'].mean().reset_index()
-        mtbf_por_activo.columns = ['Activo', 'MTBF']
-        df_disp = df_disp.merge(mtbf_por_activo, on='Activo', how='left')
-        df_disp['Disponibilidad'] = (df_disp['MTBF'] / (df_disp['MTBF'] + df_disp['MTTR']) * 100).round(1)
-        df_disp = df_disp.dropna(subset=['Disponibilidad']).sort_values('Disponibilidad', ascending=True).tail(15)
-
-        if not df_disp.empty:
+        if disponibilidad_por_activo:
+            df_disp = pd.DataFrame(disponibilidad_por_activo)
             fig_disp = go.Figure()
             colores_disp = ['#10B981' if d >= 90 else '#F59E0B' if d >= 70 else '#EF4444' for d in df_disp['Disponibilidad']]
             fig_disp.add_trace(go.Bar(
@@ -570,15 +604,17 @@ def mostrar_kpis_industriales(df_ordenes, df_act, df_planes=None):
 
         st.markdown("---")
 
-        # --- Distribución Preventivo vs Correctivo (Donut) ---
+        # ── Composición ──
         st.markdown("### 🧩 Composición del Mantenimiento")
         col_comp1, col_comp2 = st.columns(2)
 
         with col_comp1:
             st.markdown("<span class='chart-header'>🛡️ Preventivo vs Correctivo</span>", unsafe_allow_html=True)
-            conteo_tipo = df_ordenes['tipo_mantenimiento'].value_counts().reset_index()
-            conteo_tipo.columns = ['Tipo', 'Cantidad']
-            colores_tipo = {"Preventivo": "#10B981", "Correctivo": "#EF4444", "Predictivo": "#60A5FA", "Mejora": "#8B5CF6"}
+            conteo_tipo = pd.DataFrame({
+                'Tipo': ['Preventivo', 'Correctivo'],
+                'Cantidad': [preventivas, correctivas]
+            })
+            colores_tipo = {"Preventivo": "#10B981", "Correctivo": "#EF4444"}
             fig_comp = go.Figure(data=[go.Pie(
                 labels=conteo_tipo['Tipo'], values=conteo_tipo['Cantidad'], hole=.55,
                 marker=dict(colors=[colores_tipo.get(t, '#6B7280') for t in conteo_tipo['Tipo']],
@@ -597,7 +633,6 @@ def mostrar_kpis_industriales(df_ordenes, df_act, df_planes=None):
             st.markdown("<span class='chart-header'>📊 Score de Madurez</span>", unsafe_allow_html=True)
             st.caption("¿Qué tan maduro es tu mantenimiento?")
 
-            # Score basado en % preventivo
             if pct_preventivo >= 70:
                 nivel, color_nivel, emoji_nivel = "EXCELENTE", "#10B981", "🏆"
             elif pct_preventivo >= 50:
@@ -613,7 +648,7 @@ def mostrar_kpis_industriales(df_ordenes, df_act, df_planes=None):
                 <div style="font-size:1.5rem;font-weight:800;color:{color_nivel};">{nivel}</div>
                 <div style="color:#9CA3AF;margin-top:5px;">{pct_preventivo:.1f}% Preventivo</div>
                 <div style="margin-top:15px;background:rgba(255,255,255,0.1);border-radius:10px;height:12px;overflow:hidden;">
-                    <div style="background:{color_nivel};width:{min(pct_preventivo, 100)}%;height:12px;border-radius:10px;transition:width 0.5s;"></div>
+                    <div style="background:{color_nivel};width:{min(pct_preventivo, 100)}%;height:12px;border-radius:10px;"></div>
                 </div>
                 <div style="display:flex;justify-content:space-between;font-size:0.7rem;color:#6B7280;margin-top:4px;">
                     <span>0%</span><span>Meta: 70%</span><span>100%</span>
@@ -628,9 +663,14 @@ def mostrar_kpis_industriales(df_ordenes, df_act, df_planes=None):
 # ==============================================================================
 # 🚦 SEMÁFORO DE CARGA DE TÉCNICOS
 # ==============================================================================
-def semaforo_tecnicos(df_ordenes, df_users):
+@st.cache_data(ttl=60, show_spinner=False)
+def _calcular_semaforo(df_ordenes_data, df_users_data):
+    """Cachea los datos del semáforo de técnicos."""
+    df_ordenes = pd.DataFrame(df_ordenes_data)
+    df_users = pd.DataFrame(df_users_data)
+
     if df_ordenes.empty or df_users.empty:
-        return
+        return []
 
     LIMITE_OCUPADO = 3
     LIMITE_SOBRECARGADO = 6
@@ -639,14 +679,9 @@ def semaforo_tecnicos(df_ordenes, df_users):
     conteo = abiertas.groupby('tecnico_asignado').size().reset_index(name='ordenes_abiertas')
     conteo['tecnico_asignado'] = conteo['tecnico_asignado'].astype(str)
 
-    st.markdown("### 🚦 Estado de Carga — Técnicos")
-    st.caption("Haz clic en un técnico para ver sus órdenes abiertas.")
-
-    cols = st.columns(len(df_users))
-    for i, (_, user) in enumerate(df_users.iterrows()):
+    resultado = []
+    for _, user in df_users.iterrows():
         uid = str(user['id'])
-        nom = user['nombre']
-        rol_u = user['rol']
         fila = conteo[conteo['tecnico_asignado'] == uid]
         n = int(fila['ordenes_abiertas'].values[0]) if not fila.empty else 0
 
@@ -659,23 +694,45 @@ def semaforo_tecnicos(df_ordenes, df_users):
         else:
             color, estado, icono, barra = "#EF4444", "CRÍTICO", "🔴", 100
 
+        resultado.append({
+            'id': uid, 'nombre': user['nombre'], 'rol': user['rol'],
+            'ordenes': n, 'color': color, 'estado': estado,
+            'icono': icono, 'barra': barra
+        })
+    return resultado
+
+
+def semaforo_tecnicos(df_ordenes, df_users):
+    datos = _calcular_semaforo(
+        df_ordenes.to_dict('records') if hasattr(df_ordenes, 'to_dict') else list(df_ordenes),
+        df_users.to_dict('records') if hasattr(df_users, 'to_dict') else list(df_users)
+    )
+
+    if not datos:
+        return
+
+    st.markdown("### 🚦 Estado de Carga — Técnicos")
+    st.caption("Haz clic en un técnico para ver sus órdenes abiertas.")
+
+    cols = st.columns(len(datos))
+    for i, tec in enumerate(datos):
         with cols[i]:
             st.markdown(f"""
-            <div style="background-color:rgba(30,41,59,0.8);border:2px solid {color};border-radius:12px;padding:15px 10px;text-align:center;margin:5px 0;">
-                <div style="font-size:1.8rem;margin-bottom:5px;">{icono}</div>
-                <div style="color:white;font-weight:700;font-size:0.9rem;margin-bottom:2px;">{nom.split()[0]}</div>
-                <div style="color:#9CA3AF;font-size:0.75rem;margin-bottom:8px;">{rol_u}</div>
-                <div style="color:{color};font-weight:800;font-size:1.8rem;line-height:1;">{n}</div>
+            <div style="background-color:rgba(30,41,59,0.8);border:2px solid {tec['color']};border-radius:12px;padding:15px 10px;text-align:center;margin:5px 0;">
+                <div style="font-size:1.8rem;margin-bottom:5px;">{tec['icono']}</div>
+                <div style="color:white;font-weight:700;font-size:0.9rem;margin-bottom:2px;">{tec['nombre'].split()[0]}</div>
+                <div style="color:#9CA3AF;font-size:0.75rem;margin-bottom:8px;">{tec['rol']}</div>
+                <div style="color:{tec['color']};font-weight:800;font-size:1.8rem;line-height:1;">{tec['ordenes']}</div>
                 <div style="color:#9CA3AF;font-size:0.7rem;margin-bottom:8px;">órdenes</div>
                 <div style="background-color:rgba(255,255,255,0.1);border-radius:4px;height:4px;margin:5px 0;">
-                    <div style="background-color:{color};width:{barra}%;height:4px;border-radius:4px;"></div>
+                    <div style="background-color:{tec['color']};width:{tec['barra']}%;height:4px;border-radius:4px;"></div>
                 </div>
-                <div style="color:{color};font-size:0.7rem;font-weight:700;letter-spacing:1px;margin-top:4px;">{estado}</div>
+                <div style="color:{tec['color']};font-size:0.7rem;font-weight:700;letter-spacing:1px;margin-top:4px;">{tec['estado']}</div>
             </div>
             """, unsafe_allow_html=True)
-            if st.button(f"Ver órdenes", key=f"sem_tec_{uid}", use_container_width=True):
+            if st.button(f"Ver órdenes", key=f"sem_tec_{tec['id']}", use_container_width=True):
                 st.session_state.current_page = "Ordenes de Trabajo"
-                st.session_state.jump_target = "ordenes_por_activo"  # Reuse filter by showing all open
+                st.session_state.jump_target = "ordenes_por_activo"
                 st.session_state.jump_id = None
                 st.rerun()
 
@@ -734,23 +791,22 @@ def render_sugerencia_tecnico(df_ordenes, df_users):
 def mostrar_metricas_inteligentes(df_ordenes, df_users, df_solicitudes):
     n_solicitudes = 0
     if not df_solicitudes.empty:
-        df_solicitudes['estado'] = df_solicitudes['estado'].astype(str).str.strip()
-        n_solicitudes = len(df_solicitudes[df_solicitudes['estado'] == 'Pendiente'])
+        n_solicitudes = len(df_solicitudes[df_solicitudes['estado'].astype(str).str.strip() == 'Pendiente'])
 
     total = len(df_ordenes)
     pendientes = por_validar = concluidas = devueltas_calidad = 0
     porcentaje_concluidas = 0
 
     if not df_ordenes.empty:
-        df_ordenes['estado'] = df_ordenes['estado'].astype(str).str.strip()
         pendientes = len(df_ordenes[df_ordenes['estado'] == 'Abierta'])
         por_validar = len(df_ordenes[df_ordenes['estado'] == 'Por Validar'])
         concluidas = len(df_ordenes[df_ordenes['estado'] == 'Concluida'])
-        devueltas_calidad = len(df_ordenes[
-            (df_ordenes['estado'] == 'Abierta') &
-            (df_ordenes['comentarios_validacion'].notnull()) &
-            (df_ordenes['comentarios_validacion'] != "")
-        ])
+        if 'comentarios_validacion' in df_ordenes.columns:
+            devueltas_calidad = len(df_ordenes[
+                (df_ordenes['estado'] == 'Abierta') &
+                (df_ordenes['comentarios_validacion'].notnull()) &
+                (df_ordenes['comentarios_validacion'] != "")
+            ])
         porcentaje_concluidas = (concluidas / total * 100) if total > 0 else 0
 
     c1, c2, c3, c4, c5 = st.columns(5)
