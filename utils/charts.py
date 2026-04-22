@@ -18,7 +18,7 @@ def _df_hash(df):
     return len(df) if hasattr(df, '__len__') else 0
 
 
-@st.cache_data(ttl=60, show_spinner=False)
+@st.cache_data(ttl=300, show_spinner=False)
 def _calcular_datos_tecnicos(ordenes_hash, df_ordenes_data, df_users_data):
     df_ordenes = pd.DataFrame(df_ordenes_data)
     df_users = pd.DataFrame(df_users_data)
@@ -43,7 +43,7 @@ def _calcular_datos_tecnicos(ordenes_hash, df_ordenes_data, df_users_data):
     return datos
 
 
-@st.cache_data(ttl=60, show_spinner=False)
+@st.cache_data(ttl=300, show_spinner=False)
 def _calcular_kpis(ordenes_hash, df_ordenes_data, df_act_data, df_planes_data):
     df_ordenes = pd.DataFrame(df_ordenes_data)
     df_act = pd.DataFrame(df_act_data)
@@ -121,7 +121,7 @@ def _calcular_kpis(ordenes_hash, df_ordenes_data, df_act_data, df_planes_data):
     }
 
 
-@st.cache_data(ttl=60, show_spinner=False)
+@st.cache_data(ttl=300, show_spinner=False)
 def _calcular_tops(ordenes_hash, df_ordenes_data):
     df = pd.DataFrame(df_ordenes_data)
     if df.empty:
@@ -145,14 +145,18 @@ def _calcular_tops(ordenes_hash, df_ordenes_data):
     return top_antiguas_list, top_criticas_list
 
 
-@st.cache_data(ttl=60, show_spinner=False)
+@st.cache_data(ttl=300, show_spinner=False)
 def _calcular_flujo_datos(ordenes_hash, df_ordenes_data, df_users_data):
     df = pd.DataFrame(df_ordenes_data)
     df_users = pd.DataFrame(df_users_data)
     if df.empty:
         return pd.DataFrame()
+    # Limitar a 200 registros más recientes para el gráfico de flujo
+    if len(df) > 200:
+        df = df.sort_values('fecha_creacion', ascending=False).head(200)
     map_user = dict(zip(df_users['id'].astype(str), df_users['nombre'])) if not df_users.empty else {}
     now = datetime.now()
+    df = df.copy()
     df['Tecnico'] = df['tecnico_asignado'].astype(str).map(map_user).fillna("Sin Asignar")
     df['Inicio'] = pd.to_datetime(df['fecha_creacion'])
     df['Cierre_Calc'] = pd.to_datetime(df['fecha_cierre']).fillna(now)
@@ -160,7 +164,7 @@ def _calcular_flujo_datos(ordenes_hash, df_ordenes_data, df_users_data):
     return df[['Tecnico', 'criticidad', 'estado', 'Dias_Activa', 'id', 'descripcion']]
 
 
-@st.cache_data(ttl=60, show_spinner=False)
+@st.cache_data(ttl=300, show_spinner=False)
 def _calcular_semaforo(ordenes_hash, df_ordenes_data, df_users_data):
     df_ordenes = pd.DataFrame(df_ordenes_data)
     df_users = pd.DataFrame(df_users_data)
@@ -281,11 +285,10 @@ def graficar_alternativas_visuales(df_ordenes, df_users):
     if df_vis.empty:
         st.info("No hay datos para graficar.")
         return
-    df_limitado = df_vis.head(200) if len(df_vis) > 200 else df_vis
     st.markdown("### 🌊 Flujo de Distribución")
     st.caption("Sigue las líneas: Técnico ➔ Criticidad ➔ Estado actual.")
     fig_flow = px.parallel_categories(
-        df_limitado, dimensions=['Tecnico', 'criticidad', 'estado'],
+        df_vis, dimensions=['Tecnico', 'criticidad', 'estado'],
         color="Dias_Activa", color_continuous_scale=px.colors.sequential.Inferno,
         labels={'Tecnico': 'Personal', 'criticidad': 'Urgencia', 'estado': 'Situación'}
     )
