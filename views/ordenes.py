@@ -78,7 +78,7 @@ def _render_interceptor(df_act, df_users, df_ordenes):
     target_id = st.session_state.jump_id
 
     if 'nav_origin' not in st.session_state:
-        st.session_state.nav_origin = st.session_state.get('current_page', 'Busqueda Global')
+        st.session_state.nav_origin = st.session_state.get('current_page', 'Tablero de Mando')
 
     st.markdown(f"""
     <div style="background-color:#1F2937;padding:15px;border-radius:8px;border-left:5px solid #3B82F6;margin-bottom:20px;">
@@ -88,7 +88,7 @@ def _render_interceptor(df_act, df_users, df_ordenes):
     """, unsafe_allow_html=True)
 
     if st.button("⬅️ VOLVER", use_container_width=True):
-        destino = st.session_state.get('nav_origin', 'Busqueda Global')
+        destino = st.session_state.get('nav_origin', 'Tablero de Mando')
         st.session_state.current_page = destino
         st.session_state.jump_target = None
         st.session_state.jump_id = None

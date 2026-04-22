@@ -121,7 +121,7 @@ def render():
             st.rerun()
     with qa3:
         if st.button("🔍 Buscar", use_container_width=True, key="dash_qa_buscar"):
-            st.session_state.current_page = "Busqueda Global"
+            st.session_state.current_page = "Inventario Activos"
             st.rerun()
     with qa4:
         if st.button("➕ Nueva Orden", use_container_width=True, key="dash_qa_nueva", type="primary"):

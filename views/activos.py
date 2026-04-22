@@ -16,7 +16,7 @@ CATEGORIAS_LIST = CATEGORIAS_ACTIVOS
 
 
 def render():
-    st.title("INVENTARIO DE ACTIVOS")
+    st.title("📦 ACTIVOS")
     mostrar_notificaciones()
 
     df_act = pd.DataFrame(run_query("activos"))
@@ -26,16 +26,13 @@ def render():
     if 'draft_data' not in st.session_state:
         st.session_state.draft_data = {}
 
-    # ── Manejar navegación desde búsqueda/jerarquía ──
+    # ── Manejar navegación desde búsqueda ──
     jump = st.session_state.get('jump_target')
     jump_id = st.session_state.get('jump_id')
 
     if jump == "activo" and jump_id:
-        # Limpiar jump
         st.session_state.jump_target = None
         st.session_state.jump_id = None
-
-        # Buscar el activo y mostrar su ficha directamente
         activo_sel = df_act[df_act['id'] == int(jump_id)] if not df_act.empty else pd.DataFrame()
         if not activo_sel.empty:
             _render_ficha_activo(activo_sel.iloc[0])
@@ -47,11 +44,19 @@ def render():
             st.error(f"Activo #{jump_id} no encontrado.")
             st.markdown("---")
 
-    # ── Navegación normal con tabs ──
-    tab_lista, tab_nuevo, tab_edit = st.tabs(["📋 LISTA DE ACTIVOS", "➕ NUEVO ACTIVO", "✏️ EDITAR / QR"])
+    # ── Búsqueda rápida integrada ──
+    _render_busqueda_rapida()
+
+    # ── Navegación con tabs ──
+    tab_lista, tab_jerarquia, tab_nuevo, tab_edit = st.tabs([
+        "📋 Lista", "🏗️ Jerarquía", "➕ Nuevo", "✏️ Editar / QR"
+    ])
 
     with tab_lista:
         _render_lista(df_act)
+
+    with tab_jerarquia:
+        _render_jerarquia(df_act)
 
     with tab_nuevo:
         _render_nuevo(df_act)
@@ -134,6 +139,177 @@ def _render_lista(df_act):
                 st.warning("⚠️ No se encontraron activos con estos filtros.")
     else:
         st.info("Aún no hay activos registrados.")
+
+
+# ==============================================================================
+# 🔍 BÚSQUEDA RÁPIDA INTEGRADA
+# ==============================================================================
+def _render_busqueda_rapida():
+    """Barra de búsqueda rápida dentro de la página de Activos."""
+    query = st.text_input(
+        "🔍 Buscar activo",
+        placeholder="Nombre, categoría o ubicación...",
+        key="activos_search_input",
+        label_visibility="collapsed"
+    )
+    if query and len(query.strip()) >= 2:
+        query = query.strip()
+        try:
+            res_nom = supabase.table("activos").select("id, nombre, categoria, area, ubicacion, foto_url") \
+                .ilike("nombre", f"%{query}%").limit(10).execute()
+            res_cat = supabase.table("activos").select("id, nombre, categoria, area, ubicacion, foto_url") \
+                .ilike("categoria", f"%{query}%").limit(10).execute()
+            res_ubi = supabase.table("activos").select("id, nombre, categoria, area, ubicacion, foto_url") \
+                .ilike("ubicacion", f"%{query}%").limit(10).execute()
+
+            todos = {}
+            for res in [res_nom, res_cat, res_ubi]:
+                if res.data:
+                    for item in res.data:
+                        todos[item['id']] = item
+
+            resultados = list(todos.values())
+            if resultados:
+                st.success(f"🔍 **{len(resultados)}** activo(s) encontrado(s)")
+                cols = st.columns(min(len(resultados), 4))
+                for i, a in enumerate(resultados[:8]):
+                    with cols[i % 4]:
+                        foto = a.get('foto_url', '')
+                        if foto and isinstance(foto, str) and len(foto) > 10:
+                            try:
+                                st.image(foto, use_container_width=True)
+                            except Exception:
+                                st.markdown("🔧", unsafe_allow_html=True)
+                        else:
+                            st.markdown("<div style='text-align:center;font-size:2rem;padding:15px;background:#1F2937;border-radius:6px;'>🔧</div>", unsafe_allow_html=True)
+                        st.caption(f"**{a['nombre']}**")
+                        st.caption(f"📍 {a.get('area', 'N/A')}")
+                        if st.button("Ver ficha", key=f"search_act_{a['id']}", use_container_width=True):
+                            st.session_state.jump_target = "activo"
+                            st.session_state.jump_id = a['id']
+                            st.rerun()
+                st.markdown("---")
+            else:
+                st.warning(f"🔍 Sin resultados para \"{query}\"")
+        except Exception as e:
+            st.caption(f"Error en búsqueda: {e}")
+
+
+# ==============================================================================
+# 🏗️ JERARQUÍA DE ACTIVOS (integrada)
+# ==============================================================================
+def _render_jerarquia(df_act):
+    """Vista de jerarquía de la planta: Área → Sub-área → Equipo."""
+    import re as re_module
+
+    df_ordenes = run_query("ordenes")
+
+    if df_act.empty:
+        st.info("No hay activos registrados. Ve a la pestaña **Nuevo** para crear el primero.")
+        return
+
+    # Calcular métricas por ubicación
+    mapa_ordenes_abiertas = {}
+    if not df_ordenes.empty:
+        abiertas = df_ordenes[df_ordenes['estado'] == 'Abierta']
+        mapa_ordenes_abiertas = abiertas.groupby('activo_id').size().to_dict()
+
+    # KPIs generales
+    total_activos = len(df_act)
+    total_areas = len(AREAS_DATA)
+    total_subs = sum(len(v) for v in AREAS_DATA.values())
+    con_ordenes = len([a for a in df_act['id'] if a in mapa_ordenes_abiertas])
+
+    k1, k2, k3, k4 = st.columns(4)
+    k1.metric("🏢 Áreas", total_areas)
+    k2.metric("📍 Sub-áreas", total_subs)
+    k3.metric("🔧 Activos", total_activos)
+    k4.metric("⚠️ Con OTs Abiertas", con_ordenes)
+
+    st.markdown("---")
+
+    # ── NAVEGACIÓN POR ÁREA ──
+    for area_nombre, sub_areas in sorted(AREAS_DATA.items()):
+        activos_area = df_act[df_act['area'] == area_nombre]
+        n_activos = len(activos_area)
+        ots_area = sum(1 for _, a in activos_area.iterrows() if a['id'] in mapa_ordenes_abiertas)
+
+        area_icon = "🏭" if area_nombre == "Producción" else "🏢" if area_nombre == "Administración" else "📦" if area_nombre == "Ventas" else "🚚"
+
+        with st.expander(f"{area_icon} {area_nombre}  —  {n_activos} activos  {'⚠️ ' + str(ots_area) + ' OTs' if ots_area > 0 else '✅'}", expanded=False):
+            for sub_area in sorted(sub_areas):
+                activos_sub = activos_area[
+                    activos_area['ubicacion'].str.contains(
+                        rf"\[{re_module.escape(sub_area)}\]", regex=False, na=False
+                    )
+                ]
+
+                if activos_sub.empty:
+                    st.markdown(f"""
+                    <div style="padding:6px 12px;margin:2px 0;color:#6B7280;font-size:0.85rem;">
+                        📍 {sub_area} <span style="font-size:0.75rem;">(vacía)</span>
+                    </div>
+                    """, unsafe_allow_html=True)
+                else:
+                    n_sub = len(activos_sub)
+                    ots_sub = sum(1 for _, a in activos_sub.iterrows() if a['id'] in mapa_ordenes_abiertas)
+                    badge = f"🔴 {ots_sub} OTs" if ots_sub > 0 else f"🟢 {n_sub} activos"
+
+                    with st.expander(f"📍 {sub_area}  —  {badge}", expanded=False):
+                        for _, activo in activos_sub.iterrows():
+                            oid = activo['id']
+                            tiene_ots = oid in mapa_ordenes_abiertas
+                            n_ots = mapa_ordenes_abiertas.get(oid, 0)
+
+                            icono_estado = "🔴" if tiene_ots else "🟢"
+                            foto = activo.get('foto_url', '')
+
+                            col_foto, col_info = st.columns([1, 4])
+                            with col_foto:
+                                if foto and isinstance(foto, str) and len(foto) > 10:
+                                    try:
+                                        st.image(foto, use_container_width=True)
+                                    except Exception:
+                                        st.caption("📷")
+                                else:
+                                    st.markdown("<div style='text-align:center;font-size:2rem;padding:20px;'>🔧</div>", unsafe_allow_html=True)
+
+                            with col_info:
+                                st.markdown(f"""
+                                <div style="background:rgba(30,41,59,0.5);border-radius:8px;padding:12px;margin-bottom:8px;">
+                                    <div style="display:flex;justify-content:space-between;align-items:center;">
+                                        <span style="color:#E5E7EB;font-weight:700;font-size:1rem;">{icono_estado} {activo['nombre']}</span>
+                                        <span style="font-size:0.75rem;color:#9CA3AF;">ID: {oid}</span>
+                                    </div>
+                                    <div style="display:flex;gap:15px;margin-top:6px;font-size:0.8rem;color:#9CA3AF;">
+                                        <span>🔧 {activo.get('categoria', 'N/A')}</span>
+                                        <span>📍 {activo.get('ubicacion', 'N/A')}</span>
+                                    </div>
+                                </div>
+                                """, unsafe_allow_html=True)
+
+                                detalles = activo.get('detalles')
+                                if detalles and isinstance(detalles, dict) and len(detalles) > 0:
+                                    with st.expander("⚙️ Especificaciones"):
+                                        for k, v in detalles.items():
+                                            st.markdown(f"**{k}:** {v}")
+
+                                if st.button(f"📋 Ver ficha", key=f"jer_act_{oid}", type="primary", use_container_width=True):
+                                    st.session_state.jump_target = "activo"
+                                    st.session_state.jump_id = oid
+                                    st.rerun()
+                                if st.button(f"🛠️ Ver OTs", key=f"jer_ot_{oid}", type="secondary", use_container_width=True):
+                                    st.session_state.current_page = "Ordenes de Trabajo"
+                                    st.session_state.jump_target = "ordenes_por_activo"
+                                    st.session_state.jump_id = oid
+                                    st.rerun()
+
+    # ── Activos sin área asignada ──
+    activos_sin_area = df_act[~df_act['area'].isin(AREAS_DATA.keys())]
+    if not activos_sin_area.empty:
+        with st.expander(f"⚠️ Activos sin área asignada  —  {len(activos_sin_area)}", expanded=False):
+            for _, act in activos_sin_area.iterrows():
+                st.markdown(f"- **{act['nombre']}** (ID: {act['id']}) — Área: {act.get('area', 'N/A')}")
 
 
 # ==============================================================================

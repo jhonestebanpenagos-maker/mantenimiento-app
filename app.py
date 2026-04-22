@@ -20,8 +20,6 @@ from utils.db import supabase
 from utils.notifications import notificar_telegram
 
 # ── Imports de vistas (una sola vez al cargar el módulo) ──
-from views.busqueda import render as render_busqueda
-from views.jerarquia import render as render_jerarquia
 from views.dashboard import render as render_dashboard
 from views.activos import render as render_activos
 from views.ordenes import render as render_ordenes
@@ -114,24 +112,20 @@ usuario = st.session_state['usuario']
 # ── Menú según rol ──
 MENUS = {
     "Admin": [
-        ("🔍", "Búsqueda", "Busqueda Global"),
         ("📊", "Tablero", "Tablero de Mando"),
-        ("🏗️", "Jerarquía", "Jerarquia Activos"),
-        ("📦", "Inventario", "Inventario Activos"),
+        ("📦", "Activos", "Inventario Activos"),
         ("🛠️", "Órdenes", "Ordenes de Trabajo"),
         ("🔩", "Repuestos", "Repuestos"),
         ("👤", "Usuarios", "Usuarios"),
     ],
     "Programador": [
-        ("🔍", "Búsqueda", "Busqueda Global"),
         ("📊", "Tablero", "Tablero de Mando"),
-        ("🏗️", "Jerarquía", "Jerarquia Activos"),
+        ("📦", "Activos", "Inventario Activos"),
         ("🛠️", "Órdenes", "Ordenes de Trabajo"),
         ("🔩", "Repuestos", "Repuestos"),
         ("👤", "Usuarios", "Usuarios"),
     ],
     "Tecnico": [
-        ("🔍", "Búsqueda", "Busqueda Global"),
         ("🛠️", "Órdenes", "Ordenes de Trabajo"),
     ],
 }
@@ -192,8 +186,8 @@ with st.sidebar:
     # ── Indicador de ubicación ──
     st.divider()
     page_icons = {
-        "Busqueda Global": "🔍", "Tablero de Mando": "📊", "Jerarquia Activos": "🏗️",
-        "Inventario Activos": "📦", "Ordenes de Trabajo": "🛠️", "Repuestos": "🔩", "Usuarios": "👤"
+        "Tablero de Mando": "📊", "Inventario Activos": "📦",
+        "Ordenes de Trabajo": "🛠️", "Repuestos": "🔩", "Usuarios": "👤"
     }
     icon = page_icons.get(current, "📋")
     st.caption(f"📍 {icon} {current}")
@@ -243,9 +237,7 @@ choice = st.session_state.current_page
 # 📄 RENDERIZAR PÁGINAS
 # ==============================================================================
 PAGES = {
-    "Busqueda Global": render_busqueda,
     "Tablero de Mando": render_dashboard,
-    "Jerarquia Activos": render_jerarquia,
     "Inventario Activos": render_activos,
     "Ordenes de Trabajo": render_ordenes,
     "Repuestos": render_repuestos,
