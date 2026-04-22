@@ -412,72 +412,37 @@ def _render_kanban(df_act, df_users, df_ordenes, df_solicitudes=None):
     st.markdown("### 📋 Tablero Kanban")
     st.caption("Vista visual de todas las órdenes. Haz clic en una tarjeta para gestionarla.")
 
-    # ── Solicitudes en Kanban ──
-    if df_solicitudes is not None and not df_solicitudes.empty:
-        # Determinar filtro por defecto
-        viene_del_tablero = st.session_state.pop('kanban_filtro_solicitudes', False)
-        filtro_default = "Pendiente" if viene_del_tablero else "Todas"
-
-        estados_sol = ["Todas", "Pendiente", "Aprobada", "Rechazada"]
-        idx_filtro = estados_sol.index(filtro_default) if filtro_default in estados_sol else 0
-
-        # Contadores rápidos
-        n_pend = len(df_solicitudes[df_solicitudes['estado'] == 'Pendiente'])
-        n_aprob = len(df_solicitudes[df_solicitudes['estado'] == 'Aprobada'])
-        n_rech = len(df_solicitudes[df_solicitudes['estado'] == 'Rechazada'])
-
-        st.markdown(
-            '<div style="background:linear-gradient(135deg,rgba(245,158,11,0.08),rgba(30,41,59,0.5));'
-            'border:1px solid rgba(245,158,11,0.3);border-radius:12px;padding:16px;margin-bottom:20px;">'
-            '<div style="display:flex;align-items:center;gap:12px;margin-bottom:12px;">'
-            '<span style="font-size:1.3rem;">📬</span>'
-            '<div style="color:#F59E0B;font-weight:800;font-size:1rem;">SOLICITUDES</div>'
-            '</div>'
-            '<div style="display:flex;gap:12px;">'
-            '<div style="background:rgba(245,158,11,0.15);border-radius:8px;padding:8px 14px;text-align:center;">'
-            '<div style="color:#F59E0B;font-weight:800;font-size:1.2rem;">' + str(n_pend) + '</div>'
-            '<div style="color:#FDE68A;font-size:0.7rem;">Pendientes</div></div>'
-            '<div style="background:rgba(16,185,129,0.15);border-radius:8px;padding:8px 14px;text-align:center;">'
-            '<div style="color:#10B981;font-weight:800;font-size:1.2rem;">' + str(n_aprob) + '</div>'
-            '<div style="color:#A7F3D0;font-size:0.7rem;">Aprobadas</div></div>'
-            '<div style="background:rgba(239,68,68,0.15);border-radius:8px;padding:8px 14px;text-align:center;">'
-            '<div style="color:#EF4444;font-weight:800;font-size:1.2rem;">' + str(n_rech) + '</div>'
-            '<div style="color:#FCA5A5;font-size:0.7rem;">Rechazadas</div></div>'
-            '</div></div>',
-            unsafe_allow_html=True
-        )
-
-        filtro_sol = st.selectbox(
-            "Filtrar por estado",
-            estados_sol,
-            index=idx_filtro,
-            key="kanban_filtro_sol_estado"
-        )
-
-        df_sol_filtrada = df_solicitudes.copy()
-        if filtro_sol != "Todas":
-            df_sol_filtrada = df_sol_filtrada[df_sol_filtrada['estado'] == filtro_sol]
-
-        if not df_sol_filtrada.empty:
-            for _, sol in df_sol_filtrada.iterrows():
+    # ── Solicitudes pendientes (viene del tablero) ──
+    mostrar_solicitudes = st.session_state.get('kanban_filtro_solicitudes', False)
+    if mostrar_solicitudes:
+        st.session_state.pop('kanban_filtro_solicitudes', None)
+    if mostrar_solicitudes and df_solicitudes is not None and not df_solicitudes.empty:
+        solicitudes_pend = df_solicitudes[df_solicitudes['estado'] == 'Pendiente']
+        if not solicitudes_pend.empty:
+            st.markdown(
+                '<div style="background:linear-gradient(135deg,rgba(245,158,11,0.12),rgba(239,68,68,0.08));'
+                'border:1px solid #F59E0B;border-radius:12px;padding:20px;margin-bottom:20px;">'
+                '<div style="display:flex;align-items:center;gap:12px;margin-bottom:15px;">'
+                '<span style="font-size:1.5rem;">📬</span>'
+                '<div>'
+                '<div style="color:#F59E0B;font-weight:800;font-size:1.1rem;">SOLICITUDES PENDIENTES — '
+                + str(len(solicitudes_pend)) + '</div>'
+                '<div style="color:#9CA3AF;font-size:0.8rem;">Reportes desde Telegram esperando aprobación</div>'
+                '</div></div>',
+                unsafe_allow_html=True
+            )
+            for _, sol in solicitudes_pend.iterrows():
                 fecha = (sol.get('fecha_solicitud', '') or '')[:10]
                 desc = (sol.get('descripcion', '') or '')[:80]
                 prioridad = sol.get('prioridad_sugerida', 'Media')
-                estado_sol = sol.get('estado', 'Pendiente')
                 prio_color = {"Crítica": "#EF4444", "Alta": "#F59E0B", "Media": "#60A5FA", "Baja": "#10B981"}.get(prioridad, "#6B7280")
-                estado_color = {"Pendiente": "#F59E0B", "Aprobada": "#10B981", "Rechazada": "#EF4444"}.get(estado_sol, "#6B7280")
-                estado_icon = {"Pendiente": "⏳", "Aprobada": "✅", "Rechazada": "❌"}.get(estado_sol, "📋")
-
                 st.markdown(
                     '<div style="background:rgba(30,41,59,0.6);border-left:3px solid ' + prio_color
                     + ';border-radius:6px;padding:10px 14px;margin-bottom:6px;">'
                     '<div style="display:flex;justify-content:space-between;align-items:center;">'
                     '<span style="color:#E5E7EB;font-weight:600;font-size:0.9rem;">Solicitud #' + str(sol['id']) + '</span>'
-                    '<div style="display:flex;gap:6px;">'
-                    '<span style="background:' + estado_color + ';color:white;padding:2px 8px;border-radius:8px;font-size:0.65rem;font-weight:700;">'
-                    + estado_icon + ' ' + estado_sol + '</span>'
                     '<span style="background:' + prio_color + ';color:white;padding:2px 8px;border-radius:8px;font-size:0.65rem;font-weight:700;">'
-                    + prioridad + '</span></div></div>'
+                    + prioridad + '</span></div>'
                     '<div style="color:#D1D5DB;font-size:0.8rem;margin-top:4px;">' + desc + '</div>'
                     '<div style="color:#9CA3AF;font-size:0.7rem;margin-top:4px;">📅 ' + fecha
                     + ' · 👤 ' + str(sol.get('solicitante_id', 'N/A')) + '</div>'
@@ -486,15 +451,13 @@ def _render_kanban(df_act, df_users, df_ordenes, df_solicitudes=None):
                 )
             st.markdown(
                 '<div style="text-align:center;margin-top:10px;">'
-                '<span style="color:#9CA3AF;font-size:0.8rem;">👇 Para aprobar o rechazar, usa la pestaña '
-                '<b>📥 Buzón Solicitudes</b></span></div>',
+                '<span style="color:#F59E0B;font-size:0.8rem;">👇 Gestiona estas solicitudes en la pestaña '
+                '<b>📥 Buzón Solicitudes</b></span></div></div>',
                 unsafe_allow_html=True
             )
+            st.markdown("---")
         else:
-            st.info(f"No hay solicitudes con estado '{filtro_sol}'.")
-        st.markdown("---")
-    elif st.session_state.pop('kanban_filtro_solicitudes', False):
-        st.toast("✨ No hay solicitudes en el sistema", icon="✅")
+            st.toast("✨ No hay solicitudes pendientes", icon="✅")
 
     if df_ordenes.empty:
         st.info("No hay órdenes para mostrar.")
