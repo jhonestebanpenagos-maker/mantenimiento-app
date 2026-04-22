@@ -175,6 +175,37 @@ with st.sidebar:
     choice = st.session_state.current_page
 
 # ==============================================================================
+# 🔄 RESOLVER JUMP TARGETS (navegación cruzada desde búsqueda/ficha/jerarquía)
+# ==============================================================================
+jump = st.session_state.get('jump_target')
+jump_id = st.session_state.get('jump_id')
+
+if jump == "activo":
+    # Navegación a ficha de activo → forzar a Inventario
+    st.session_state.current_page = "Inventario Activos"
+    choice = "Inventario Activos"
+elif jump == "orden":
+    # Navegación a una orden específica → forzar a Órdenes
+    st.session_state.current_page = "Ordenes de Trabajo"
+    choice = "Ordenes de Trabajo"
+elif jump == "ordenes_por_activo":
+    # Navegación a órdenes filtradas por activo → forzar a Órdenes
+    st.session_state.current_page = "Ordenes de Trabajo"
+    choice = "Ordenes de Trabajo"
+elif jump == "crear_para_activo":
+    # Navegación a crear orden para activo → forzar a Órdenes
+    st.session_state.current_page = "Ordenes de Trabajo"
+    choice = "Ordenes de Trabajo"
+elif jump == "preventivo":
+    # Navegación a preventivo específico → forzar a Órdenes
+    st.session_state.current_page = "Ordenes de Trabajo"
+    choice = "Ordenes de Trabajo"
+elif jump == "repuesto":
+    # Navegación a repuesto específico → forzar a Repuestos
+    st.session_state.current_page = "Repuestos"
+    choice = "Repuestos"
+
+# ==============================================================================
 # 📄 RENDERIZAR PÁGINAS
 # ==============================================================================
 if choice == "Busqueda Global":

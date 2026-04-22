@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 import time
+import calendar as cal_lib
 from datetime import datetime
 from utils.db import supabase, run_query, run_query_paginated, render_paginacion
 from utils.helpers import mostrar_notificaciones, agregar_notificacion, registrar_accion_critica, error_amigable
@@ -198,6 +199,20 @@ def _render_ordenes_por_activo(df_act, df_users, df_ordenes):
     st.session_state.jump_target = None
     st.session_state.jump_id = None
 
+    # Safety check
+    if not activo_id:
+        st.error("No se especificó un activo.")
+        if st.button("⬅️ Volver al inicio"):
+            st.session_state.current_page = "Tablero de Mando"
+            st.rerun()
+        return
+
+    try:
+        activo_id = int(activo_id)
+    except (ValueError, TypeError):
+        st.error("ID de activo no válido.")
+        return
+
     # Buscar nombre del activo
     nombre_activo = "Activo"
     if not df_act.empty:
@@ -300,10 +315,24 @@ def _render_crear_para_activo(df_act, df_users, df_ordenes):
     st.session_state.jump_target = None
     st.session_state.jump_id = None
 
+    # Safety check
+    if not activo_id:
+        st.error("No se especificó un activo.")
+        if st.button("⬅️ Volver al inicio"):
+            st.session_state.current_page = "Tablero de Mando"
+            st.rerun()
+        return
+
+    try:
+        activo_id = int(activo_id)
+    except (ValueError, TypeError):
+        st.error("ID de activo no válido.")
+        return
+
     # Buscar nombre del activo
     nombre_activo = "Activo"
     if not df_act.empty:
-        match = df_act[df_act['id'] == int(activo_id)]
+        match = df_act[df_act['id'] == activo_id]
         if not match.empty:
             nombre_activo = match.iloc[0]['nombre']
 
@@ -1030,7 +1059,7 @@ def _render_bitacora(id_orden_selec):
 
     st.markdown("---")
     st.caption("Historial de avances y archivos cargados.")
-    with st.container(height=500, border=True):
+    with st.container(border=True):
         try:
             bitacora_res = supabase.table("bitacora").select("*") \
                 .eq("orden_id", id_orden_selec).order("fecha", desc=True).execute()
@@ -1315,7 +1344,6 @@ def _render_preventivos(df_act, df_users):
 
 def _render_calendario_preventivo(df_planes, map_act):
     """Renderiza un calendario mensual visual con preventivos marcados."""
-    import calendar as cal_lib
 
     now = datetime.now()
 
