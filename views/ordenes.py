@@ -469,6 +469,7 @@ def _render_kanban(df_act, df_users, df_ordenes, df_solicitudes=None):
     df_abiertas = df_ordenes[df_ordenes['estado'] == 'Abierta'].copy()
     df_validar = df_ordenes[df_ordenes['estado'] == 'Por Validar'].copy()
     df_concluidas = df_ordenes[df_ordenes['estado'] == 'Concluida'].copy()
+    df_canceladas = df_ordenes[df_ordenes['estado'] == 'Cancelada'].copy()
 
     c_f1, c_f2, c_f3 = st.columns(3)
     with c_f1:
@@ -502,6 +503,7 @@ def _render_kanban(df_act, df_users, df_ordenes, df_solicitudes=None):
     df_abiertas = _aplicar_filtros(df_abiertas)
     df_validar = _aplicar_filtros(df_validar)
     df_concluidas = _aplicar_filtros(df_concluidas)
+    df_canceladas = _aplicar_filtros(df_canceladas)
 
     def _tarjeta_orden(row, color_borde):
         nombre_activo = map_act.get(row.get('activo_id'), 'Activo')
@@ -583,7 +585,7 @@ def _render_kanban(df_act, df_users, df_ordenes, df_solicitudes=None):
                     st.session_state[state_key] = False
                     st.rerun()
 
-    col1, col2, col3 = st.columns(3)
+    col1, col2, col3, col4 = st.columns(4)
 
     with col1:
         _render_columna("ABIERTAS", "#F59E0B", "🔨", df_abiertas, "abierta")
@@ -594,15 +596,19 @@ def _render_kanban(df_act, df_users, df_ordenes, df_solicitudes=None):
     with col3:
         _render_columna("CONCLUIDAS", "#10B981", "✅", df_concluidas, "concluida")
 
+    with col4:
+        _render_columna("CANCELADAS", "#EF4444", "❌", df_canceladas, "cancelada")
+
     st.markdown("---")
-    total = len(df_abiertas) + len(df_validar) + len(df_concluidas)
+    total = len(df_abiertas) + len(df_validar) + len(df_concluidas) + len(df_canceladas)
     if total > 0:
-        r1, r2, r3, r4 = st.columns(4)
+        r1, r2, r3, r4, r5 = st.columns(5)
         r1.metric("🔨 Abiertas", len(df_abiertas))
         r2.metric("🧐 Por Validar", len(df_validar))
         r3.metric("✅ Concluidas", len(df_concluidas))
+        r4.metric("❌ Canceladas", len(df_canceladas))
         pct = (len(df_concluidas) / total * 100) if total > 0 else 0
-        r4.metric("📊 Progreso", f"{pct:.0f}%")
+        r5.metric("📊 Progreso", f"{pct:.0f}%")
 
 
 # ==============================================================================
