@@ -81,17 +81,8 @@ def render():
             st.session_state.current_page = "Ordenes de Trabajo"; st.rerun()
     with c2:
         n_solic = len(df_solicitudes[df_solicitudes['estado'] == 'Pendiente']) if not df_solicitudes.empty else 0
-        if n_solic > 0:
-            if st.button(f"📬 Buzón ({n_solic})", use_container_width=True, key="dash_qa2", type="primary"):
-                st.session_state.current_page = "Ordenes de Trabajo"
-                st.session_state.ordenes_tab = "kanban"
-                st.session_state.kanban_filtro_solicitudes = True
-                st.rerun()
-        else:
-            if st.button(f"📬 Buzón (0)", use_container_width=True, key="dash_qa2", type="secondary"):
-                st.session_state.current_page = "Ordenes de Trabajo"
-                st.session_state.ordenes_tab = "kanban"
-                st.rerun()
+        if st.button(f"📬 Buzón ({n_solic})", use_container_width=True, key="dash_qa2"):
+            st.session_state.current_page = "Ordenes de Trabajo"; st.rerun()
     with c3:
         if st.button("➕ Nueva Orden", use_container_width=True, key="dash_qa3", type="primary"):
             st.session_state.current_page = "Ordenes de Trabajo"; st.rerun()
