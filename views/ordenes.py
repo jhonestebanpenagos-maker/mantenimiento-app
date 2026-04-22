@@ -853,7 +853,15 @@ def _render_gestion_global(df_act, df_users, df_ordenes):
         st.session_state.jump_id = None
 
     col_filtros = st.columns(3)
-    filtro_estado = col_filtros[0].selectbox("Filtrar Estado", ["Todas", "Abierta", "Por Validar", "Concluida", "Cancelada"], index=0)
+
+    # Leer filtro desde dashboard si fue seteado
+    _filtro_estado = st.session_state.pop('_filtro_estado_ots', None)
+    if _filtro_estado and _filtro_estado != "Todas":
+        opciones = ["Todas", "Abierta", "Por Validar", "Concluida", "Cancelada"]
+        idx_default = opciones.index(_filtro_estado) if _filtro_estado in opciones else 0
+        filtro_estado = col_filtros[0].selectbox("Filtrar Estado", opciones, index=idx_default)
+    else:
+        filtro_estado = col_filtros[0].selectbox("Filtrar Estado", ["Todas", "Abierta", "Por Validar", "Concluida", "Cancelada"], index=0)
 
     if 'gestion_pagina' not in st.session_state:
         st.session_state.gestion_pagina = 1

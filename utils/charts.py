@@ -713,103 +713,37 @@ def mostrar_metricas_inteligentes(df_ordenes, df_users, df_solicitudes):
             ])
         porcentaje_concluidas = (concluidas / total * 100) if total > 0 else 0
 
-    # ── Métricas con botones ──
     c1, c2, c3, c4, c5 = st.columns(5)
     with c1:
         color_sol = "normal" if n_solicitudes == 0 else "inverse"
         st.metric("📬 Solicitudes Pendientes", n_solicitudes, "en Buzón", delta_color=color_sol)
-        if st.button("👁️ Ver", key="btn_det_solicitudes", use_container_width=True):
-            st.session_state['_detalle_filtro'] = 'solicitudes'
+        if st.button("Ver solicitudes", key="nav_solicitudes", use_container_width=True):
+            st.session_state['_filtro_estado_ots'] = None
+            st.session_state.current_page = "Ordenes de Trabajo"
+            st.toast("📬 Ir a la pestaña Buzón de Solicitudes", icon="📥")
+            st.rerun()
     with c2:
         delta_text = str(devueltas_calidad) + " Devueltas" if devueltas_calidad > 0 else None
         st.metric("🔨 OT en Ejecución", pendientes, delta_text, delta_color="inverse")
-        if st.button("👁️ Ver", key="btn_det_abiertas", use_container_width=True):
-            st.session_state['_detalle_filtro'] = 'abiertas'
+        if st.button("Ver OT abiertas", key="nav_abiertas", use_container_width=True):
+            st.session_state['_filtro_estado_ots'] = "Abierta"
+            st.session_state.current_page = "Ordenes de Trabajo"
+            st.rerun()
     with c3:
         st.metric("🧐 OT por Validar", por_validar, "Esperando Aprobación")
-        if st.button("👁️ Ver", key="btn_det_validar", use_container_width=True):
-            st.session_state['_detalle_filtro'] = 'validar'
+        if st.button("Ver por validar", key="nav_validar", use_container_width=True):
+            st.session_state['_filtro_estado_ots'] = "Por Validar"
+            st.session_state.current_page = "Ordenes de Trabajo"
+            st.rerun()
     with c4:
         st.metric("✅ OT Finalizadas", concluidas, str(round(porcentaje_concluidas)) + "% del total")
-        if st.button("👁️ Ver", key="btn_det_concluidas", use_container_width=True):
-            st.session_state['_detalle_filtro'] = 'concluidas'
+        if st.button("Ver finalizadas", key="nav_concluidas", use_container_width=True):
+            st.session_state['_filtro_estado_ots'] = "Concluida"
+            st.session_state.current_page = "Ordenes de Trabajo"
+            st.rerun()
     with c5:
         st.metric("📋 Total OTs Registradas", total)
-        if st.button("👁️ Ver", key="btn_det_todas", use_container_width=True):
-            st.session_state['_detalle_filtro'] = 'todas'
-
-    # ── Panel de detalle ──
-    filtro = st.session_state.get('_detalle_filtro')
-    if filtro:
-        _render_detalle_filtro(filtro, df_ordenes, df_users, df_solicitudes)
-
-
-def _render_detalle_filtro(filtro, df_ordenes, df_users, df_solicitudes):
-    """Muestra el detalle filtrado debajo de las métricas."""
-    map_user = dict(zip(df_users['id'].astype(str), df_users['nombre'])) if not df_users.empty else {}
-
-    # Configurar qué mostrar según el filtro
-    if filtro == 'solicitudes':
-        titulo = "📬 Solicitudes Pendientes"
-        if df_solicitudes.empty:
-            st.info("No hay solicitudes pendientes.")
-            return
-        df_filtrado = df_solicitudes[df_solicitudes['estado'].astype(str).str.strip() == 'Pendiente']
-        if df_filtrado.empty:
-            st.info("No hay solicitudes pendientes.")
-            return
-        st.markdown(f"**{titulo}** — {len(df_filtrado)} registros")
-        for _, sol in df_filtrado.iterrows():
-            with st.expander(f"📬 Solicitud #{sol['id']} — {sol.get('descripcion', '')[:50]}..."):
-                st.write(f"**Solicitante:** {sol.get('solicitante_id', 'N/A')}")
-                st.write(f"**Descripción:** {sol.get('descripcion', 'N/A')}")
-                st.write(f"**Fecha:** {sol.get('fecha_solicitud', '')[:10]}")
-                st.write(f"**Prioridad sugerida:** {sol.get('prioridad_sugerida', 'N/A')}")
-                if sol.get('foto_url'):
-                    st.image(sol['foto_url'], width=200)
-        return
-
-    elif filtro == 'abiertas':
-        titulo = "🔨 OT en Ejecución"
-        df_filtrado = df_ordenes[df_ordenes['estado'] == 'Abierta'].copy()
-    elif filtro == 'validar':
-        titulo = "🧐 OT por Validar"
-        df_filtrado = df_ordenes[df_ordenes['estado'] == 'Por Validar'].copy()
-    elif filtro == 'concluidas':
-        titulo = "✅ OT Finalizadas"
-        df_filtrado = df_ordenes[df_ordenes['estado'] == 'Concluida'].copy()
-    elif filtro == 'todas':
-        titulo = "📋 Todas las OTs"
-        df_filtrado = df_ordenes.copy()
-    else:
-        return
-
-    if df_filtrado.empty:
-        st.info(f"No hay órdenes en estado '{filtro}'.")
-        return
-
-    # Ordenar por fecha descendente
-    if 'fecha_creacion' in df_filtrado.columns:
-        df_filtrado = df_filtrado.sort_values('fecha_creacion', ascending=False)
-
-    st.markdown(f"**{titulo}** — {len(df_filtrado)} registros")
-
-    # Mostrar como tabla compacta
-    cols_mostrar = ['id', 'estado', 'criticidad', 'tipo_mantenimiento', 'descripcion', 'fecha_creacion', 'tecnico_asignado']
-    cols_existentes = [c for c in cols_mostrar if c in df_filtrado.columns]
-    df_ver = df_filtrado[cols_existentes].copy()
-
-    if 'tecnico_asignado' in df_ver.columns:
-        df_ver['tecnico'] = df_ver['tecnico_asignado'].astype(str).map(map_user).fillna('Sin asignar')
-        df_ver = df_ver.drop(columns=['tecnico_asignado'])
-    if 'fecha_creacion' in df_ver.columns:
-        df_ver['fecha'] = df_ver['fecha_creacion'].astype(str).str[:10]
-        df_ver = df_ver.drop(columns=['fecha_creacion'])
-
-    nombres = {
-        'id': 'OT #', 'estado': 'Estado', 'criticidad': 'Criticidad',
-        'tipo_mantenimiento': 'Tipo', 'descripcion': 'Descripción',
-    }
-    df_ver = df_ver.rename(columns=nombres)
-
-    st.dataframe(df_ver, use_container_width=True, hide_index=True, height=min(len(df_ver) * 35 + 40, 400))
+        if st.button("Ver todas", key="nav_todas", use_container_width=True):
+            st.session_state['_filtro_estado_ots'] = "Todas"
+            st.session_state.current_page = "Ordenes de Trabajo"
+            st.rerun()
