@@ -470,7 +470,7 @@ def _render_kanban(df_act, df_users, df_ordenes, df_solicitudes=None):
     df_validar = df_ordenes[df_ordenes['estado'] == 'Por Validar'].copy()
     df_concluidas = df_ordenes[df_ordenes['estado'] == 'Concluida'].copy()
 
-    c_f1, c_f2 = st.columns(2)
+    c_f1, c_f2, c_f3 = st.columns(3)
     with c_f1:
         filtro_activo_k = st.selectbox(
             "Filtrar por activo",
@@ -483,6 +483,12 @@ def _render_kanban(df_act, df_users, df_ordenes, df_solicitudes=None):
             ["Todas", "Crítica", "Alta", "Media", "Baja"],
             key="kanban_filtro_crit"
         )
+    with c_f3:
+        filtro_tipo_k = st.selectbox(
+            "Filtrar por tipo",
+            ["Todos", "Correctivo", "Preventivo", "Predictivo", "Mejora"],
+            key="kanban_filtro_tipo"
+        )
 
     def _aplicar_filtros(df):
         if filtro_activo_k != "Todos":
@@ -490,6 +496,8 @@ def _render_kanban(df_act, df_users, df_ordenes, df_solicitudes=None):
             df = df[df['activo_id'].isin(act_ids)]
         if filtro_crit_k != "Todas":
             df = df[df['criticidad'] == filtro_crit_k]
+        if filtro_tipo_k != "Todos":
+            df = df[df['tipo_mantenimiento'] == filtro_tipo_k]
         return df
 
     df_abiertas = _aplicar_filtros(df_abiertas)
