@@ -1,0 +1,211 @@
+/* =============================================================
+   TEMA CLARO: LIGHT PROFESSIONAL
+   Fondo blanco, texto oscuro, ideal para pantallas luminosas.
+   ============================================================= */
+:root {
+    --accent: #2563EB;
+    --accent-soft: rgba(37, 99, 235, 0.08);
+    --success: #059669;
+    --warning: #D97706;
+    --danger: #DC2626;
+    --bg-main: #F8F9FB;
+    --bg-sidebar: #FFFFFF;
+    --bg-card: #FFFFFF;
+    --bg-input: #F3F4F6;
+    --border: rgba(0, 0, 0, 0.08);
+    --border-focus: rgba(37, 99, 235, 0.4);
+    --text-primary: #111827;
+    --text-secondary: #6B7280;
+    --text-muted: #9CA3AF;
+}
+
+/* =========================================
+   1. OPTIMIZACIÓN MÓVIL
+   ========================================= */
+#MainMenu {visibility: hidden;}
+footer {visibility: hidden;}
+header {visibility: hidden;}
+
+@media (max-width: 768px) {
+    .block-container {
+        padding-top: 1.5rem !important;
+        padding-left: 0.5rem !important;
+        padding-right: 0.5rem !important;
+        padding-bottom: 1rem !important;
+    }
+    div[data-testid="metric-container"] { padding: 5% !important; }
+    h1 { font-size: 1.8rem !important; }
+    h2 { font-size: 1.5rem !important; }
+    h3 { font-size: 1.2rem !important; }
+    img { max-width: 100% !important; height: auto !important; }
+}
+
+/* =========================================
+   2. ESTILOS GENERALES
+   ========================================= */
+.stApp {
+    background-color: var(--bg-main);
+    color: var(--text-primary);
+}
+
+/* BARRA LATERAL */
+[data-testid="stSidebar"] {
+    background-color: var(--bg-sidebar);
+    border-right: 1px solid var(--border);
+}
+[data-testid="stSidebarNav"] span {
+    color: var(--text-primary) !important;
+    font-weight: 500;
+}
+[data-testid="stSidebarNav"] a[aria-current="page"] {
+    background-color: var(--accent-soft);
+    border-left: 3px solid var(--accent);
+}
+
+/* BOTONES SECUNDARIOS (peligro) */
+section[data-testid="stSidebar"] button[kind="secondary"] {
+    background-color: transparent !important;
+    border: 1px solid var(--danger) !important;
+}
+section[data-testid="stSidebar"] button[kind="secondary"] p {
+    color: var(--danger) !important;
+}
+section[data-testid="stSidebar"] button[kind="secondary"]:hover {
+    background-color: rgba(220, 38, 38, 0.06) !important;
+}
+
+section[data-testid="stMain"] button[kind="secondary"] {
+    background-color: rgba(220, 38, 38, 0.08) !important;
+    border: 1px solid var(--danger) !important;
+}
+section[data-testid="stMain"] button[kind="secondary"] * {
+    color: var(--danger) !important;
+    font-weight: 600 !important;
+}
+section[data-testid="stMain"] button[kind="secondary"]:hover {
+    background-color: rgba(220, 38, 38, 0.14) !important;
+}
+
+/* =========================================
+   3. TIPOGRAFÍA
+   ========================================= */
+h1, h2, h3 {
+    color: var(--text-primary) !important;
+    -webkit-text-fill-color: var(--text-primary) !important;
+    font-weight: 700 !important;
+    text-transform: none !important;
+    letter-spacing: -0.01em;
+}
+
+/* TARJETAS */
+.card-style {
+    background: var(--bg-card);
+    border-radius: 10px;
+    padding: 22px;
+    border: 1px solid var(--border);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06), 0 1px 2px rgba(0, 0, 0, 0.04);
+    margin-bottom: 16px;
+}
+.chart-header {
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: var(--text-secondary);
+    margin-bottom: 12px;
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 8px;
+    display: block;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+/* =========================================
+   4. INPUTS Y FORMULARIOS
+   ========================================= */
+.stTextInput input,
+.stTextArea textarea,
+.stSelectbox > div > div {
+    background-color: var(--bg-input) !important;
+    color: var(--text-primary) !important;
+    border: 1px solid var(--border) !important;
+    border-radius: 6px;
+}
+.stTextInput input:focus,
+.stTextArea textarea:focus {
+    border-color: var(--border-focus) !important;
+    box-shadow: 0 0 0 1px var(--border-focus) !important;
+}
+.stTextInput label,
+.stSelectbox label,
+.stTextArea label {
+    color: var(--text-secondary) !important;
+    font-weight: 500 !important;
+}
+
+/* BOTÓN PRINCIPAL */
+div.stButton > button:first-child {
+    background: var(--accent) !important;
+    color: white !important;
+    border: none;
+    font-weight: 600;
+    border-radius: 6px;
+    transition: all 0.15s ease;
+}
+div.stButton > button:first-child:hover {
+    background: #3B82F6 !important;
+    transform: translateY(-1px);
+}
+
+/* =========================================
+   5. MÉTRICAS
+   ========================================= */
+[data-testid="stMetric"] {
+    background: var(--bg-card);
+    border-left: 3px solid var(--accent);
+    border-radius: 8px;
+    padding: 14px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+}
+[data-testid="stMetricLabel"] {
+    color: var(--text-secondary) !important;
+    font-size: 0.8rem !important;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+[data-testid="stMetricValue"] {
+    color: var(--text-primary) !important;
+}
+
+/* =========================================
+   6. PESTAÑAS
+   ========================================= */
+.stTabs [data-baseweb="tab"] {
+    color: var(--text-muted);
+    font-weight: 500;
+}
+.stTabs [aria-selected="true"] {
+    color: var(--accent) !important;
+    background-color: transparent !important;
+    border-bottom-color: var(--accent) !important;
+}
+
+/* TOAST */
+[data-testid="stToast"] {
+    background: var(--bg-card) !important;
+    color: var(--text-primary) !important;
+    border: 1px solid var(--border) !important;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.1) !important;
+}
+
+/* DATAFRAME */
+[data-testid="stDataFrame"] {
+    background: var(--bg-card) !important;
+}
+
+/* LAYOUT */
+div[data-testid="stVerticalBlock"] > div:empty {
+    height: 0 !important;
+    margin: 0 !important;
+}
+[data-testid="stSidebarNav"] {
+    padding-top: 10px !important;
+}

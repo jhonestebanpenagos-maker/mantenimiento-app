@@ -39,6 +39,11 @@ TEMAS_DISPONIBLES = {
         "nombre": "🟡 Warm Neutral",
         "archivo": "styles_opcion_b.css",
         "descripcion": "Cálido, elegante, cómodo"
+    },
+    "light": {
+        "nombre": "⬜ Light Professional",
+        "archivo": "styles_opcion_claro.css",
+        "descripcion": "Fondo blanco, ideal para pantallas luminosas"
     }
 }
 

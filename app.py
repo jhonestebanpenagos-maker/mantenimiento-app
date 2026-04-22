@@ -111,8 +111,6 @@ with st.sidebar:
     if st.button("🔓 Salir", use_container_width=True, type="secondary"):
         logout()
 
-    render_selector_tema()
-
     st.divider()
 
     if 'current_page' not in st.session_state:
@@ -140,6 +138,8 @@ with st.sidebar:
             st.query_params["session_id"] = doc_actual
             st.query_params["last_page"] = valor
             st.rerun()
+
+    render_selector_tema()
 
     choice = st.session_state.current_page
 
