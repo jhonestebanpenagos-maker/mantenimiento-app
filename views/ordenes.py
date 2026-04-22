@@ -900,21 +900,64 @@ def _render_preventivos(df_act, df_users):
             act_sel = c1.selectbox("Activo", act_nombres)
             users_dict = dict(zip(df_users['nombre'], df_users['id'])) if not df_users.empty else {}
             tec_sel = c2.selectbox("Técnico Sugerido", list(users_dict.keys()))
-            desc = st.text_input("Tarea a realizar (Ej: Cambio de filtros)")
+            desc = st.text_input("Título del plan (Ej: Limpieza mensual de filtros)")
             c3, c4 = st.columns(2)
             dias = c3.number_input("Frecuencia (Días)", min_value=1, value=30)
             fecha_base = c4.date_input("Fecha de Inicio / Última vez hecho")
 
-            if st.form_submit_button("GUARDAR PLAN"):
+            st.markdown("---")
+            st.markdown("#### ✅ Checklist de Verificación")
+            st.caption("Agrega los pasos que el técnico debe verificar en cada ejecución.")
+
+            # Inicializar checklist en session state
+            if 'checklist_items' not in st.session_state:
+                st.session_state.checklist_items = ["", ""]
+
+            # Mostrar items actuales
+            items_a_eliminar = []
+            for i, item in enumerate(st.session_state.checklist_items):
+                c_item, c_del = st.columns([5, 1])
+                nuevo_val = c_item.text_input(
+                    f"Paso {i+1}",
+                    value=item,
+                    key=f"checklist_item_{i}",
+                    placeholder=f"Ej: Verificar temperatura del motor",
+                    label_visibility="collapsed"
+                )
+                st.session_state.checklist_items[i] = nuevo_val
+                if len(st.session_state.checklist_items) > 1:
+                    if c_del.button("🗑️", key=f"del_check_{i}", help="Eliminar paso"):
+                        items_a_eliminar.append(i)
+
+            for idx in sorted(items_a_eliminar, reverse=True):
+                st.session_state.checklist_items.pop(idx)
+                st.rerun()
+
+            c_add1, c_add2 = st.columns(2)
+            with c_add1:
+                if st.form_submit_button("➕ Agregar paso"):
+                    st.session_state.checklist_items.append("")
+                    st.rerun()
+
+            enviado = st.form_submit_button("GUARDAR PLAN")
+
+            if enviado:
                 id_act = df_act[df_act['nombre'] == act_sel].iloc[0]['id']
                 id_tec = users_dict[tec_sel]
+
+                # Filtrar items vacíos
+                checklist_limpio = [item.strip() for item in st.session_state.checklist_items if item.strip()]
+                checklist_json = checklist_limpio if checklist_limpio else None
+
                 try:
                     supabase.table("planes_mantenimiento").insert({
                         "activo_id": int(id_act), "descripcion": desc,
                         "frecuencia_dias": int(dias), "ultima_ejecucion": fecha_base.isoformat(),
-                        "tecnico_default": str(id_tec)
+                        "tecnico_default": str(id_tec),
+                        "checklist": checklist_json
                     }).execute()
-                    st.toast("Plan guardado.")
+                    st.session_state.checklist_items = ["", ""]
+                    st.toast(f"✅ Plan guardado con {len(checklist_limpio)} pasos de verificación.")
                     st.rerun()
                 except Exception as e:
                     error_amigable(e)
@@ -962,6 +1005,18 @@ def _render_preventivos(df_act, df_users):
             use_container_width=True, hide_index=True
         )
 
+        # Mostrar checklists por plan
+        st.markdown("#### ✅ Checklists por Plan")
+        planes_con_checklist = df_planes[df_planes['checklist'].apply(lambda x: isinstance(x, list) and len(x) > 0 if x is not None else False)]
+        if not planes_con_checklist.empty:
+            for _, plan in planes_con_checklist.iterrows():
+                nombre_act = map_act.get(plan.get('activo_id'), 'Activo')
+                with st.expander(f"📋 {plan['descripcion']} — {nombre_act}"):
+                    for i, item in enumerate(plan['checklist'], 1):
+                        st.markdown(f"  **{i}.** {item}")
+        else:
+            st.caption("Ningún plan tiene checklist configurado.")
+
     st.markdown("---")
 
     # =====================================================================
@@ -979,13 +1034,33 @@ def _render_preventivos(df_act, df_users):
         for idx, plan in df_planes.iterrows():
             if plan['proxima_fecha'] <= now:
                 try:
-                    supabase.table("ordenes").insert({
+                    # Construir descripción con checklist si existe
+                    desc_orden = f"[PREVENTIVO] {plan['descripcion']}"
+                    checklist = plan.get('checklist')
+                    if checklist and isinstance(checklist, list) and len(checklist) > 0:
+                        checklist_texto = "\n".join([f"☐ {item}" for item in checklist])
+                        desc_orden = f"{desc_orden}\n\n✅ CHECKLIST:\n{checklist_texto}"
+
+                    res_orden = supabase.table("ordenes").insert({
                         "activo_id": int(plan['activo_id']),
-                        "descripcion": f"[PREVENTIVO] {plan['descripcion']}",
+                        "descripcion": desc_orden,
                         "criticidad": "Media", "tipo_mantenimiento": "Preventivo",
                         "estado": "Abierta", "tecnico_asignado": str(plan['tecnico_default']),
                         "fecha_creacion": now.isoformat()
                     }).execute()
+
+                    # Registrar checklist en bitácora si existe
+                    if checklist and isinstance(checklist, list) and len(checklist) > 0 and res_orden.data:
+                        nuevo_id = res_orden.data[0]['id']
+                        checklist_log = "📋 CHECKLIST DEL PREVENTIVO:\n" + "\n".join(
+                            [f"{i+1}. {item}" for i, item in enumerate(checklist)]
+                        )
+                        supabase.table("bitacora").insert({
+                            "orden_id": nuevo_id, "usuario_text": "SISTEMA",
+                            "mensaje": checklist_log,
+                            "fecha": now.isoformat()
+                        }).execute()
+
                     supabase.table("planes_mantenimiento").update({
                         "ultima_ejecucion": now.isoformat()
                     }).eq("id", plan['id']).execute()
