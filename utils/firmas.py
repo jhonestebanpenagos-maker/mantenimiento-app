@@ -151,7 +151,7 @@ def render_firmas_cierre(orden_id: int, usuario: str, rol: str, estado_orden: st
     # Firma del técnico (cuando la orden está abierta y es técnico)
     if estado_orden == "Abierta" and not firma_tecnico:
         if rol in ["Tecnico", "Admin", "Programador"]:
-            with st.toggle("✍️ Firmar como Técnico (Cerrar trabajo)", key=f"toggle_firma_tec_{orden_id}"):
+            if st.toggle("✍️ Firmar como Técnico (Cerrar trabajo)", key=f"toggle_firma_tec_{orden_id}"):
                 with st.form(f"form_firma_tecnico_{orden_id}", clear_on_submit=True):
                     st.markdown("**Confirma que el trabajo fue realizado correctamente.**")
                     doc_confirm = st.text_input(
@@ -176,7 +176,7 @@ def render_firmas_cierre(orden_id: int, usuario: str, rol: str, estado_orden: st
     # Firma del supervisor (cuando está por validar)
     if estado_orden == "Por Validar" and not firma_supervisor:
         if rol in ["Admin", "Programador"]:
-            with st.toggle("✍️ Firmar como Supervisor (Aprobar trabajo)", key=f"toggle_firma_sup_{orden_id}"):
+            if st.toggle("✍️ Firmar como Supervisor (Aprobar trabajo)", key=f"toggle_firma_sup_{orden_id}"):
                 with st.form(f"form_firma_supervisor_{orden_id}", clear_on_submit=True):
                     st.markdown("**Aprueba que el trabajo fue ejecutado satisfactoriamente.**")
 
