@@ -1,7 +1,6 @@
 import streamlit as st
 import time
 import uuid
-import pandas as pd
 from datetime import datetime, timedelta
 from utils.db import supabase
 from utils.helpers import hashear_password, verificar_password, migrar_password_si_sha256, agregar_notificacion, registrar_login, error_amigable
@@ -72,12 +71,11 @@ def logout():
     st.session_state['session_created_at'] = None
     st.session_state['sla_verificado'] = False
     st.session_state['sla_alertas_count'] = 0
-    st.query_params.clear()
     st.rerun()
 
 
 # ==============================================================================
-# 🔄 RECUPERAR SESIÓN DESDE URL
+# 🔄 VERIFICACIÓN DE SESIÓN
 # ==============================================================================
 def _sesion_expirada() -> bool:
     """Verifica si la sesión actual ha expirado."""
@@ -103,40 +101,15 @@ def _forzar_cierre_sesion(motivo: str):
     st.session_state['user_doc'] = None
     st.session_state['session_token'] = None
     st.session_state['session_created_at'] = None
-    st.query_params.clear()
 
 
 def try_restore_session():
+    """Verifica si ya hay una sesión activa y válida en session_state."""
     if st.session_state['usuario'] is not None:
-        # Verificar expiración en sesión activa
         if _sesion_expirada():
             _forzar_cierre_sesion(f"Sesión expirada (>{SESSION_MAX_HOURS}h)")
             st.rerun()
         return
-
-    query_params = st.query_params
-    if "session_id" in query_params:
-        token_url = query_params["session_id"]
-        token_guardado = st.session_state.get('session_token')
-        doc_guardado = st.session_state.get('user_doc')
-        if token_guardado and token_url == token_guardado and doc_guardado:
-            # Verificar expiración al restaurar
-            if _sesion_expirada():
-                _forzar_cierre_sesion(f"Sesión expirada al restaurar (>{SESSION_MAX_HOURS}h)")
-                st.query_params.clear()
-                st.rerun()
-                return
-            try:
-                res = supabase.table("usuarios").select("*").eq("documento", doc_guardado).execute()
-                if res.data:
-                    user = res.data[0]
-                    st.session_state['usuario'] = user['nombre']
-                    st.session_state['rol'] = user['rol']
-                    if "last_page" in query_params:
-                        st.session_state.current_page = query_params["last_page"]
-                    st.rerun()
-            except Exception as e:
-                error_amigable(e, "restaurar sesión")
 
 
 # ==============================================================================
@@ -206,10 +179,7 @@ def show_login():
                                 st.session_state['rol'] = user['rol']
                                 st.session_state['user_doc'] = documento
                                 st.session_state['session_created_at'] = datetime.now().isoformat()
-                                token_sesion = str(uuid.uuid4())
-                                st.session_state['session_token'] = token_sesion
-                                st.query_params["session_id"] = token_sesion
-                                st.query_params["last_page"] = "Tablero de Mando"
+                                st.session_state['session_token'] = str(uuid.uuid4())
                                 st.rerun()
                             else:
                                 registrar_login(documento, exito=False, motivo="Contraseña incorrecta")

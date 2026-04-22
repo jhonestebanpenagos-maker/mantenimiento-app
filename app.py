@@ -134,9 +134,6 @@ with st.sidebar:
         tipo = "primary" if activo else "secondary"
         if st.button(f"{icono} {texto}", key=f"menu_{valor}", use_container_width=True, type=tipo):
             st.session_state.current_page = valor
-            doc_actual = st.query_params.get("session_id", "")
-            st.query_params["session_id"] = doc_actual
-            st.query_params["last_page"] = valor
             st.rerun()
 
     render_selector_tema()

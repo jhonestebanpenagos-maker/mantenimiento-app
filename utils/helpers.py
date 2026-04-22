@@ -1,6 +1,12 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
+import os
+import re
+import json
+import logging
+import bcrypt
+import hashlib
 from datetime import datetime
 
 
@@ -86,7 +92,6 @@ def check_open_orders(user_id):
 # ==============================================================================
 # 🛠️ MANEJO DE ERRORES AMIGABLE
 # ==============================================================================
-import logging
 
 # Logger centralizado
 _logger = logging.getLogger("orion")
@@ -158,11 +163,7 @@ def error_amigable(e: Exception, contexto: str = ""):
 # ==============================================================================
 # 🔐 HASH DE CONTRASEÑAS (bcrypt) + POLÍTICA DE SEGURIDAD
 # ==============================================================================
-import bcrypt
-import hashlib
-import re
-import json
-import os
+
 
 # Ruta del archivo de auditoría local
 _AUDIT_LOG_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), "logs", "auditoria.log")

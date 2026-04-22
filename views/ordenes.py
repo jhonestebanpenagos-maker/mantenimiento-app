@@ -270,8 +270,17 @@ def _render_kanban(df_act, df_users, df_ordenes):
             st.caption("Sin órdenes")
             return
 
-        # Mostrar máximo 15 tarjetas por columna
-        for _, row in df_col.head(15).iterrows():
+        # Paginación dentro de cada columna
+        max_default = 10
+        state_key = f"kanban_show_all_{key_prefix}"
+        mostrar_todas = st.session_state.get(state_key, False)
+
+        if mostrar_todas:
+            items = df_col
+        else:
+            items = df_col.head(max_default)
+
+        for _, row in items.iterrows():
             html_tarjeta = _tarjeta_orden(row, color)
             st.markdown(html_tarjeta, unsafe_allow_html=True)
 
@@ -282,8 +291,15 @@ def _render_kanban(df_act, df_users, df_ordenes):
                 st.session_state.jump_id = oid
                 st.rerun()
 
-        if len(df_col) > 15:
-            st.caption(f"... y {len(df_col) - 15} más")
+        if len(df_col) > max_default:
+            if not mostrar_todas:
+                if st.button(f"▼ Ver todas ({count})", key=f"{key_prefix}_kanban_more", use_container_width=True):
+                    st.session_state[state_key] = True
+                    st.rerun()
+            else:
+                if st.button(f"▲ Mostrar menos", key=f"{key_prefix}_kanban_less", use_container_width=True):
+                    st.session_state[state_key] = False
+                    st.rerun()
 
     # Renderizar las 3 columnas
     col1, col2, col3 = st.columns(3)
@@ -295,7 +311,7 @@ def _render_kanban(df_act, df_users, df_ordenes):
         _render_columna("POR VALIDAR", "#60A5FA", "🧐", df_validar, "validar")
 
     with col3:
-        _render_columna("CONCLUIDAS", "#10B981", "✅", df_concluidas.head(20), "concluida")
+        _render_columna("CONCLUIDAS", "#10B981", "✅", df_concluidas, "concluida")
 
     # Resumen visual
     st.markdown("---")
@@ -798,6 +814,12 @@ def _render_orden_detalle(id_orden_selec, orden_actual, df_display, idx_tabla, d
 def _render_bitacora(id_orden_selec):
     st.markdown("#### 📜 Bitácora y Adjuntos")
 
+    try:
+        oid = int(id_orden_selec)
+    except (ValueError, TypeError):
+        st.error("ID de orden no válido.")
+        return
+
     # Time tracker compacto
     usuario = st.session_state.get('usuario', '')
     rol = st.session_state.get('rol', '')
@@ -805,7 +827,7 @@ def _render_bitacora(id_orden_selec):
     # Obtener estado actual de la orden
     estado_orden = "Abierta"
     try:
-        res_estado = supabase.table("ordenes").select("estado").eq("id", int(id_orden_selec)).execute()
+        res_estado = supabase.table("ordenes").select("estado").eq("id", oid).execute()
         if res_estado.data:
             estado_orden = res_estado.data[0].get('estado', 'Abierta')
     except Exception:

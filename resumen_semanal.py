@@ -11,7 +11,7 @@ from datetime import datetime, timedelta
 # =====================================================
 SUPABASE_URL = os.environ.get("SUPABASE_URL")
 SUPABASE_KEY = os.environ.get("SUPABASE_KEY")
-TELEGRAM_TOKEN = "8382805163:AAEfkue6AMQu6qvqyRdTmh05kIOZUOxCdwM"
+TELEGRAM_TOKEN = os.environ.get("TELEGRAM_TOKEN")
 
 def enviar_telegram(chat_id, mensaje):
     """Envía mensaje por Telegram"""
