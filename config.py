@@ -30,16 +30,6 @@ TEMAS_DISPONIBLES = {
         "archivo": "styles.css",
         "descripcion": "El tema original de ORIÓN"
     },
-    "slate": {
-        "nombre": "🔵 Slate Profesional",
-        "archivo": "styles_opcion_a.css",
-        "descripcion": "Frío, corporativo, minimalista"
-    },
-    "warm": {
-        "nombre": "🟡 Warm Neutral",
-        "archivo": "styles_opcion_b.css",
-        "descripcion": "Cálido, elegante, cómodo"
-    },
     "light": {
         "nombre": "⬜ Light Professional",
         "archivo": "styles_opcion_claro.css",
