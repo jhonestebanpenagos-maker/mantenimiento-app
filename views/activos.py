@@ -37,16 +37,22 @@ def mostrar_visor(nombre, foto, qr):
     c_zoom1, c_zoom2 = st.columns(2)
     with c_zoom1:
         st.markdown("**Fotografía Real**")
-        if isinstance(foto, str) and len(foto.strip()) > 10:
-            st.image(foto, use_container_width=True)
-        else:
-            st.warning("Sin foto")
+        try:
+            if isinstance(foto, str) and foto.startswith("http") and len(foto) > 10:
+                st.image(foto, use_container_width=True)
+            else:
+                st.warning("Sin foto")
+        except Exception:
+            st.warning("No se pudo cargar la foto.")
     with c_zoom2:
         st.markdown("**Código QR**")
-        if isinstance(qr, str) and len(qr.strip()) > 10:
-            st.image(qr, width=250)
-        else:
-            st.warning("Sin QR")
+        try:
+            if isinstance(qr, str) and qr.startswith("http") and len(qr) > 10:
+                st.image(qr, width=250)
+            else:
+                st.warning("Sin QR")
+        except Exception:
+            st.warning("No se pudo cargar el QR.")
     st.caption("Presione 'Esc' o la 'X' para cerrar.")
 
 
