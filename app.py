@@ -117,14 +117,14 @@ with st.sidebar:
         st.session_state.current_page = "Tablero de Mando"
 
     if rol == "Admin":
-        menu = [("📊", "Tablero"), ("📦", "Inventario Activos"), ("🛠️", "Órdenes de Trabajo"), ("🔩", "Repuestos"), ("👤", "Usuarios")]
-        valores = ["Tablero de Mando", "Inventario Activos", "Ordenes de Trabajo", "Repuestos", "Usuarios"]
+        menu = [("🔍", "Búsqueda"), ("📊", "Tablero"), ("📦", "Inventario Activos"), ("🛠️", "Órdenes de Trabajo"), ("🔩", "Repuestos"), ("👤", "Usuarios")]
+        valores = ["Busqueda Global", "Tablero de Mando", "Inventario Activos", "Ordenes de Trabajo", "Repuestos", "Usuarios"]
     elif rol == "Programador":
-        menu = [("📊", "Tablero"), ("🛠️", "Órdenes de Trabajo"), ("🔩", "Repuestos"), ("👤", "Usuarios")]
-        valores = ["Tablero de Mando", "Ordenes de Trabajo", "Repuestos", "Usuarios"]
+        menu = [("🔍", "Búsqueda"), ("📊", "Tablero"), ("🛠️", "Órdenes de Trabajo"), ("🔩", "Repuestos"), ("👤", "Usuarios")]
+        valores = ["Busqueda Global", "Tablero de Mando", "Ordenes de Trabajo", "Repuestos", "Usuarios"]
     elif rol == "Tecnico":
-        menu = [("🛠️", "Órdenes de Trabajo")]
-        valores = ["Ordenes de Trabajo"]
+        menu = [("🔍", "Búsqueda"), ("🛠️", "Órdenes de Trabajo")]
+        valores = ["Busqueda Global", "Ordenes de Trabajo"]
     else:
         menu = []
         valores = []
@@ -144,7 +144,11 @@ with st.sidebar:
 # ==============================================================================
 # 📄 RENDERIZAR PÁGINAS
 # ==============================================================================
-if choice == "Tablero de Mando":
+if choice == "Busqueda Global":
+    from views.busqueda import render as render_busqueda
+    render_busqueda()
+
+elif choice == "Tablero de Mando":
     from views.dashboard import render as render_dashboard
     render_dashboard()
 
