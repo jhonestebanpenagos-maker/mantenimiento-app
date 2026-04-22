@@ -8,6 +8,7 @@ from utils.uploads import subir_archivo_generico
 from utils.notifications import notificar_telegram
 from utils.charts import sugerir_tecnico, render_sugerencia_tecnico
 from utils.time_tracking import render_time_tracker
+from utils.costos import render_costos
 from pdf_utils import generar_pdf_orden
 
 
@@ -381,6 +382,7 @@ def _render_orden_gestion(row, nombre_activo, df_users, usuario):
         # Time tracker
         if row['estado'] != 'Concluida':
             render_time_tracker(row['id'], usuario)
+            render_costos(row['id'], usuario)
             st.markdown("---")
 
         st.markdown("##### 📜 Historial de Gestión")
