@@ -799,6 +799,7 @@ def _render_bitacora(id_orden_selec):
     # Time tracker compacto
     usuario = st.session_state.get('usuario', '')
     render_time_tracker(id_orden_selec, usuario)
+    render_costos(id_orden_selec, usuario)
 
     st.markdown("---")
     st.caption("Historial de avances y archivos cargados.")
