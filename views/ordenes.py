@@ -1027,7 +1027,10 @@ def _render_preventivos(df_act, df_users):
 
         # Mostrar checklists por plan
         st.markdown("#### ✅ Checklists por Plan")
-        planes_con_checklist = df_planes[df_planes['checklist'].apply(lambda x: isinstance(x, list) and len(x) > 0 if x is not None else False)]
+        if "checklist" in df_planes.columns:
+            planes_con_checklist = df_planes[df_planes["checklist"].apply(lambda x: isinstance(x, list) and len(x) > 0 if x is not None else False)]
+        else:
+            planes_con_checklist = pd.DataFrame()
         if not planes_con_checklist.empty:
             for _, plan in planes_con_checklist.iterrows():
                 nombre_act = map_act.get(plan.get('activo_id'), 'Activo')
