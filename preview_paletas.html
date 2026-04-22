@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ORIÓN — Comparación de Paletas</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #0a0a0a; color: #fff; padding: 30px; }
+  h1 { text-align: center; margin-bottom: 30px; font-size: 1.4rem; color: #888; letter-spacing: 2px; }
+
+  .comparison { display: grid; grid-template-columns: 1fr 1fr; gap: 30px; max-width: 1200px; margin: 0 auto; }
+
+  .palette { border-radius: 16px; overflow: hidden; border: 1px solid rgba(255,255,255,0.05); }
+
+  /* Header de cada paleta */
+  .palette-header { padding: 20px 25px; text-align: center; }
+  .palette-header h2 { font-size: 1.1rem; margin-bottom: 4px; }
+  .palette-header p { font-size: 0.8rem; opacity: 0.6; }
+
+  /* === OPCIÓN A === */
+  .option-a { background: #111318; }
+  .option-a .palette-header { background: #151820; border-bottom: 1px solid rgba(255,255,255,0.06); }
+  .option-a .palette-header h2 { color: #E2E4E9; }
+  .option-a .palette-header p { color: #8B919D; }
+
+  .option-a .metric-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; padding: 15px; }
+  .option-a .metric { background: rgba(25,30,40,0.75); border-left: 3px solid #6B8BD6; border-radius: 8px; padding: 12px; }
+  .option-a .metric-label { font-size: 0.7rem; color: #8B919D; text-transform: uppercase; letter-spacing: 0.5px; }
+  .option-a .metric-value { font-size: 1.4rem; font-weight: 700; color: #E2E4E9; margin-top: 4px; }
+
+  .option-a .card { background: rgba(25,30,40,0.75); margin: 0 15px 10px; border-radius: 10px; padding: 16px; border: 1px solid rgba(255,255,255,0.06); }
+  .option-a .card-title { font-size: 0.85rem; color: #8B919D; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 10px; padding-bottom: 6px; border-bottom: 1px solid rgba(255,255,255,0.06); }
+  .option-a .card h3 { color: #E2E4E9; font-size: 1rem; margin-bottom: 6px; }
+  .option-a .card p { color: #8B919D; font-size: 0.8rem; line-height: 1.5; }
+
+  .option-a .btn-primary { background: #6B8BD6; color: white; border: none; padding: 10px 20px; border-radius: 6px; font-weight: 600; cursor: pointer; font-size: 0.85rem; margin: 10px 15px; }
+  .option-a .btn-secondary { background: rgba(212,107,107,0.12); color: #D46B6B; border: 1px solid #D46B6B; padding: 10px 20px; border-radius: 6px; font-weight: 600; cursor: pointer; font-size: 0.85rem; margin: 10px 15px; }
+
+  .option-a .tab-bar { display: flex; padding: 0 15px; border-bottom: 1px solid rgba(255,255,255,0.06); margin-bottom: 15px; }
+  .option-a .tab { padding: 10px 16px; font-size: 0.8rem; color: #5C6170; font-weight: 500; cursor: pointer; }
+  .option-a .tab.active { color: #6B8BD6; border-bottom: 2px solid #6B8BD6; }
+
+  .option-a .colors { display: flex; gap: 6px; padding: 15px; flex-wrap: wrap; justify-content: center; }
+  .option-a .swatch { width: 40px; height: 40px; border-radius: 8px; position: relative; }
+  .option-a .swatch span { position: absolute; bottom: -18px; left: 50%; transform: translateX(-50%); font-size: 0.55rem; color: #5C6170; white-space: nowrap; }
+
+  /* === OPCIÓN B === */
+  .option-b { background: #141210; }
+  .option-b .palette-header { background: #1A1714; border-bottom: 1px solid rgba(201,165,90,0.08); }
+  .option-b .palette-header h2 { color: #E8E2D8; }
+  .option-b .palette-header p { color: #9E9585; }
+
+  .option-b .metric-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; padding: 15px; }
+  .option-b .metric { background: rgba(35,30,25,0.7); border-left: 3px solid #C9A55A; border-radius: 8px; padding: 12px; }
+  .option-b .metric-label { font-size: 0.7rem; color: #9E9585; text-transform: uppercase; letter-spacing: 0.5px; }
+  .option-b .metric-value { font-size: 1.4rem; font-weight: 700; color: #E8E2D8; margin-top: 4px; }
+
+  .option-b .card { background: rgba(35,30,25,0.7); margin: 0 15px 10px; border-radius: 10px; padding: 16px; border: 1px solid rgba(201,165,90,0.06); }
+  .option-b .card-title { font-size: 0.85rem; color: #9E9585; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 10px; padding-bottom: 6px; border-bottom: 1px solid rgba(201,165,90,0.1); }
+  .option-b .card h3 { color: #E8E2D8; font-size: 1rem; margin-bottom: 6px; }
+  .option-b .card p { color: #9E9585; font-size: 0.8rem; line-height: 1.5; }
+
+  .option-b .btn-primary { background: #C9A55A; color: #141210; border: none; padding: 10px 20px; border-radius: 6px; font-weight: 600; cursor: pointer; font-size: 0.85rem; margin: 10px 15px; }
+  .option-b .btn-secondary { background: rgba(184,107,107,0.1); color: #B86B6B; border: 1px solid #B86B6B; padding: 10px 20px; border-radius: 6px; font-weight: 600; cursor: pointer; font-size: 0.85rem; margin: 10px 15px; }
+
+  .option-b .tab-bar { display: flex; padding: 0 15px; border-bottom: 1px solid rgba(201,165,90,0.08); margin-bottom: 15px; }
+  .option-b .tab { padding: 10px 16px; font-size: 0.8rem; color: #6B6358; font-weight: 500; cursor: pointer; }
+  .option-b .tab.active { color: #C9A55A; border-bottom: 2px solid #C9A55A; }
+
+  .option-b .colors { display: flex; gap: 6px; padding: 15px; flex-wrap: wrap; justify-content: center; }
+  .option-b .swatch { width: 40px; height: 40px; border-radius: 8px; position: relative; }
+  .option-b .swatch span { position: absolute; bottom: -18px; left: 50%; transform: translateX(-50%); font-size: 0.55rem; color: #6B6358; white-space: nowrap; }
+
+  /* Semaforo compartido */
+  .semaforo { display: flex; gap: 8px; padding: 10px 15px; margin-bottom: 10px; }
+  .semaforo-item { flex: 1; text-align: center; padding: 8px; border-radius: 8px; font-size: 0.75rem; font-weight: 600; }
+  .sema-rojo { background: rgba(239,68,68,0.15); color: #ef4444; }
+  .sema-amarillo { background: rgba(245,158,11,0.15); color: #f59e0b; }
+  .sema-verde { background: rgba(16,185,129,0.15); color: #10b981; }
+
+  .footer { text-align: center; margin-top: 30px; padding: 20px; color: #555; font-size: 0.8rem; }
+</style>
+</head>
+<body>
+
+<h1>ORIÓN — Comparación de Paletas de Color</h1>
+
+<div class="comparison">
+
+  <!-- OPCIÓN A: SLATE PROFESIONAL -->
+  <div class="palette option-a">
+    <div class="palette-header">
+      <h2>Opción A — Slate Profesional</h2>
+      <p>Frío, corporativo, minimalista · Azul-grisáceo</p>
+    </div>
+
+    <div class="colors">
+      <div class="swatch" style="background:#111318;"><span>Fondo</span></div>
+      <div class="swatch" style="background:#151820;"><span>Sidebar</span></div>
+      <div class="swatch" style="background:#6B8BD6;"><span>Acento</span></div>
+      <div class="swatch" style="background:#5BBF8C;"><span>OK</span></div>
+      <div class="swatch" style="background:#D4A053;"><span>Alerta</span></div>
+      <div class="swatch" style="background:#D46B6B;"><span>Peligro</span></div>
+      <div class="swatch" style="background:#E2E4E9;"><span>Texto</span></div>
+    </div>
+
+    <div class="tab-bar">
+      <div class="tab active">📊 Tablero</div>
+      <div class="tab">📦 Activos</div>
+      <div class="tab">🛠️ Órdenes</div>
+      <div class="tab">🔩 Repuestos</div>
+    </div>
+
+    <div class="metric-row">
+      <div class="metric"><div class="metric-label">Órdenes Abiertas</div><div class="metric-value">23</div></div>
+      <div class="metric"><div class="metric-label">Por Validar</div><div class="metric-value">7</div></div>
+      <div class="metric"><div class="metric-label">Concluidas</div><div class="metric-value">156</div></div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">📋 Orden #42 — Línea de Producción</div>
+      <h3>Motor principal vibración excesiva</h3>
+      <p>Técnico: Carlos M. · Criticidad: Alta · 3 días abierta</p>
+    </div>
+
+    <div class="card">
+      <div class="card-title">⚙️ Último Movimiento</div>
+      <h3>Repuesto SKF-6205 retirado</h3>
+      <p>Salida de 2 unidades · Almacén Central · Hace 2 horas</p>
+    </div>
+
+    <div class="semaforo">
+      <div class="semaforo-item sema-rojo">🔴 Pedro — Crítico</div>
+      <div class="semaforo-item sema-amarillo">🟡 Ana — Ocupado</div>
+      <div class="semaforo-item sema-verde">🟢 Luis — Libre</div>
+    </div>
+
+    <button class="btn-primary">💾 Guardar Cambios</button>
+    <button class="btn-secondary">🗑️ Eliminar</button>
+  </div>
+
+  <!-- OPCIÓN B: WARM NEUTRAL -->
+  <div class="palette option-b">
+    <div class="palette-header">
+      <h2>Opción B — Warm Neutral</h2>
+      <p>Cálido, elegante, cómodo · Ámbar tenue</p>
+    </div>
+
+    <div class="colors">
+      <div class="swatch" style="background:#141210;"><span>Fondo</span></div>
+      <div class="swatch" style="background:#1A1714;"><span>Sidebar</span></div>
+      <div class="swatch" style="background:#C9A55A;"><span>Acento</span></div>
+      <div class="swatch" style="background:#6BAF7D;"><span>OK</span></div>
+      <div class="swatch" style="background:#C9A040;"><span>Alerta</span></div>
+      <div class="swatch" style="background:#B86B6B;"><span>Peligro</span></div>
+      <div class="swatch" style="background:#E8E2D8;"><span>Texto</span></div>
+    </div>
+
+    <div class="tab-bar">
+      <div class="tab active">📊 Tablero</div>
+      <div class="tab">📦 Activos</div>
+      <div class="tab">🛠️ Órdenes</div>
+      <div class="tab">🔩 Repuestos</div>
+    </div>
+
+    <div class="metric-row">
+      <div class="metric"><div class="metric-label">Órdenes Abiertas</div><div class="metric-value">23</div></div>
+      <div class="metric"><div class="metric-label">Por Validar</div><div class="metric-value">7</div></div>
+      <div class="metric"><div class="metric-label">Concluidas</div><div class="metric-value">156</div></div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">📋 Orden #42 — Línea de Producción</div>
+      <h3>Motor principal vibración excesiva</h3>
+      <p>Técnico: Carlos M. · Criticidad: Alta · 3 días abierta</p>
+    </div>
+
+    <div class="card">
+      <div class="card-title">⚙️ Último Movimiento</div>
+      <h3>Repuesto SKF-6205 retirado</h3>
+      <p>Salida de 2 unidades · Almacén Central · Hace 2 horas</p>
+    </div>
+
+    <div class="semaforo">
+      <div class="semaforo-item sema-rojo">🔴 Pedro — Crítico</div>
+      <div class="semaforo-item sema-amarillo">🟡 Ana — Ocupado</div>
+      <div class="semaforo-item sema-verde">🟢 Luis — Libre</div>
+    </div>
+
+    <button class="btn-primary">💾 Guardar Cambios</button>
+    <button class="btn-secondary">🗑️ Eliminar</button>
+  </div>
+
+</div>
+
+<div class="footer">
+  ORIÓN — Comparación de Paletas · Los colores de estado (rojo/amarillo/verde) se mantienen iguales en ambas opciones.
+</div>
+
+</body>
+</html>

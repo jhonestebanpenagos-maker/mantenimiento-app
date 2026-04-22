@@ -14,7 +14,7 @@ st.set_page_config(page_title="Orión | Mantenimiento", layout="wide", initial_s
 st.write("Streamlit version:", st.__version__)
 
 # Configuración
-from config import init_cloudinary, cargar_css
+from config import init_cloudinary, cargar_css, render_selector_tema
 from auth import check_login, logout
 from utils.db import supabase, run_query
 from utils.notifications import notificar_telegram
@@ -110,6 +110,8 @@ with st.sidebar:
 
     if st.button("🔓 Salir", use_container_width=True, type="secondary"):
         logout()
+
+    render_selector_tema()
 
     st.divider()
 

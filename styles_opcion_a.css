@@ -1,0 +1,199 @@
+/* =============================================================
+   OPCIÓN A: SLATE PROFESIONAL
+   Paleta fría, corporativa, minimalista.
+   Azules grises, sin gradientes, máxima legibilidad.
+   ============================================================= */
+:root {
+    --accent: #6B8BD6;
+    --accent-soft: rgba(107, 139, 214, 0.12);
+    --success: #5BBF8C;
+    --warning: #D4A053;
+    --danger: #D46B6B;
+    --bg-main: #111318;
+    --bg-sidebar: #151820;
+    --bg-card: rgba(25, 30, 40, 0.75);
+    --bg-input: #0D0F14;
+    --border: rgba(255, 255, 255, 0.06);
+    --border-focus: rgba(107, 139, 214, 0.4);
+    --text-primary: #E2E4E9;
+    --text-secondary: #8B919D;
+    --text-muted: #5C6170;
+}
+
+/* =========================================
+   1. OPTIMIZACIÓN MÓVIL
+   ========================================= */
+#MainMenu {visibility: hidden;}
+footer {visibility: hidden;}
+header {visibility: hidden;}
+
+@media (max-width: 768px) {
+    .block-container {
+        padding-top: 1.5rem !important;
+        padding-left: 0.5rem !important;
+        padding-right: 0.5rem !important;
+        padding-bottom: 1rem !important;
+    }
+    div[data-testid="metric-container"] { padding: 5% !important; }
+    h1 { font-size: 1.8rem !important; }
+    h2 { font-size: 1.5rem !important; }
+    h3 { font-size: 1.2rem !important; }
+    img { max-width: 100% !important; height: auto !important; }
+}
+
+/* =========================================
+   2. ESTILOS GENERALES
+   ========================================= */
+.stApp {
+    background-color: var(--bg-main);
+    color: var(--text-primary);
+}
+
+/* BARRA LATERAL */
+[data-testid="stSidebar"] {
+    background-color: var(--bg-sidebar);
+    border-right: 1px solid var(--border);
+}
+[data-testid="stSidebarNav"] span {
+    color: var(--text-primary) !important;
+    font-weight: 500;
+}
+[data-testid="stSidebarNav"] a[aria-current="page"] {
+    background-color: var(--accent-soft);
+    border-left: 3px solid var(--accent);
+}
+
+/* BOTONES SECUNDARIOS (peligro) */
+section[data-testid="stSidebar"] button[kind="secondary"] {
+    background-color: transparent !important;
+    border: 1px solid var(--danger) !important;
+}
+section[data-testid="stSidebar"] button[kind="secondary"] p {
+    color: var(--danger) !important;
+}
+section[data-testid="stSidebar"] button[kind="secondary"]:hover {
+    background-color: rgba(212, 107, 107, 0.1) !important;
+}
+
+section[data-testid="stMain"] button[kind="secondary"] {
+    background-color: rgba(212, 107, 107, 0.12) !important;
+    border: 1px solid var(--danger) !important;
+}
+section[data-testid="stMain"] button[kind="secondary"] * {
+    color: var(--danger) !important;
+    font-weight: 600 !important;
+}
+section[data-testid="stMain"] button[kind="secondary"]:hover {
+    background-color: rgba(212, 107, 107, 0.2) !important;
+}
+
+/* =========================================
+   3. TIPOGRAFÍA (SIN GRADIENTES)
+   ========================================= */
+h1, h2, h3 {
+    color: var(--text-primary) !important;
+    -webkit-text-fill-color: var(--text-primary) !important;
+    font-weight: 700 !important;
+    text-transform: none !important;
+    letter-spacing: -0.01em;
+}
+
+/* TARJETAS */
+.card-style {
+    background: var(--bg-card);
+    backdrop-filter: blur(8px);
+    border-radius: 10px;
+    padding: 22px;
+    border: 1px solid var(--border);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+    margin-bottom: 16px;
+}
+.chart-header {
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: var(--text-secondary);
+    margin-bottom: 12px;
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 8px;
+    display: block;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+/* =========================================
+   4. INPUTS Y FORMULARIOS
+   ========================================= */
+.stTextInput input,
+.stTextArea textarea,
+.stSelectbox > div > div {
+    background-color: var(--bg-input) !important;
+    color: var(--text-primary) !important;
+    border: 1px solid var(--border) !important;
+    border-radius: 6px;
+}
+.stTextInput input:focus,
+.stTextArea textarea:focus {
+    border-color: var(--border-focus) !important;
+    box-shadow: 0 0 0 1px var(--border-focus) !important;
+}
+.stTextInput label,
+.stSelectbox label,
+.stTextArea label {
+    color: var(--text-secondary) !important;
+    font-weight: 500 !important;
+}
+
+/* BOTÓN PRINCIPAL */
+div.stButton > button:first-child {
+    background: var(--accent) !important;
+    color: white !important;
+    border: none;
+    font-weight: 600;
+    border-radius: 6px;
+    transition: all 0.15s ease;
+}
+div.stButton > button:first-child:hover {
+    background: #7D9AE0 !important;
+    transform: translateY(-1px);
+}
+
+/* =========================================
+   5. MÉTRICAS
+   ========================================= */
+[data-testid="stMetric"] {
+    background: var(--bg-card);
+    border-left: 3px solid var(--accent);
+    border-radius: 8px;
+    padding: 14px;
+}
+[data-testid="stMetricLabel"] {
+    color: var(--text-secondary) !important;
+    font-size: 0.8rem !important;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+[data-testid="stMetricValue"] {
+    color: var(--text-primary) !important;
+}
+
+/* =========================================
+   6. PESTAÑAS
+   ========================================= */
+.stTabs [data-baseweb="tab"] {
+    color: var(--text-muted);
+    font-weight: 500;
+}
+.stTabs [aria-selected="true"] {
+    color: var(--accent) !important;
+    background-color: transparent !important;
+    border-bottom-color: var(--accent) !important;
+}
+
+/* LAYOUT */
+div[data-testid="stVerticalBlock"] > div:empty {
+    height: 0 !important;
+    margin: 0 !important;
+}
+[data-testid="stSidebarNav"] {
+    padding-top: 10px !important;
+}
