@@ -8,7 +8,7 @@ from utils.db import run_query
 from utils.helpers import mostrar_notificaciones
 from utils.notifications import verificar_sla_y_alertar
 from utils.charts import (
-    mostrar_metricas_inteligentes, graficar_alternativas_visuales,
+    mostrar_metricas_inteligentes, graficar_tendencia_semanal,
     mostrar_tops_ordenes, mostrar_kpis_industriales, graficar_estado_barras,
     graficar_criticidad, graficar_torta_tipo, graficar_ordenes_por_tecnico,
     semaforo_tecnicos
@@ -41,8 +41,8 @@ def generar_excel_cached(df_len, df_ordenes, df_activos, df_usuarios):
 # 📄 RENDERIZAR SECCIONES PESADAS (lazy)
 # ==============================================================================
 def _render_seccion_graficos(df, df_users):
-    """Sección de gráficos — se renderiza solo cuando es visible."""
-    graficar_alternativas_visuales(df, df_users)
+    """Sección de tendencia — se renderiza solo cuando es visible."""
+    graficar_tendencia_semanal(df)
     st.markdown("---")
     mostrar_tops_ordenes(df)
 
@@ -148,7 +148,7 @@ def render():
     # En vez de renderizar todo de golpe, el usuario ve primero lo importante
     # y elige qué sección pesada cargar
     tab_graficos, tab_kpis, tab_analisis, tab_tecnicos = st.tabs([
-        "📊 Flujo y Tendencias",
+        "📈 Tendencia",
         "🏭 KPIs Industriales",
         "📈 Análisis Global",
         "👥 Técnicos"

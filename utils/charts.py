@@ -146,171 +146,100 @@ def _calcular_tops(ordenes_hash, df_ordenes_data):
 
 
 @st.cache_data(ttl=300, show_spinner=False)
-def _calcular_flujo_datos(ordenes_hash, df_ordenes_data, df_users_data):
+@st.cache_data(ttl=300, show_spinner=False)
+def _calcular_tendencia_semanal(ordenes_hash, df_ordenes_data):
+    """Calcula OTs creadas vs cerradas por semana (últimas 12 semanas)."""
     df = pd.DataFrame(df_ordenes_data)
-    df_users = pd.DataFrame(df_users_data)
     if df.empty:
         return pd.DataFrame()
-    # Limitar a 200 registros más recientes para el gráfico de flujo
-    if len(df) > 200:
-        df = df.sort_values('fecha_creacion', ascending=False).head(200)
-    map_user = dict(zip(df_users['id'].astype(str), df_users['nombre'])) if not df_users.empty else {}
+
     now = datetime.now()
-    df = df.copy()
-    df['Tecnico'] = df['tecnico_asignado'].astype(str).map(map_user).fillna("Sin Asignar")
-    df['Inicio'] = pd.to_datetime(df['fecha_creacion'])
-    df['Cierre_Calc'] = pd.to_datetime(df['fecha_cierre']).fillna(now)
-    df['Dias_Activa'] = ((df['Cierre_Calc'] - df['Inicio']).dt.total_seconds() / 86400).round(1)
-    return df[['Tecnico', 'criticidad', 'estado', 'Dias_Activa', 'id', 'descripcion']]
+    inicio = now - pd.Timedelta(weeks=12)
 
+    df['fecha_creacion'] = pd.to_datetime(df['fecha_creacion'], errors='coerce')
+    df['fecha_cierre'] = pd.to_datetime(df['fecha_cierre'], errors='coerce')
 
-@st.cache_data(ttl=300, show_spinner=False)
-def _calcular_semaforo(ordenes_hash, df_ordenes_data, df_users_data):
-    df_ordenes = pd.DataFrame(df_ordenes_data)
-    df_users = pd.DataFrame(df_users_data)
-    if df_ordenes.empty or df_users.empty:
-        return []
-    LIMITE_OCUPADO = 3
-    LIMITE_SOBRECARGADO = 6
-    abiertas = df_ordenes[df_ordenes['estado'] == 'Abierta']
-    conteo = abiertas.groupby('tecnico_asignado').size().reset_index(name='ordenes_abiertas')
-    conteo['tecnico_asignado'] = conteo['tecnico_asignado'].astype(str)
-    resultado = []
-    for _, user in df_users.iterrows():
-        uid = str(user['id'])
-        fila = conteo[conteo['tecnico_asignado'] == uid]
-        n = int(fila['ordenes_abiertas'].values[0]) if not fila.empty else 0
-        if n == 0:
-            color, estado, icono, barra = "#10B981", "LIBRE", "🟢", 0
-        elif n <= LIMITE_OCUPADO:
-            color, estado, icono, barra = "#F59E0B", "OCUPADO", "🟡", 40
-        elif n <= LIMITE_SOBRECARGADO:
-            color, estado, icono, barra = "#EA580C", "CARGADO", "🟠", 70
-        else:
-            color, estado, icono, barra = "#EF4444", "CRÍTICO", "🔴", 100
-        resultado.append({
-            'id': uid, 'nombre': user['nombre'], 'rol': user['rol'],
-            'ordenes': n, 'color': color, 'estado': estado, 'icono': icono, 'barra': barra
-        })
-    return resultado
+    df_creadas = df[df['fecha_creacion'] >= inicio].copy()
+    df_creadas['semana'] = df_creadas['fecha_creacion'].dt.isocalendar().week.astype(int)
+    df_creadas['anio'] = df_creadas['fecha_creacion'].dt.isocalendar().year.astype(int)
+    creadas = df_creadas.groupby(['anio', 'semana']).size().reset_index(name='Creadas')
 
+    df_cerradas = df[df['fecha_cierre'].notna() & (df['fecha_cierre'] >= inicio)].copy()
+    df_cerradas['semana'] = df_cerradas['fecha_cierre'].dt.isocalendar().week.astype(int)
+    df_cerradas['anio'] = df_cerradas['fecha_cierre'].dt.isocalendar().year.astype(int)
+    cerradas = df_cerradas.groupby(['anio', 'semana']).size().reset_index(name='Cerradas')
 
-def graficar_ordenes_por_tecnico(df_ordenes, df_users):
-    datos = _calcular_datos_tecnicos(_df_hash(df_ordenes), _df_to_records(df_ordenes), _df_to_records(df_users))
-    if not datos:
-        st.info("No hay datos suficientes para mostrar la carga por técnico.")
-        return
-    df_final = pd.DataFrame(datos).sort_values('Total', ascending=True)
-    fig = go.Figure()
-    fig.add_trace(go.Bar(
-        name='Concluidas', y=df_final['Tecnico'], x=df_final['Concluidas'],
-        orientation='h', marker=dict(color='#10B981', line=dict(width=0)),
-        text=df_final['Concluidas'], textposition='inside',
-        textfont=dict(color='white', size=12),
-        hovertemplate='<b>%{y}</b><br>Concluidas: %{x}<extra></extra>'
-    ))
-    fig.add_trace(go.Bar(
-        name='Abiertas', y=df_final['Tecnico'], x=df_final['Abiertas'],
-        orientation='h', marker=dict(color='#F59E0B', line=dict(width=0)),
-        text=df_final['Abiertas'], textposition='inside',
-        textfont=dict(color='white', size=12),
-        hovertemplate='<b>%{y}</b><br>Abiertas: %{x}<extra></extra>'
-    ))
-    fig.update_layout(
-        barmode='stack', paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)',
-        font=dict(color='white', size=12), height=250,
-        margin=dict(l=0, r=0, t=10, b=0), showlegend=True,
-        legend=dict(orientation="h", yanchor="bottom", y=-0.25, xanchor="center", x=0.5, font=dict(color='white', size=12), bgcolor='rgba(0,0,0,0)'),
-        xaxis=dict(showgrid=True, gridcolor='rgba(255,255,255,0.1)', title=None),
-        yaxis=dict(title=None, tickfont=dict(size=11))
+    semanas = pd.concat([creadas[['anio', 'semana']], cerradas[['anio', 'semana']]]).drop_duplicates()
+    semanas = semanas.sort_values(['anio', 'semana']).reset_index(drop=True)
+    semanas = semanas.merge(creadas, on=['anio', 'semana'], how='left')
+    semanas = semanas.merge(cerradas, on=['anio', 'semana'], how='left')
+    semanas['Creadas'] = semanas['Creadas'].fillna(0).astype(int)
+    semanas['Cerradas'] = semanas['Cerradas'].fillna(0).astype(int)
+
+    semanas['Semana'] = semanas.apply(
+        lambda r: f"S{int(r['semana'])} \'{str(int(r['anio']))[-2:]}", axis=1
     )
-    fig.update_layout(dragmode=False, hovermode='y unified')
+    semanas['Backlog'] = (semanas['Creadas'] - semanas['Cerradas']).cumsum()
+
+    return semanas
+
+
+def graficar_tendencia_semanal(df_ordenes):
+    """Gráfico de tendencia: OTs creadas vs cerradas por semana + backlog."""
+    semanas = _calcular_tendencia_semanal(_df_hash(df_ordenes), _df_to_records(df_ordenes))
+    if semanas.empty:
+        st.info("No hay datos suficientes para mostrar tendencia.")
+        return
+
+    st.markdown("### 📈 Tendencia Semanal de OTs")
+    st.caption("Creadas vs Cerradas por semana — ¿estamos cerrando más de lo que entra?")
+
+    fig = go.Figure()
+
+    fig.add_trace(go.Bar(
+        name='📥 Creadas', x=semanas['Semana'], y=semanas['Creadas'],
+        marker_color='#F59E0B', text=semanas['Creadas'], textposition='inside',
+        textfont=dict(color='white', size=11),
+        hovertemplate='<b>%{x}</b><br>Creadas: %{y}<extra></extra>'
+    ))
+
+    fig.add_trace(go.Bar(
+        name='✅ Cerradas', x=semanas['Semana'], y=semanas['Cerradas'],
+        marker_color='#10B981', text=semanas['Cerradas'], textposition='inside',
+        textfont=dict(color='white', size=11),
+        hovertemplate='<b>%{x}</b><br>Cerradas: %{y}<extra></extra>'
+    ))
+
+    fig.add_trace(go.Scatter(
+        name='🔥 Backlog', x=semanas['Semana'], y=semanas['Backlog'],
+        mode='lines+markers+text', line=dict(color='#EF4444', width=2),
+        marker=dict(size=6), text=semanas['Backlog'], textposition='top center',
+        textfont=dict(color='#EF4444', size=10),
+        hovertemplate='<b>%{x}</b><br>Backlog: %{y}<extra></extra>'
+    ))
+
+    fig.update_layout(
+        barmode='group',
+        paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)',
+        font=dict(color='white', size=12), height=350,
+        margin=dict(l=0, r=0, t=10, b=0),
+        legend=dict(orientation="h", yanchor="bottom", y=-0.25, xanchor="center", x=0.5,
+                    font=dict(color='white', size=12), bgcolor='rgba(0,0,0,0)'),
+        xaxis=dict(title=None, showgrid=False),
+        yaxis=dict(showgrid=True, gridcolor='rgba(255,255,255,0.1)', title=None),
+        hovermode='x unified'
+    )
+
     st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
 
-
-def graficar_criticidad(df):
-    if df.empty:
-        return
-    conteo = df['criticidad'].value_counts().reset_index()
-    conteo.columns = ['Nivel', 'Cantidad']
-    conteo['Nivel'] = conteo['Nivel'].astype(str).str.strip()
-    orden_oficial = ["Baja", "Media", "Alta", "Crítica"]
-    colores = {"Baja": "#10B981", "Media": "#F59E0B", "Alta": "#EA580C", "Crítica": "#EF4444"}
-    conteo = conteo[conteo['Nivel'].isin(orden_oficial)]
-    fig = px.bar(conteo, x='Nivel', y='Cantidad', color='Nivel', color_discrete_map=colores, text='Cantidad', category_orders={"Nivel": orden_oficial})
-    fig.update_layout(
-        paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)',
-        font=dict(color='white'), showlegend=False,
-        margin=dict(l=0, r=0, t=10, b=0), height=250,
-        xaxis=dict(title=None), yaxis=dict(showgrid=True, gridcolor='rgba(255,255,255,0.1)')
-    )
-    fig.update_traces(textfont_size=14, textposition='outside', marker_line_width=0)
-    st.plotly_chart(fig, use_container_width=True)
+    ultima = semanas.iloc[-1]
+    balance = int(ultima['Creadas'] - ultima['Cerradas'])
+    if balance <= 0:
+        st.success(f"✅ Última semana: {ultima['Cerradas']} cerradas vs {ultima['Creadas']} creadas — vas bien.")
+    else:
+        st.warning(f"⚠️ Última semana: {ultima['Creadas']} creadas vs {ultima['Cerradas']} cerradas — +{balance} acumuladas.")
 
 
-def graficar_torta_tipo(df):
-    if df.empty:
-        return
-    conteo = df['tipo_mantenimiento'].value_counts().reset_index()
-    conteo.columns = ['Tipo', 'Cantidad']
-    colores_torta = ["#3B82F6", "#8B5CF6", "#EC4899"]
-    fig = go.Figure(data=[go.Pie(
-        labels=conteo['Tipo'], values=conteo['Cantidad'], hole=.5,
-        marker=dict(colors=colores_torta, line=dict(color='#111827', width=2)),
-        textinfo='label+percent', textfont=dict(color='white')
-    )])
-    fig.update_layout(paper_bgcolor='rgba(0,0,0,0)', font=dict(color='white'), height=250, showlegend=False, margin=dict(l=0, r=0, t=10, b=10))
-    st.plotly_chart(fig, use_container_width=True)
-
-
-def graficar_estado_barras(df):
-    if df.empty:
-        return
-    conteo = df['estado'].value_counts().reset_index()
-    conteo.columns = ['Estado', 'Cantidad']
-    colores = {"Abierta": "#F59E0B", "Concluida": "#10B981"}
-    fig = px.bar(conteo, x='Cantidad', y='Estado', orientation='h', color='Estado', color_discrete_map=colores, text='Cantidad')
-    fig.update_layout(
-        paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)',
-        font=dict(color='white'), showlegend=False,
-        margin=dict(l=0, r=0, t=10, b=0), height=250,
-        xaxis=dict(showgrid=False), yaxis=dict(title=None)
-    )
-    fig.update_traces(textfont_size=14, textposition='inside')
-    st.plotly_chart(fig, use_container_width=True)
-
-
-def graficar_alternativas_visuales(df_ordenes, df_users):
-    df_vis = _calcular_flujo_datos(_df_hash(df_ordenes), _df_to_records(df_ordenes), _df_to_records(df_users))
-    if df_vis.empty:
-        st.info("No hay datos para graficar.")
-        return
-    st.markdown("### 🌊 Flujo de Distribución")
-    st.caption("Sigue las líneas: Técnico ➔ Criticidad ➔ Estado actual.")
-    fig_flow = px.parallel_categories(
-        df_vis, dimensions=['Tecnico', 'criticidad', 'estado'],
-        color="Dias_Activa", color_continuous_scale=px.colors.sequential.Inferno,
-        labels={'Tecnico': 'Personal', 'criticidad': 'Urgencia', 'estado': 'Situación'}
-    )
-    fig_flow.update_layout(paper_bgcolor='rgba(0,0,0,0)', margin=dict(l=20, r=20, t=20, b=20), font=dict(color='white'), height=350)
-    st.plotly_chart(fig_flow, use_container_width=True)
-    st.markdown("---")
-    st.markdown("### 🏎️ Tiempos de Respuesta (La Carrera)")
-    st.caption("Cada punto es una Orden. Izquierda = Reciente/Rápido. Derecha = Antiguo/Lento.")
-    color_map_crit = {"Alta": "#EF4444", "Media": "#F59E0B", "Baja": "#10B981", "Crítica": "#7F1D1D"}
-    fig_race = px.strip(
-        df_vis, x="Dias_Activa", y="Tecnico", color="criticidad",
-        color_discrete_map=color_map_crit, orientation="h", stripmode="overlay",
-        hover_data=["id", "descripcion", "estado"]
-    )
-    fig_race.update_layout(
-        paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(255,255,255,0.05)',
-        font=dict(color='white'), height=300,
-        xaxis=dict(title="Días desde creación", showgrid=True, gridcolor='rgba(255,255,255,0.1)'),
-        yaxis=dict(title=None)
-    )
-    fig_race.add_vline(x=7, line_width=1, line_dash="dash", line_color="white", annotation_text="Límite 7 días")
-    st.plotly_chart(fig_race, use_container_width=True)
 
 
 def mostrar_tops_ordenes(df_ordenes):
