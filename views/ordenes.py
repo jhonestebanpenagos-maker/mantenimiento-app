@@ -472,10 +472,10 @@ def _render_kanban(df_act, df_users, df_ordenes, df_solicitudes=None):
 
     c_f1, c_f2, c_f3 = st.columns(3)
     with c_f1:
-        filtro_activo_k = st.selectbox(
-            "Filtrar por activo",
-            ["Todos"] + sorted([v for v in map_act.values() if v]),
-            key="kanban_filtro_activo"
+        filtro_estado_k = st.selectbox(
+            "Filtrar por estado",
+            ["Todas", "Abierta", "Por Validar", "Concluida", "Cancelada"],
+            key="kanban_filtro_estado"
         )
     with c_f2:
         filtro_crit_k = st.selectbox(
@@ -491,9 +491,8 @@ def _render_kanban(df_act, df_users, df_ordenes, df_solicitudes=None):
         )
 
     def _aplicar_filtros(df):
-        if filtro_activo_k != "Todos":
-            act_ids = [k for k, v in map_act.items() if v == filtro_activo_k]
-            df = df[df['activo_id'].isin(act_ids)]
+        if filtro_estado_k != "Todas":
+            df = df[df['estado'] == filtro_estado_k]
         if filtro_crit_k != "Todas":
             df = df[df['criticidad'] == filtro_crit_k]
         if filtro_tipo_k != "Todos":
