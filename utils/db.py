@@ -1,5 +1,5 @@
 # ==============================================================================
-# utils/db.py — OPTIMIZADO
+# utils/db.py — COMPLETO CON INVALIDACIÓN
 # ==============================================================================
 import streamlit as st
 import pandas as pd
@@ -28,28 +28,11 @@ supabase = init_supabase()
 
 
 # ==============================================================================
-# 🔍 FUNCIONES DE CONSULTA
+# 📦 CACHÉ DE LECTURA
 # ==============================================================================
-def run_query(table_name, filters=None, order_by="id"):
-    """
-    Todas las tablas pasan por caché.
-    - Tablas maestras: TTL 600s (cambian poco)
-    - Tablas transaccionales: TTL 60s (cambian más seguido)
-    """
-    tablas_maestras = ["usuarios", "activos", "categorias", "ubicaciones", "inventario"]
-
-    if table_name in tablas_maestras:
-        return pd.DataFrame(_run_query_cached(table_name, tuple(filters.items()) if filters else None, order_by, ttl=600))
-    else:
-        return pd.DataFrame(_run_query_cached(table_name, tuple(filters.items()) if filters else None, order_by, ttl=60))
-
-
-@st.cache_data(ttl=60, show_spinner=False)
-def _run_query_cached(table_name, filters_tuple, order_by, ttl=60):
-    """
-    Consulta genérica cacheada.
-    Recibe filters como tupla para que sea hashable por Streamlit.
-    """
+@st.cache_data(ttl=300, show_spinner=False)
+def _run_query_cached(table_name, filters_tuple, order_by):
+    """Consulta genérica cacheada. TTL largo porque se invalida al escribir."""
     try:
         query = supabase.table(table_name).select("*")
         if filters_tuple:
@@ -63,38 +46,57 @@ def _run_query_cached(table_name, filters_tuple, order_by, ttl=60):
         return []
 
 
-# ── Mantener compatibilidad con imports existentes ──
-def _run_query_internal(table_name, filters, order_by):
-    """Compatibilidad: redirige a _run_query_cached."""
+def run_query(table_name, filters=None, order_by="id"):
+    """Lee datos con caché. Se actualiza inmediatamente tras writes."""
     filters_tuple = tuple(filters.items()) if filters else None
-    return _run_query_cached(table_name, filters_tuple, order_by)
-
-def _run_query_live_data(table_name, filters, order_by):
-    """Compatibilidad: redirige a _run_query_cached."""
-    filters_tuple = tuple(filters.items()) if filters else None
-    return _run_query_cached(table_name, filters_tuple, order_by)
+    return pd.DataFrame(_run_query_cached(table_name, filters_tuple, order_by))
 
 
 # ==============================================================================
-# 🚫 INVALIDAR CACHÉ (cuando se crea/actualiza/elimina un registro)
+# ✏️ ESCRITURA CON INVALIDACIÓN AUTOMÁTICA
 # ==============================================================================
-def invalidate_cache(table_name: str):
-    """Limpia el caché de una tabla específica después de una escritura."""
+def invalidate_cache(table_name: str = None):
+    """Limpia caché para que el siguiente rerun traiga datos frescos."""
     _run_query_cached.clear()
-    st.cache_data.clear()
+    run_query_paginated.clear()
+    print(f"🔄 Caché invalidado: {table_name or 'TODO'}")
+
+
+def db_insert(table_name: str, data: dict):
+    """Insert + invalidación automática."""
+    result = supabase.table(table_name).insert(data).execute()
+    invalidate_cache(table_name)
+    return result
+
+
+def db_update(table_name: str, data: dict, id_field: str, id_value):
+    """Update + invalidación automática."""
+    result = supabase.table(table_name).update(data).eq(id_field, id_value).execute()
+    invalidate_cache(table_name)
+    return result
+
+
+def db_upsert(table_name: str, data: dict):
+    """Upsert + invalidación automática."""
+    result = supabase.table(table_name).upsert(data).execute()
+    invalidate_cache(table_name)
+    return result
+
+
+def db_delete(table_name: str, id_field: str, id_value):
+    """Delete + invalidación automática."""
+    result = supabase.table(table_name).delete().eq(id_field, id_value).execute()
+    invalidate_cache(table_name)
+    return result
 
 
 # ==============================================================================
 # 📄 CONSULTAS PAGINADAS
 # ==============================================================================
-@st.cache_data(ttl=60, show_spinner=False)
+@st.cache_data(ttl=300, show_spinner=False)
 def run_query_paginated(table_name, page=1, per_page=25, filters_tuple=None, order_by="id", desc=True):
-    """
-    Consulta con paginación real desde Supabase (cacheada).
-    Retorna (data_list, total_registros, total_paginas).
-    """
+    """Consulta paginada cacheada. Se invalida automáticamente tras writes."""
     try:
-        # Conteo total
         count_q = supabase.table(table_name).select("id", count="exact")
         if filters_tuple:
             for key, value in filters_tuple:
@@ -106,7 +108,6 @@ def run_query_paginated(table_name, page=1, per_page=25, filters_tuple=None, ord
         count_res = count_q.execute()
         total = count_res.count if count_res.count is not None else 0
 
-        # Datos paginados
         offset = (page - 1) * per_page
         data_q = supabase.table(table_name).select("*")
         if filters_tuple:
@@ -124,21 +125,18 @@ def run_query_paginated(table_name, page=1, per_page=25, filters_tuple=None, ord
         return data, total, total_paginas
 
     except Exception as e:
-        print(f"Error en consulta paginada {table_name}: {e}")
+        print(f"Error paginación {table_name}: {e}")
         return [], 0, 0
 
 
 def run_query_paginated_df(table_name, page=1, per_page=25, filters=None, order_by="id", desc=True):
-    """Wrapper que convierte filters dict a tupla y retorna DataFrame."""
+    """Wrapper que retorna DataFrame."""
     filters_tuple = tuple(filters.items()) if filters else None
     data, total, total_paginas = run_query_paginated(table_name, page, per_page, filters_tuple, order_by, desc)
     return pd.DataFrame(data), total, total_paginas
 
 
 def render_paginacion(key_prefix: str, pagina_actual: int, total_paginas: int, total_registros: int) -> int:
-    """
-    Renderiza controles de paginación. Retorna la página seleccionada.
-    """
     if total_paginas <= 1:
         return pagina_actual
 
@@ -149,8 +147,7 @@ def render_paginacion(key_prefix: str, pagina_actual: int, total_paginas: int, t
     with c_nav:
         c_prev, c_pg, c_next = st.columns([1, 2, 1])
         with c_prev:
-            disabled_prev = pagina_actual <= 1
-            if st.button("◀", key=f"{key_prefix}_prev", disabled=disabled_prev, use_container_width=True):
+            if st.button("◀", key=f"{key_prefix}_prev", disabled=pagina_actual <= 1, use_container_width=True):
                 return pagina_actual - 1
         with c_pg:
             nueva = st.number_input(
@@ -161,8 +158,7 @@ def render_paginacion(key_prefix: str, pagina_actual: int, total_paginas: int, t
             if nueva != pagina_actual:
                 return nueva
         with c_next:
-            disabled_next = pagina_actual >= total_paginas
-            if st.button("▶", key=f"{key_prefix}_next", disabled=disabled_next, use_container_width=True):
+            if st.button("▶", key=f"{key_prefix}_next", disabled=pagina_actual >= total_paginas, use_container_width=True):
                 return pagina_actual + 1
 
     return pagina_actual
