@@ -9,6 +9,7 @@ from utils.notifications import notificar_telegram
 from utils.charts import sugerir_tecnico, render_sugerencia_tecnico
 from utils.time_tracking import render_time_tracker
 from utils.costos import render_costos
+from utils.firmas import render_firmas_cierre
 from pdf_utils import generar_pdf_orden
 
 
@@ -383,6 +384,7 @@ def _render_orden_gestion(row, nombre_activo, df_users, usuario):
         if row['estado'] != 'Concluida':
             render_time_tracker(row['id'], usuario)
             render_costos(row['id'], usuario)
+            render_firmas_cierre(row['id'], usuario, st.session_state.get('rol', ''), row['estado'])
             st.markdown("---")
 
         st.markdown("##### 📜 Historial de Gestión")
@@ -798,8 +800,20 @@ def _render_bitacora(id_orden_selec):
 
     # Time tracker compacto
     usuario = st.session_state.get('usuario', '')
+    rol = st.session_state.get('rol', '')
+
+    # Obtener estado actual de la orden
+    estado_orden = "Abierta"
+    try:
+        res_estado = supabase.table("ordenes").select("estado").eq("id", int(id_orden_selec)).execute()
+        if res_estado.data:
+            estado_orden = res_estado.data[0].get('estado', 'Abierta')
+    except Exception:
+        pass
+
     render_time_tracker(id_orden_selec, usuario)
     render_costos(id_orden_selec, usuario)
+    render_firmas_cierre(id_orden_selec, usuario, rol, estado_orden)
 
     st.markdown("---")
     st.caption("Historial de avances y archivos cargados.")
