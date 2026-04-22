@@ -20,6 +20,7 @@ from utils.db import supabase
 from utils.notifications import notificar_telegram
 
 # ── Imports de vistas (una sola vez al cargar el módulo) ──
+from views.busqueda import render as render_busqueda
 from views.dashboard import render as render_dashboard
 from views.activos import render as render_activos
 from views.ordenes import render as render_ordenes
@@ -112,6 +113,7 @@ usuario = st.session_state['usuario']
 # ── Menú según rol ──
 MENUS = {
     "Admin": [
+        ("🔍", "Buscar", "Busqueda Global"),
         ("📊", "Tablero", "Tablero de Mando"),
         ("📦", "Activos", "Inventario Activos"),
         ("🛠️", "Órdenes", "Ordenes de Trabajo"),
@@ -119,6 +121,7 @@ MENUS = {
         ("👤", "Usuarios", "Usuarios"),
     ],
     "Programador": [
+        ("🔍", "Buscar", "Busqueda Global"),
         ("📊", "Tablero", "Tablero de Mando"),
         ("📦", "Activos", "Inventario Activos"),
         ("🛠️", "Órdenes", "Ordenes de Trabajo"),
@@ -126,6 +129,7 @@ MENUS = {
         ("👤", "Usuarios", "Usuarios"),
     ],
     "Tecnico": [
+        ("🔍", "Buscar", "Busqueda Global"),
         ("🛠️", "Órdenes", "Ordenes de Trabajo"),
     ],
 }
@@ -186,8 +190,9 @@ with st.sidebar:
     # ── Indicador de ubicación ──
     st.divider()
     page_icons = {
-        "Tablero de Mando": "📊", "Inventario Activos": "📦",
-        "Ordenes de Trabajo": "🛠️", "Repuestos": "🔩", "Usuarios": "👤"
+        "Busqueda Global": "🔍", "Tablero de Mando": "📊",
+        "Inventario Activos": "📦", "Ordenes de Trabajo": "🛠️",
+        "Repuestos": "🔩", "Usuarios": "👤"
     }
     icon = page_icons.get(current, "📋")
     st.caption(f"📍 {icon} {current}")
@@ -237,6 +242,7 @@ choice = st.session_state.current_page
 # 📄 RENDERIZAR PÁGINAS
 # ==============================================================================
 PAGES = {
+    "Busqueda Global": render_busqueda,
     "Tablero de Mando": render_dashboard,
     "Inventario Activos": render_activos,
     "Ordenes de Trabajo": render_ordenes,

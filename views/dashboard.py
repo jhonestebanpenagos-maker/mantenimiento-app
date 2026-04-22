@@ -107,7 +107,7 @@ def render():
 
     # ── Acciones rápidas ──
     st.markdown("#### ⚡ Acciones Rápidas")
-    qa1, qa2, qa3, qa4 = st.columns(4)
+    qa1, qa2, qa3 = st.columns(3)
 
     with qa1:
         n_abiertas = len(df[df['estado'] == 'Abierta'])
@@ -120,10 +120,6 @@ def render():
             st.session_state.current_page = "Ordenes de Trabajo"
             st.rerun()
     with qa3:
-        if st.button("🔍 Buscar", use_container_width=True, key="dash_qa_buscar"):
-            st.session_state.current_page = "Inventario Activos"
-            st.rerun()
-    with qa4:
         if st.button("➕ Nueva Orden", use_container_width=True, key="dash_qa_nueva", type="primary"):
             st.session_state.current_page = "Ordenes de Trabajo"
             st.rerun()
