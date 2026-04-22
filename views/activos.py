@@ -30,31 +30,6 @@ CATEGORIAS_LIST = sorted([
 ])
 
 
-@st.dialog("📸 Detalle Visual del Activo")
-def mostrar_visor(nombre, foto, qr):
-    st.subheader(nombre)
-    st.markdown("---")
-    c_zoom1, c_zoom2 = st.columns(2)
-    with c_zoom1:
-        st.markdown("**Fotografía Real**")
-        if isinstance(foto, str) and foto.startswith("http") and len(foto) > 10:
-            st.markdown(
-                f'<img src="{foto}" style="width:100%;border-radius:8px;border:1px solid #333;" />',
-                unsafe_allow_html=True
-            )
-        else:
-            st.warning("Sin foto")
-    with c_zoom2:
-        st.markdown("**Código QR**")
-        if isinstance(qr, str) and qr.startswith("http") and len(qr) > 10:
-            st.markdown(
-                f'<img src="{qr}" style="width:250px;border-radius:8px;border:1px solid #333;" />',
-                unsafe_allow_html=True
-            )
-        else:
-            st.warning("Sin QR")
-    st.caption("Presione 'Esc' o la 'X' para cerrar.")
-
 
 def render():
     st.title("INVENTARIO DE ACTIVOS")
@@ -84,12 +59,6 @@ def render():
 # ==============================================================================
 def _render_lista(df_act):
     if not df_act.empty:
-        # Abrir diálogo si hay uno pendiente (controlado por session_state)
-        dialog_info = st.session_state.get('visor_activo_pendiente')
-        if dialog_info:
-            mostrar_visor(dialog_info['nombre'], dialog_info['foto'], dialog_info['qr'])
-            del st.session_state['visor_activo_pendiente']
-
         col_kpi1, col_kpi2, col_kpi3, col_kpi4 = st.columns(4)
         col_kpi1.metric("Total Activos", len(df_act))
         col_kpi2.metric("Áreas Activas", df_act['area'].nunique())
@@ -118,16 +87,14 @@ def _render_lista(df_act):
         if filtro_cat != "Todas":
             df_filtered = df_filtered[df_filtered['categoria'] == filtro_cat]
 
-        @st.fragment
-        def fragmento_tabla_estable(dataframe_filtrado):
-            if not dataframe_filtrado.empty:
-                st.markdown(f"###### 🧬 Resultados: {len(dataframe_filtrado)}")
-                st.info("👆 **Haga clic en una fila** para ver Foto y QR.")
-                if 'last_viewed_id' not in st.session_state:
-                    st.session_state.last_viewed_id = None
-                altura_final = min(max(len(dataframe_filtrado) * 35 + 38, 100), 600)
+        if not df_filtered.empty:
+            st.markdown(f"###### 🧬 Resultados: {len(df_filtered)}")
+            st.info("👆 **Haga clic en una fila** para ver Foto y QR a la derecha.")
+            altura_final = min(max(len(df_filtered) * 35 + 38, 100), 600)
+            c_tabla, c_detalle = st.columns([2, 1])
+            with c_tabla:
                 event = st.dataframe(
-                    dataframe_filtrado[['id', 'foto_url', 'nombre', 'categoria', 'area', 'ubicacion', 'qr_url']],
+                    df_filtered[['id', 'foto_url', 'nombre', 'categoria', 'area', 'ubicacion', 'qr_url']],
                     column_config={
                         "foto_url": st.column_config.ImageColumn("Foto", width="small"),
                         "qr_url": st.column_config.ImageColumn("QR", width="small"),
@@ -140,25 +107,28 @@ def _render_lista(df_act):
                     use_container_width=True, hide_index=True, height=altura_final,
                     selection_mode="single-row", on_select="rerun", key="tabla_maestra_activos"
                 )
+            with c_detalle:
                 if len(event.selection.rows) > 0:
                     idx = event.selection.rows[0]
-                    sel_data = dataframe_filtrado.iloc[idx]
-                    sel_id = sel_data['id']
-                    if st.session_state.get('last_viewed_id') != sel_id:
-                        st.session_state.last_viewed_id = sel_id
-                        st.session_state['visor_activo_pendiente'] = {
-                            'nombre': sel_data['nombre'],
-                            'foto': sel_data['foto_url'],
-                            'qr': sel_data['qr_url']
-                        }
-                        st.rerun()
+                    sel = df_filtered.iloc[idx]
+                    st.markdown(f"**{sel['nombre']}**")
+                    st.caption(f"{sel['area']} / {sel['ubicacion']}")
+                    if isinstance(sel['foto_url'], str) and sel['foto_url'].startswith("http"):
+                        st.markdown(
+                            f'<img src="{sel["foto_url"]}" style="width:100%;border-radius:8px;border:1px solid #444;margin-top:8px;" />',
+                            unsafe_allow_html=True
+                        )
+                    if isinstance(sel['qr_url'], str) and sel['qr_url'].startswith("http"):
+                        st.markdown("**QR**")
+                        st.markdown(
+                            f'<img src="{sel["qr_url"]}" style="width:150px;border-radius:6px;" />',
+                            unsafe_allow_html=True
+                        )
                 else:
-                    st.session_state.last_viewed_id = None
-            else:
-                if search_term or filtro_area != "Todas" or filtro_cat != "Todas":
-                    st.warning("⚠️ No se encontraron activos con estos filtros.")
-
-        fragmento_tabla_estable(df_filtered)
+                    st.caption("Seleccione una fila")
+        else:
+            if search_term or filtro_area != "Todas" or filtro_cat != "Todas":
+                st.warning("⚠️ No se encontraron activos con estos filtros.")
     else:
         st.info("Aún no hay activos registrados.")
 
