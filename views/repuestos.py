@@ -7,12 +7,10 @@ from utils.db import supabase, run_query
 from utils.helpers import mostrar_notificaciones, agregar_notificacion, error_amigable
 from utils.uploads import subir_imagen
 from utils.notifications import notificar_telegram
+from utils.catalogos import CATEGORIAS_REPUESTOS
 
 
-CATEGORIAS_REP = sorted([
-    "Eléctrico", "Mecánico", "Hidráulico", "Neumático", "Lubricantes", "Filtros",
-    "Correas y Cadenas", "Rodamientos", "Electrónico", "Herramientas", "Otros"
-])
+CATEGORIAS_REP = CATEGORIAS_REPUESTOS
 
 
 def render():

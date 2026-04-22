@@ -84,7 +84,9 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         try:
             res = supabase.table("activos").select("nombre").eq("id", activo_id).execute()
             nombre = res.data[0]['nombre'] if res.data else "Equipo Escaneado"
-        except: nombre = "Equipo"
+        except Exception as e:
+            print(f"Error buscando activo QR: {e}")
+            nombre = "Equipo"
         
         context.user_data['origen'] = 'qr'
         context.user_data['activo_id'] = activo_id

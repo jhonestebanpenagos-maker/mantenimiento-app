@@ -747,7 +747,8 @@ def _render_orden_detalle(id_orden_selec, orden_actual, df_display, idx_tabla, d
                 st.download_button("📄 Descargar PDF Reporte", data=pdf_data,
                                    file_name=f"Reporte_OT_{id_orden_selec}.pdf",
                                    mime="application/pdf", key=f"btn_pdf_g_{id_orden_selec}")
-            except:
+            except Exception as e:
+                print(f"Error generando PDF: {e}")
                 pass
 
         with st.form(key=f"form_edit_orden_g_{id_orden_selec}"):

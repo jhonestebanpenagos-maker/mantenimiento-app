@@ -11,7 +11,6 @@ from datetime import datetime
 # 🚀 ARRANQUE
 # ==============================================================================
 st.set_page_config(page_title="Orión | Mantenimiento", layout="wide", initial_sidebar_state="collapsed")
-st.write("Streamlit version:", st.__version__)
 
 # Configuración
 from config import init_cloudinary, cargar_css, render_selector_tema
@@ -33,8 +32,9 @@ if "id_activo_qr" in query_params:
     id_qr = query_params["id_activo_qr"]
     try:
         datos_activo = supabase.table("activos").select("*").eq("id", id_qr).execute()
-    except:
+    except Exception as e:
         st.error("Error de conexión.")
+        print(f"Error consultando activo QR: {e}")
         st.stop()
 
     if datos_activo.data:
@@ -56,7 +56,8 @@ if "id_activo_qr" in query_params:
                 st.table(pd.DataFrame(ots.data)[['fecha_creacion', 'tipo_mantenimiento', 'estado']])
             else:
                 st.info("Sin registros.")
-        except:
+        except Exception as e:
+            print(f"Error cargando historial QR: {e}")
             pass
         st.markdown("---")
         if st.button("🏠 Inicio"):

@@ -49,7 +49,7 @@ def generar_resumen():
         def en_semana(fecha_str):
             try:
                 return inicio <= fecha_str <= fin
-            except:
+            except Exception:
                 return False
 
         semana       = [o for o in todas if en_semana(o.get('fecha_creacion', ''))]

@@ -31,5 +31,6 @@ def leer_qr_imagen(uploaded_image):
             if 'id_activo_qr' in params:
                 return params['id_activo_qr'][0]
         return None
-    except:
+    except Exception as e:
+        print(f"Error leyendo QR: {e}")
         return None

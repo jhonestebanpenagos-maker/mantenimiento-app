@@ -14,3 +14,7 @@ env/
 # --- Archivos del Sistema Operativo ---
 .DS_Store
 Thumbs.db
+
+# --- Archivos de desarrollo ---
+preview_paletas.html
+.tema_actual

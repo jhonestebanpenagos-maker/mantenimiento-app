@@ -201,7 +201,7 @@ def _manejar_intento_fallido(MAX_INTENTOS, BLOQUEO_MINUTOS):
     intentos_restantes = MAX_INTENTOS - st.session_state['login_intentos']
     if st.session_state['login_intentos'] >= MAX_INTENTOS:
         st.session_state['login_bloqueado'] = (
-            datetime.now() + pd.Timedelta(minutes=BLOQUEO_MINUTOS)
+            datetime.now() + timedelta(minutes=BLOQUEO_MINUTOS)
         )
         registrar_login("SISTEMA", exito=False, motivo=f"Cuenta bloqueada por {BLOQUEO_MINUTOS} min")
         st.error(f"🔒 Demasiados intentos. Cuenta bloqueada por {BLOQUEO_MINUTOS} minutos.")

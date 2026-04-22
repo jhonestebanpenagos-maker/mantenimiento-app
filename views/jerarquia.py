@@ -5,22 +5,7 @@ Estructura: Planta → Área → Sub-área → Activo
 import streamlit as st
 import pandas as pd
 from utils.db import supabase, run_query
-
-
-# Definición de jerarquía (mismo que activos.py)
-AREAS_DATA = {
-    "Producción": [
-        "Agua Cristal", "B&B", "Calderas", "Cuarto de Lubricación", "Equipos Auxiliares",
-        "Laboratorio Fisico Quimico", "Laboratorio Microbiológico", "Linea 1", "Linea 2",
-        "Linea 3", "Linea 10", "Linea 8 Jugos", "Oficinas Técnicas", "Pasillo Técnico",
-        "Ptap", "Ptar", "Sala de Jarabe Simple", "Sala de Jarabe Terminado",
-        "Sala de Jarabes Jugos", "Sub Estación Eléctrica", "Taller de Mantenimiento"
-    ],
-    "Administración": ["Administración", "Auditorio", "Casino", "Portería Vehicular", "Servicios Generales"],
-    "Ventas": ["Bodega Carrera 8va", "Bodega Publicidad", "Dispensadores", "Ventas"],
-    "Logística": ["Almacen Materia Prima", "Almacén Producto Terminado", "Lavadero de Vehiculos",
-                   "Punto de Canje", "Taller de Reparación de Estibas", "Taller Vehicular"]
-}
+from utils.catalogos import AREAS_DATA
 
 
 def render():
@@ -100,8 +85,9 @@ def render():
                                 if foto and isinstance(foto, str) and len(foto) > 10:
                                     try:
                                         st.image(foto, use_container_width=True)
-                                    except:
+                                    except Exception as e:
                                         st.caption("📷")
+                                        print(f"Error cargando foto jerarquía: {e}")
                                 else:
                                     st.markdown("<div style='text-align:center;font-size:2rem;padding:20px;'>🔧</div>", unsafe_allow_html=True)
 

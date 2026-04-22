@@ -1,33 +1,17 @@
 import streamlit as st
 import pandas as pd
 import time
+import html as html_module
 from datetime import datetime
 from utils.db import supabase, run_query, render_paginacion
 from utils.helpers import mostrar_notificaciones, agregar_notificacion, registrar_accion_critica, error_amigable
 from utils.uploads import subir_imagen
 from utils.qr import generar_qr_activo
+from utils.catalogos import AREAS_DATA, CATEGORIAS_ACTIVOS
 from pdf_utils import generar_hoja_vida_pdf
 
 
-AREAS_DATA = {
-    "Producción": [
-        "Agua Cristal", "B&B", "Calderas", "Cuarto de Lubricación", "Equipos Auxiliares",
-        "Laboratorio Fisico Quimico", "Laboratorio Microbiológico", "Linea 1", "Linea 2",
-        "Linea 3", "Linea 10", "Linea 8 Jugos", "Oficinas Técnicas", "Pasillo Técnico",
-        "Ptap", "Ptar", "Sala de Jarabe Simple", "Sala de Jarabe Terminado",
-        "Sala de Jarabes Jugos", "Sub Estación Eléctrica", "Taller de Mantenimiento"
-    ],
-    "Administración": ["Administración", "Auditorio", "Casino", "Portería Vehicular", "Servicios Generales"],
-    "Ventas": ["Bodega Carrera 8va", "Bodega Publicidad", "Dispensadores", "Ventas"],
-    "Logística": ["Almacen Materia Prima", "Almacén Producto Terminado", "Lavadero de Vehiculos",
-                   "Punto de Canje", "Taller de Reparación de Estibas", "Taller Vehicular"]
-}
-
-CATEGORIAS_LIST = sorted([
-    "Aire Acondicionado", "CCTV", "Control de Acceso", "Eléctrico", "Estanterías",
-    "Extraccion", "Hidrosanitario", "Infraestructura", "Mecánico", "Muelles",
-    "Red Contra Incendio", "Refrigeración Industrial", "Ventilacion"
-])
+CATEGORIAS_LIST = CATEGORIAS_ACTIVOS
 
 
 
@@ -101,11 +85,11 @@ def _render_lista(df_act):
                     qr = '<img src="' + row["qr_url"] + '" style="width:60px;height:60px;border-radius:4px;" />'
                 else:
                     qr = ""
-                nombre = str(row["nombre"])
+                nombre = html_module.escape(str(row["nombre"]))
                 act_id = str(row["id"])
-                cat = str(row.get("categoria", "N/A"))
-                area = str(row.get("area", ""))
-                ubic = str(row.get("ubicacion", ""))
+                cat = html_module.escape(str(row.get("categoria", "N/A")))
+                area = html_module.escape(str(row.get("area", "")))
+                ubic = html_module.escape(str(row.get("ubicacion", "")))
                 card = (
                     '<div style="background:#1F2937;border:1px solid #374151;border-radius:10px;overflow:hidden;">'
                     + foto
@@ -163,7 +147,7 @@ def _render_nuevo(df_act):
         def get_idx(opts, val):
             try:
                 return list(opts).index(val)
-            except:
+            except (ValueError, TypeError):
                 return 0
 
         nom = c1.text_input("Nombre del Activo", value=draft.get('nombre', ''))
@@ -249,13 +233,15 @@ def _render_activo_creado():
         if foto_local is not None:
             try:
                 st.image(foto_local, use_container_width=True, caption="Previsualización")
-            except:
+            except Exception as e:
                 st.warning("No se pudo cargar la vista previa local.")
+                print(f"Error cargando preview local: {e}")
         elif pd.notna(foto_nube) and isinstance(foto_nube, str) and len(foto_nube) > 10:
             try:
                 st.image(foto_nube, use_container_width=True)
-            except:
+            except Exception as e:
                 st.error("Error al cargar imagen desde la nube.")
+                print(f"Error cargando imagen nube: {e}")
         else:
             st.info("ℹ️ Sin imagen disponible.")
     with c_datos:
@@ -344,8 +330,9 @@ def _render_edit(df_act):
                 if pd.notna(url_db) and isinstance(url_db, str) and len(url_db.strip()) > 10:
                     try:
                         st.image(url_db, use_container_width=True, caption="Imagen actual")
-                    except:
+                    except Exception as e:
                         st.error("Error al cargar la imagen desde la nube.")
+                        print(f"Error cargando imagen activo: {e}")
                 else:
                     st.info("Sin imagen asignada.")
         with col_f2:
