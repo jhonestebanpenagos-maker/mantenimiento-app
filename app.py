@@ -28,11 +28,13 @@ from views.ordenes import render as render_ordenes
 from views.repuestos import render as render_repuestos
 from views.usuarios import render as render_usuarios
 
-# ── Inicialización única (no re-ejecutar en cada rerun) ──
+# ── Inicialización única ──
 if 'app_initialized' not in st.session_state:
     init_cloudinary()
-    cargar_css()
     st.session_state.app_initialized = True
+
+# ── CSS se carga en CADA rerun (necesario para cambio de tema) ──
+cargar_css()
 
 if not supabase:
     st.error("Error de conexión a la base de datos.")
@@ -43,7 +45,6 @@ if not supabase:
 # ==============================================================================
 @st.cache_data(ttl=300, show_spinner="Cargando activo...")
 def cargar_activo_qr(activo_id: str):
-    """Carga un activo por ID QR con caché de 5 minutos."""
     try:
         resultado = supabase.table("activos").select("*").eq("id", activo_id).execute()
         return resultado.data[0] if resultado.data else None
@@ -53,7 +54,6 @@ def cargar_activo_qr(activo_id: str):
 
 @st.cache_data(ttl=300)
 def cargar_historial_qr(activo_id: str):
-    """Carga historial de órdenes para un activo QR con caché de 5 minutos."""
     try:
         resultado = supabase.table("ordenes").select("*").eq("activo_id", activo_id) \
             .order("id", desc=True).limit(5).execute()
@@ -111,7 +111,7 @@ if not check_login():
 rol = st.session_state['rol']
 usuario = st.session_state['usuario']
 
-# ── Menú según rol (diccionario, no listas paralelas) ──
+# ── Menú según rol ──
 MENUS = {
     "Admin": [
         ("🔍", "Búsqueda", "Busqueda Global"),
@@ -136,7 +136,7 @@ MENUS = {
     ],
 }
 
-# ── Calcular tiempo de sesión cada 60s, no en cada rerun ──
+# ── Calcular tiempo de sesión cada 60s ──
 creada = st.session_state.get('session_created_at')
 if creada:
     now = time.time()
@@ -152,7 +152,6 @@ if creada:
             pass
 
 with st.sidebar:
-    # ── Info de usuario ──
     st.markdown(f"""
         <div style="margin-bottom: 20px;">
             <p style="color: white; margin: 0; font-size: 1.1rem; font-weight: 600;">👋 {usuario}</p>
@@ -190,7 +189,7 @@ with st.sidebar:
             st.session_state.jump_id = None
             st.rerun()
 
-    # ── Indicador de ubicación actual ──
+    # ── Indicador de ubicación ──
     st.divider()
     page_icons = {
         "Busqueda Global": "🔍", "Tablero de Mando": "📊", "Jerarquia Activos": "🏗️",
