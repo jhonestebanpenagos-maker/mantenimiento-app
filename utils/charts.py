@@ -96,8 +96,8 @@ def _calcular_kpis(ordenes_hash, df_ordenes_data, df_act_data, df_planes_data):
         mtbf_por_activo = [{'Activo': r['Activo'], 'MTBF_horas': round(r['MTBF'], 1)} for _, r in mtbf_top.iterrows()]
         df_disp = df_k.groupby('Activo')['duracion_horas'].mean().reset_index()
         df_disp.columns = ['Activo', 'MTTR']
-       ='Activo', how='left')
-        df_disp[' df_disp = df_disp.merge(mtbf_activo, onDisponibilidad'] = (df_disp['MTBF'] / (df_disp['MTBF'] + df_disp['MTTR']) * 100).round(1)
+        df_disp = df_disp.merge(mtbf_activo, on='Activo', how='left')
+        df_disp['Disponibilidad'] = (df_disp['MTBF'] / (df_disp['MTBF'] + df_disp['MTTR']) * 100).round(1)
         df_disp = df_disp.dropna(subset=['Disponibilidad']).sort_values('Disponibilidad', ascending=True).tail(15)
         disponibilidad_por_activo = df_disp.to_dict('records')
     cumplimiento_planes = None
