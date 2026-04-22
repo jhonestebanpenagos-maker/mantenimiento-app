@@ -131,7 +131,7 @@ def render_costos(orden_id: int, usuario: str):
         st.metric("💰 TOTAL", f"${costos['total']:,.0f}")
 
     # Formulario para agregar costo
-    with st.expander("➕ Registrar Costo"):
+    if st.toggle("➕ Registrar Costo", key=f"toggle_costo_{orden_id}"):
         with st.form(f"form_costo_{orden_id}", clear_on_submit=True):
             c_t, c_c, c_m = st.columns(3)
             tipo_costo = c_t.selectbox("Tipo", [
