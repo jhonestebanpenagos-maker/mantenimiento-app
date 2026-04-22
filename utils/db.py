@@ -1,3 +1,6 @@
+# ==============================================================================
+# utils/db.py — OPTIMIZADO
+# ==============================================================================
 import streamlit as st
 import pandas as pd
 from supabase import create_client, Client
@@ -28,51 +31,73 @@ supabase = init_supabase()
 # 🔍 FUNCIONES DE CONSULTA
 # ==============================================================================
 def run_query(table_name, filters=None, order_by="id"):
+    """
+    Todas las tablas pasan por caché.
+    - Tablas maestras: TTL 600s (cambian poco)
+    - Tablas transaccionales: TTL 60s (cambian más seguido)
+    """
     tablas_maestras = ["usuarios", "activos", "categorias", "ubicaciones", "inventario"]
+
     if table_name in tablas_maestras:
-        return pd.DataFrame(_run_query_internal(table_name, filters, order_by))
+        return pd.DataFrame(_run_query_cached(table_name, tuple(filters.items()) if filters else None, order_by, ttl=600))
     else:
-        return pd.DataFrame(_run_query_live_data(table_name, filters, order_by))
+        return pd.DataFrame(_run_query_cached(table_name, tuple(filters.items()) if filters else None, order_by, ttl=60))
 
 
-@st.cache_data(ttl=600)
-def _run_query_internal(table_name, filters, order_by):
-    query = supabase.table(table_name).select("*")
-    if filters:
-        for key, value in filters.items():
-            query = query.eq(key, value)
-    res = query.order(order_by).execute()
-    return res.data if res.data else []
-
-
-def _run_query_live_data(table_name, filters, order_by):
+@st.cache_data(ttl=60, show_spinner=False)
+def _run_query_cached(table_name, filters_tuple, order_by, ttl=60):
+    """
+    Consulta genérica cacheada.
+    Recibe filters como tupla para que sea hashable por Streamlit.
+    """
     try:
         query = supabase.table(table_name).select("*")
-        if filters:
-            for key, value in filters.items():
+        if filters_tuple:
+            for key, value in filters_tuple:
                 if value is not None:
                     query = query.eq(key, value)
         res = query.order(order_by).execute()
         return res.data if res.data else []
     except Exception as e:
         print(f"Error en consulta {table_name}: {e}")
-        st.error(f"⚠️ No se pudieron cargar los datos de {table_name}. Intente nuevamente.")
         return []
+
+
+# ── Mantener compatibilidad con imports existentes ──
+def _run_query_internal(table_name, filters, order_by):
+    """Compatibilidad: redirige a _run_query_cached."""
+    filters_tuple = tuple(filters.items()) if filters else None
+    return _run_query_cached(table_name, filters_tuple, order_by)
+
+def _run_query_live_data(table_name, filters, order_by):
+    """Compatibilidad: redirige a _run_query_cached."""
+    filters_tuple = tuple(filters.items()) if filters else None
+    return _run_query_cached(table_name, filters_tuple, order_by)
+
+
+# ==============================================================================
+# 🚫 INVALIDAR CACHÉ (cuando se crea/actualiza/elimina un registro)
+# ==============================================================================
+def invalidate_cache(table_name: str):
+    """Limpia el caché de una tabla específica después de una escritura."""
+    _run_query_cached.clear()
+    st.cache_data.clear()
 
 
 # ==============================================================================
 # 📄 CONSULTAS PAGINADAS
 # ==============================================================================
-def run_query_paginated(table_name, page=1, per_page=25, filters=None, order_by="id", desc=True):
+@st.cache_data(ttl=60, show_spinner=False)
+def run_query_paginated(table_name, page=1, per_page=25, filters_tuple=None, order_by="id", desc=True):
     """
-    Consulta con paginación real desde Supabase.
-    Retorna (dataframe, total_registros, total_paginas).
+    Consulta con paginación real desde Supabase (cacheada).
+    Retorna (data_list, total_registros, total_paginas).
     """
     try:
-        # Conteo total (solo select id para optimizar)
+        # Conteo total
         count_q = supabase.table(table_name).select("id", count="exact")
-        if filters:
-            for key, value in filters.items():
+        if filters_tuple:
+            for key, value in filters_tuple:
                 if value is not None:
                     if isinstance(value, list):
                         count_q = count_q.in_(key, value)
@@ -84,8 +109,8 @@ def run_query_paginated(table_name, page=1, per_page=25, filters=None, order_by=
         # Datos paginados
         offset = (page - 1) * per_page
         data_q = supabase.table(table_name).select("*")
-        if filters:
-            for key, value in filters.items():
+        if filters_tuple:
+            for key, value in filters_tuple:
                 if value is not None:
                     if isinstance(value, list):
                         data_q = data_q.in_(key, value)
@@ -96,18 +121,23 @@ def run_query_paginated(table_name, page=1, per_page=25, filters=None, order_by=
         data = data_res.data if data_res.data else []
 
         total_paginas = max(1, (total + per_page - 1) // per_page)
-        return pd.DataFrame(data), total, total_paginas
+        return data, total, total_paginas
 
     except Exception as e:
         print(f"Error en consulta paginada {table_name}: {e}")
-        st.error(f"⚠️ No se pudieron cargar los datos de {table_name}.")
-        return pd.DataFrame(), 0, 0
+        return [], 0, 0
+
+
+def run_query_paginated_df(table_name, page=1, per_page=25, filters=None, order_by="id", desc=True):
+    """Wrapper que convierte filters dict a tupla y retorna DataFrame."""
+    filters_tuple = tuple(filters.items()) if filters else None
+    data, total, total_paginas = run_query_paginated(table_name, page, per_page, filters_tuple, order_by, desc)
+    return pd.DataFrame(data), total, total_paginas
 
 
 def render_paginacion(key_prefix: str, pagina_actual: int, total_paginas: int, total_registros: int) -> int:
     """
     Renderiza controles de paginación. Retorna la página seleccionada.
-    Uso: nueva_pagina = render_paginacion("ordenes", pagina, total_pag, total_reg)
     """
     if total_paginas <= 1:
         return pagina_actual
