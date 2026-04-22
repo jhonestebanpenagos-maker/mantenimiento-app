@@ -28,13 +28,16 @@ def render():
         _render_interceptor(df_act, df_users, df_ordenes)
         return
 
-    tab_mis_gestiones, tab_buzon, tab_calidad, tab_gestion, tab_crear_directa, tab_preventivos = st.tabs([
-        "📂 Mis Gestiones", "📥 Buzón Solicitudes", "🧐 Control Calidad",
+    tab_mis_gestiones, tab_kanban, tab_buzon, tab_calidad, tab_gestion, tab_crear_directa, tab_preventivos = st.tabs([
+        "📂 Mis Gestiones", "📋 Kanban", "📥 Buzón Solicitudes", "🧐 Control Calidad",
         "🎛️ Gestión Global", "➕ Crear Directa", "🗓️ Preventivos"
     ])
 
     with tab_mis_gestiones:
         _render_mis_gestiones(df_act, df_users, df_ordenes)
+
+    with tab_kanban:
+        _render_kanban(df_act, df_users, df_ordenes)
 
     with tab_buzon:
         _render_buzon(df_act, df_users, df_ordenes, df_solicitudes)
@@ -165,6 +168,142 @@ def _interceptor_preventivo(target_id, df_act, df_users):
                 st.rerun()
     except Exception as e:
         error_amigable(e, "gestión de preventivos")
+
+
+# ==============================================================================
+# 📋 VISTA KANBAN
+# ==============================================================================
+def _render_kanban(df_act, df_users, df_ordenes):
+    """Vista Kanban: tarjetas de órdenes en columnas por estado."""
+    st.markdown("### 📋 Tablero Kanban")
+    st.caption("Vista visual de todas las órdenes. Haz clic en una tarjeta para gestionarla.")
+
+    if df_ordenes.empty:
+        st.info("No hay órdenes para mostrar.")
+        return
+
+    map_act = dict(zip(df_act['id'], df_act['nombre'])) if not df_act.empty else {}
+    map_user = dict(zip(df_users['id'].astype(str), df_users['nombre'])) if not df_users.empty else {}
+
+    # Separar por estado
+    df_abiertas = df_ordenes[df_ordenes['estado'] == 'Abierta'].copy()
+    df_validar = df_ordenes[df_ordenes['estado'] == 'Por Validar'].copy()
+    df_concluidas = df_ordenes[df_ordenes['estado'] == 'Concluida'].copy()
+
+    # Filtro rápido
+    c_f1, c_f2 = st.columns(2)
+    with c_f1:
+        filtro_activo_k = st.selectbox(
+            "Filtrar por activo",
+            ["Todos"] + sorted([v for v in map_act.values() if v]),
+            key="kanban_filtro_activo"
+        )
+    with c_f2:
+        filtro_crit_k = st.selectbox(
+            "Filtrar criticidad",
+            ["Todas", "Crítica", "Alta", "Media", "Baja"],
+            key="kanban_filtro_crit"
+        )
+
+    def _aplicar_filtros(df):
+        if filtro_activo_k != "Todos":
+            act_ids = [k for k, v in map_act.items() if v == filtro_activo_k]
+            df = df[df['activo_id'].isin(act_ids)]
+        if filtro_crit_k != "Todas":
+            df = df[df['criticidad'] == filtro_crit_k]
+        return df
+
+    df_abiertas = _aplicar_filtros(df_abiertas)
+    df_validar = _aplicar_filtros(df_validar)
+    df_concluidas = _aplicar_filtros(df_concluidas)
+
+    def _tarjeta_orden(row, color_borde):
+        nombre_activo = map_act.get(row.get('activo_id'), 'Activo')
+        tecnico = map_user.get(str(row.get('tecnico_asignado', '')), 'Sin asignar')
+        desc_corta = (row.get('descripcion', '') or '')[:60]
+        criticidad = row.get('criticidad', 'Media')
+        tipo = row.get('tipo_mantenimiento', '')
+        fecha = (row.get('fecha_creacion', '') or '')[:10]
+
+        crit_color = {"Crítica": "#EF4444", "Alta": "#F59E0B", "Media": "#60A5FA", "Baja": "#10B981"}.get(criticidad, "#6B7280")
+        tipo_icon = {"Correctivo": "🔧", "Preventivo": "🛡️", "Predictivo": "📡", "Mejora": "⬆️"}.get(tipo, "📋")
+
+        return f"""
+        <div style="
+            background: rgba(30,41,59,0.6);
+            border-left: 4px solid {color_borde};
+            border-radius: 8px;
+            padding: 12px;
+            margin-bottom: 8px;
+            cursor: pointer;
+            transition: all 0.2s;
+        " onmouseover="this.style.background='rgba(30,41,59,0.9)'" onmouseout="this.style.background='rgba(30,41,59,0.6)'">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+                <span style="color:#E5E7EB;font-weight:700;font-size:0.9rem;">OT #{row['id']}</span>
+                <span style="background:{crit_color};color:white;padding:2px 8px;border-radius:10px;font-size:0.65rem;font-weight:700;">{criticidad}</span>
+            </div>
+            <div style="color:#D1D5DB;font-size:0.8rem;margin-bottom:6px;">{desc_corta}{'...' if len(row.get('descripcion', '') or '') > 60 else ''}</div>
+            <div style="display:flex;justify-content:space-between;font-size:0.7rem;color:#9CA3AF;">
+                <span>{tipo_icon} {tipo}</span>
+                <span>👷 {tecnico.split()[0] if tecnico else '?'}</span>
+            </div>
+            <div style="font-size:0.7rem;color:#6B7280;margin-top:4px;">
+                📍 {nombre_activo[:25]} | 📅 {fecha}
+            </div>
+        </div>
+        """
+
+    def _render_columna(titulo, color, icono, df_col, key_prefix):
+        count = len(df_col)
+        st.markdown(f"""
+        <div style="text-align:center;margin-bottom:10px;">
+            <span style="font-size:1.5rem;">{icono}</span>
+            <span style="color:{color};font-weight:800;font-size:1.1rem;margin-left:8px;">{titulo}</span>
+            <span style="background:{color};color:white;border-radius:12px;padding:2px 10px;font-size:0.8rem;font-weight:700;margin-left:8px;">{count}</span>
+        </div>
+        """, unsafe_allow_html=True)
+
+        if df_col.empty:
+            st.caption("Sin órdenes")
+            return
+
+        # Mostrar máximo 15 tarjetas por columna
+        for _, row in df_col.head(15).iterrows():
+            html_tarjeta = _tarjeta_orden(row, color)
+            st.markdown(html_tarjeta, unsafe_allow_html=True)
+
+            oid = row['id']
+            if st.button(f"⚙️ Gestionar #{oid}", key=f"{key_prefix}_kanban_{oid}", use_container_width=True, type="secondary"):
+                st.session_state.current_page = "Ordenes de Trabajo"
+                st.session_state.jump_target = "orden"
+                st.session_state.jump_id = oid
+                st.rerun()
+
+        if len(df_col) > 15:
+            st.caption(f"... y {len(df_col) - 15} más")
+
+    # Renderizar las 3 columnas
+    col1, col2, col3 = st.columns(3)
+
+    with col1:
+        _render_columna("ABIERTAS", "#F59E0B", "🔨", df_abiertas, "abierta")
+
+    with col2:
+        _render_columna("POR VALIDAR", "#60A5FA", "🧐", df_validar, "validar")
+
+    with col3:
+        _render_columna("CONCLUIDAS", "#10B981", "✅", df_concluidas.head(20), "concluida")
+
+    # Resumen visual
+    st.markdown("---")
+    total = len(df_abiertas) + len(df_validar) + len(df_concluidas)
+    if total > 0:
+        r1, r2, r3, r4 = st.columns(4)
+        r1.metric("🔨 Abiertas", len(df_abiertas))
+        r2.metric("🧐 Por Validar", len(df_validar))
+        r3.metric("✅ Concluidas", len(df_concluidas))
+        pct = (len(df_concluidas) / total * 100) if total > 0 else 0
+        r4.metric("📊 Progreso", f"{pct:.0f}%")
 
 
 # ==============================================================================
