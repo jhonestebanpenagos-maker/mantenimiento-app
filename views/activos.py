@@ -30,6 +30,26 @@ CATEGORIAS_LIST = sorted([
 ])
 
 
+@st.dialog("📸 Detalle Visual del Activo")
+def mostrar_visor(nombre, foto, qr):
+    st.subheader(nombre)
+    st.markdown("---")
+    c_zoom1, c_zoom2 = st.columns(2)
+    with c_zoom1:
+        st.markdown("**Fotografía Real**")
+        if foto and isinstance(foto, str):
+            st.image(foto, use_container_width=True)
+        else:
+            st.warning("Sin foto")
+    with c_zoom2:
+        st.markdown("**Código QR**")
+        if qr:
+            st.image(qr, width=250)
+        else:
+            st.warning("Sin QR")
+    st.caption("Presione 'Esc' o la 'X' para cerrar.")
+
+
 def render():
     st.title("INVENTARIO DE ACTIVOS")
     mostrar_notificaciones()
@@ -58,24 +78,11 @@ def render():
 # ==============================================================================
 def _render_lista(df_act):
     if not df_act.empty:
-        @st.dialog("📸 Detalle Visual del Activo")
-        def mostrar_visor(nombre, foto, qr):
-            st.subheader(nombre)
-            st.markdown("---")
-            c_zoom1, c_zoom2 = st.columns(2)
-            with c_zoom1:
-                st.markdown("**Fotografía Real**")
-                if foto and isinstance(foto, str):
-                    st.image(foto, use_container_width=True)
-                else:
-                    st.warning("Sin foto")
-            with c_zoom2:
-                st.markdown("**Código QR**")
-                if qr:
-                    st.image(qr, width=250)
-                else:
-                    st.warning("Sin QR")
-            st.caption("Presione 'Esc' o la 'X' para cerrar.")
+        # Abrir diálogo si hay uno pendiente (controlado por session_state)
+        dialog_info = st.session_state.get('visor_activo_pendiente')
+        if dialog_info:
+            mostrar_visor(dialog_info['nombre'], dialog_info['foto'], dialog_info['qr'])
+            del st.session_state['visor_activo_pendiente']
 
         col_kpi1, col_kpi2, col_kpi3, col_kpi4 = st.columns(4)
         col_kpi1.metric("Total Activos", len(df_act))
@@ -131,9 +138,14 @@ def _render_lista(df_act):
                     idx = event.selection.rows[0]
                     sel_data = dataframe_filtrado.iloc[idx]
                     sel_id = sel_data['id']
-                    if st.session_state.last_viewed_id != sel_id:
+                    if st.session_state.get('last_viewed_id') != sel_id:
                         st.session_state.last_viewed_id = sel_id
-                        mostrar_visor(sel_data['nombre'], sel_data['foto_url'], sel_data['qr_url'])
+                        st.session_state['visor_activo_pendiente'] = {
+                            'nombre': sel_data['nombre'],
+                            'foto': sel_data['foto_url'],
+                            'qr': sel_data['qr_url']
+                        }
+                        st.rerun()
                 else:
                     st.session_state.last_viewed_id = None
             else:
