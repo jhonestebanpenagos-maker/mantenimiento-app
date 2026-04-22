@@ -111,12 +111,12 @@ def render():
 
     with qa1:
         n_abiertas = len(df[df['estado'] == 'Abierta'])
-        if st.button(f"🔨 Ver {n_abiertas} Abiertas", use_container_width=True, key="dash_qa_abiertas"):
+        if st.button(f"🔨 OT Abiertas ({n_abiertas})", use_container_width=True, key="dash_qa_abiertas"):
             st.session_state.current_page = "Ordenes de Trabajo"
             st.rerun()
     with qa2:
         n_solic = len(df_solicitudes[df_solicitudes['estado'] == 'Pendiente']) if not df_solicitudes.empty else 0
-        if st.button(f"📥 Buzón ({n_solic})", use_container_width=True, key="dash_qa_buzon"):
+        if st.button(f"📬 Buzón ({n_solic})", use_container_width=True, key="dash_qa_buzon"):
             st.session_state.current_page = "Ordenes de Trabajo"
             st.rerun()
     with qa3:

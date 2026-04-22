@@ -671,13 +671,13 @@ def mostrar_metricas_inteligentes(df_ordenes, df_users, df_solicitudes):
     c1, c2, c3, c4, c5 = st.columns(5)
     with c1:
         color_sol = "normal" if n_solicitudes == 0 else "inverse"
-        st.metric("📬 Solicitudes", n_solicitudes, "Nuevas en Buzón", delta_color=color_sol)
+        st.metric("📬 Solicitudes Pendientes", n_solicitudes, "en Buzón", delta_color=color_sol)
     with c2:
         delta_text = str(devueltas_calidad) + " Devueltas" if devueltas_calidad > 0 else None
-        st.metric("🔨 En Ejecución", pendientes, delta_text, delta_color="inverse")
+        st.metric("🔨 OT en Ejecución", pendientes, delta_text, delta_color="inverse")
     with c3:
-        st.metric("🧐 Calidad", por_validar, "Por Aprobar")
+        st.metric("🧐 OT por Validar", por_validar, "Esperando Aprobación")
     with c4:
-        st.metric("✅ Finalizadas", concluidas, str(round(porcentaje_concluidas)) + "%")
+        st.metric("✅ OT Finalizadas", concluidas, str(round(porcentaje_concluidas)) + "% del total")
     with c5:
-        st.metric("📦 Total OTs", total)
+        st.metric("📋 Total OTs Registradas", total)
