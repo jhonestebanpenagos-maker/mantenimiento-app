@@ -1,9 +1,12 @@
+# ==============================================================================
+# views/ordenes.py — CON INVALIDACIÓN DE CACHÉ AUTOMÁTICA
+# ==============================================================================
 import streamlit as st
 import pandas as pd
 import time
 import calendar as cal_lib
 from datetime import datetime
-from utils.db import supabase, run_query, run_query_paginated, render_paginacion
+from utils.db import supabase, run_query, run_query_paginated, render_paginacion, db_insert, db_update, db_delete, invalidate_cache
 from utils.helpers import mostrar_notificaciones, agregar_notificacion, registrar_accion_critica, error_amigable
 from utils.uploads import subir_archivo_generico
 from utils.notifications import notificar_telegram
@@ -74,7 +77,6 @@ def _render_interceptor(df_act, df_users, df_ordenes):
     target_type = st.session_state.jump_target
     target_id = st.session_state.jump_id
 
-    # Guardar origen de navegación si no está guardado
     if 'nav_origin' not in st.session_state:
         st.session_state.nav_origin = st.session_state.get('current_page', 'Busqueda Global')
 
@@ -129,17 +131,17 @@ def _interceptor_orden(target_id, df_act, df_users):
                 nueva_crit = st.select_slider("Criticidad", ["Baja", "Media", "Alta", "Crítica"], value=orden_actual['criticidad'])
 
                 if st.form_submit_button("💾 GUARDAR CAMBIOS Y REASIGNAR", type="primary", use_container_width=True):
-                    supabase.table("ordenes").update({
+                    db_update("ordenes", {
                         "estado": nuevo_estado, "tecnico_asignado": str(tech_dict[nuevo_tec_nom]),
                         "activo_id": int(act_dict[nuevo_act_nom]), "criticidad": nueva_crit, "descripcion": nueva_desc
-                    }).eq("id", target_id).execute()
+                    }, "id", target_id)
                     st.toast("✅ Orden actualizada correctamente.")
                     time.sleep(1.2)
                     st.rerun()
 
             st.markdown("### 🗑️ Opciones Críticas")
             if st.button("ELIMINAR ORDEN DEFINITIVAMENTE", type="secondary", use_container_width=True):
-                supabase.table("ordenes").delete().eq("id", target_id).execute()
+                db_delete("ordenes", "id", target_id)
                 registrar_accion_critica("ELIMINAR_ORDEN", st.session_state.get('usuario', '?'), f"Orden #{target_id} eliminada")
                 st.toast("🗑️ Orden eliminada.")
                 st.session_state.jump_target = None
@@ -170,17 +172,17 @@ def _interceptor_preventivo(target_id, df_act, df_users):
                 dias_p = st.number_input("Frecuencia (Días)", value=plan_focus['frecuencia_dias'])
 
                 if st.form_submit_button("💾 GUARDAR Y REASIGNAR", type="primary", use_container_width=True):
-                    supabase.table("planes_mantenimiento").update({
+                    db_update("planes_mantenimiento", {
                         "activo_id": int(act_dict[nuevo_act_nom]),
                         "tecnico_default": str(tech_dict[nuevo_tec_nom]),
                         "descripcion": desc_p, "frecuencia_dias": dias_p
-                    }).eq("id", target_id).execute()
+                    }, "id", target_id)
                     st.toast("✅ Plan actualizado.")
                     time.sleep(1.2)
                     st.rerun()
 
             if st.button("🗑️ ELIMINAR PLAN DEFINITIVAMENTE", type="secondary", use_container_width=True):
-                supabase.table("planes_mantenimiento").delete().eq("id", target_id).execute()
+                db_delete("planes_mantenimiento", "id", target_id)
                 registrar_accion_critica("ELIMINAR_PLAN", st.session_state.get('usuario', '?'), f"Plan #{target_id} eliminado")
                 st.session_state.jump_target = None
                 st.rerun()
@@ -189,17 +191,14 @@ def _interceptor_preventivo(target_id, df_act, df_users):
 
 
 # ==============================================================================
-# 🔍 ÓRDENES POR ACTIVO (vista filtrada)
+# 🔍 ÓRDENES POR ACTIVO
 # ==============================================================================
 def _render_ordenes_por_activo(df_act, df_users, df_ordenes):
-    """Muestra las órdenes de un activo específico, con opción de volver."""
     activo_id = st.session_state.get('jump_id')
 
-    # Limpiar jump
     st.session_state.jump_target = None
     st.session_state.jump_id = None
 
-    # Safety check
     if not activo_id:
         st.error("No se especificó un activo.")
         if st.button("⬅️ Volver al inicio"):
@@ -213,7 +212,6 @@ def _render_ordenes_por_activo(df_act, df_users, df_ordenes):
         st.error("ID de activo no válido.")
         return
 
-    # Buscar nombre del activo
     nombre_activo = "Activo"
     if not df_act.empty:
         match = df_act[df_act['id'] == int(activo_id)]
@@ -223,7 +221,6 @@ def _render_ordenes_por_activo(df_act, df_users, df_ordenes):
     st.title(f"🛠️ Órdenes de: {nombre_activo}")
     st.caption(f"📦 Inventario > {nombre_activo} > Órdenes de Trabajo")
 
-    # Botón volver
     if st.button("⬅️ Volver a la ficha del activo", use_container_width=True):
         st.session_state.current_page = "Inventario Activos"
         st.session_state.jump_target = "activo"
@@ -232,7 +229,6 @@ def _render_ordenes_por_activo(df_act, df_users, df_ordenes):
 
     st.markdown("---")
 
-    # Filtrar órdenes
     if df_ordenes.empty:
         st.info("Este activo no tiene órdenes registradas.")
         if st.button("➕ Crear primera orden", type="primary"):
@@ -251,7 +247,6 @@ def _render_ordenes_por_activo(df_act, df_users, df_ordenes):
             st.rerun()
         return
 
-    # KPIs
     total = len(df_filtrado)
     abiertas = len(df_filtrado[df_filtrado['estado'] == 'Abierta'])
     por_validar = len(df_filtrado[df_filtrado['estado'] == 'Por Validar'])
@@ -265,7 +260,6 @@ def _render_ordenes_por_activo(df_act, df_users, df_ordenes):
 
     st.markdown("---")
 
-    # Filtro por estado
     filtro = st.selectbox("Filtrar por estado", ["Todas", "Abierta", "Por Validar", "Concluida", "Cancelada"])
     if filtro != "Todas":
         df_filtrado = df_filtrado[df_filtrado['estado'] == filtro]
@@ -296,7 +290,6 @@ def _render_ordenes_por_activo(df_act, df_users, df_ordenes):
                 st.session_state.jump_id = orden['id']
                 st.rerun()
 
-    # Botón para crear nueva
     st.markdown("---")
     if st.button("➕ Nueva orden para este activo", type="primary", use_container_width=True):
         st.session_state.jump_target = "crear_para_activo"
@@ -308,14 +301,11 @@ def _render_ordenes_por_activo(df_act, df_users, df_ordenes):
 # ➕ CREAR ORDEN PARA ACTIVO ESPECÍFICO
 # ==============================================================================
 def _render_crear_para_activo(df_act, df_users, df_ordenes):
-    """Muestra el formulario de creación rápida con el activo preseleccionado."""
     activo_id = st.session_state.get('jump_id')
 
-    # Limpiar jump
     st.session_state.jump_target = None
     st.session_state.jump_id = None
 
-    # Safety check
     if not activo_id:
         st.error("No se especificó un activo.")
         if st.button("⬅️ Volver al inicio"):
@@ -329,7 +319,6 @@ def _render_crear_para_activo(df_act, df_users, df_ordenes):
         st.error("ID de activo no válido.")
         return
 
-    # Buscar nombre del activo
     nombre_activo = "Activo"
     if not df_act.empty:
         match = df_act[df_act['id'] == activo_id]
@@ -339,7 +328,6 @@ def _render_crear_para_activo(df_act, df_users, df_ordenes):
     st.title(f"➕ Nueva Orden para: {nombre_activo}")
     st.caption(f"📦 Inventario > {nombre_activo} > Crear Orden")
 
-    # Botón volver
     if st.button("⬅️ Volver a la ficha del activo", use_container_width=True):
         st.session_state.current_page = "Inventario Activos"
         st.session_state.jump_target = "activo"
@@ -348,7 +336,6 @@ def _render_crear_para_activo(df_act, df_users, df_ordenes):
 
     st.markdown("---")
 
-    # Formulario con activo preseleccionado
     nom_sugerido = render_sugerencia_tecnico(df_ordenes, df_users)
 
     with st.form("ot_para_activo", clear_on_submit=True):
@@ -372,17 +359,16 @@ def _render_crear_para_activo(df_act, df_users, df_ordenes):
                 st.error("Debe asignar un técnico.")
             else:
                 try:
-                    res = supabase.table("ordenes").insert({
+                    res = db_insert("ordenes", {
                         "activo_id": int(activo_id), "descripcion": desc_d,
                         "criticidad": crit_d, "tipo_mantenimiento": tipo_d,
                         "estado": "Abierta", "tecnico_asignado": str(tech_opts_d[asig_d]),
                         "fecha_creacion": datetime.now().isoformat()
-                    }).execute()
+                    })
                     if res.data:
                         nuevo_id = res.data[0]['id']
                         st.toast(f"✅ Orden #{nuevo_id} creada para {nombre_activo}.")
                         time.sleep(1)
-                        # Ir a gestionar la orden recién creada
                         st.session_state.current_page = "Ordenes de Trabajo"
                         st.session_state.jump_target = "orden"
                         st.session_state.jump_id = nuevo_id
@@ -395,7 +381,6 @@ def _render_crear_para_activo(df_act, df_users, df_ordenes):
 # 📋 VISTA KANBAN
 # ==============================================================================
 def _render_kanban(df_act, df_users, df_ordenes):
-    """Vista Kanban: tarjetas de órdenes en columnas por estado."""
     st.markdown("### 📋 Tablero Kanban")
     st.caption("Vista visual de todas las órdenes. Haz clic en una tarjeta para gestionarla.")
 
@@ -406,12 +391,10 @@ def _render_kanban(df_act, df_users, df_ordenes):
     map_act = dict(zip(df_act['id'], df_act['nombre'])) if not df_act.empty else {}
     map_user = dict(zip(df_users['id'].astype(str), df_users['nombre'])) if not df_users.empty else {}
 
-    # Separar por estado
     df_abiertas = df_ordenes[df_ordenes['estado'] == 'Abierta'].copy()
     df_validar = df_ordenes[df_ordenes['estado'] == 'Por Validar'].copy()
     df_concluidas = df_ordenes[df_ordenes['estado'] == 'Concluida'].copy()
 
-    # Filtro rápido
     c_f1, c_f2 = st.columns(2)
     with c_f1:
         filtro_activo_k = st.selectbox(
@@ -488,7 +471,6 @@ def _render_kanban(df_act, df_users, df_ordenes):
             st.caption("Sin órdenes")
             return
 
-        # Paginación dentro de cada columna
         max_default = 10
         state_key = f"kanban_show_all_{key_prefix}"
         mostrar_todas = st.session_state.get(state_key, False)
@@ -519,7 +501,6 @@ def _render_kanban(df_act, df_users, df_ordenes):
                     st.session_state[state_key] = False
                     st.rerun()
 
-    # Renderizar las 3 columnas
     col1, col2, col3 = st.columns(3)
 
     with col1:
@@ -531,7 +512,6 @@ def _render_kanban(df_act, df_users, df_ordenes):
     with col3:
         _render_columna("CONCLUIDAS", "#10B981", "✅", df_concluidas, "concluida")
 
-    # Resumen visual
     st.markdown("---")
     total = len(df_abiertas) + len(df_validar) + len(df_concluidas)
     if total > 0:
@@ -570,7 +550,7 @@ def _render_mis_gestiones(df_act, df_users, df_ordenes):
                         url_subida = subir_archivo_generico(archivo_nuevo)
                         if url_subida:
                             datos_update["archivo_url"] = url_subida
-                    supabase.table("bitacora").update(datos_update).eq("id", item_id).execute()
+                    db_update("bitacora", datos_update, "id", item_id)
                     st.toast("Registro actualizado.")
                     st.rerun()
                 except Exception as e:
@@ -614,7 +594,6 @@ def _render_orden_gestion(row, nombre_activo, df_users, usuario):
         </div>
         """, unsafe_allow_html=True)
 
-        # Time tracker
         if row['estado'] != 'Concluida':
             render_time_tracker(row['id'], usuario)
             render_costos(row['id'], usuario)
@@ -646,7 +625,7 @@ def _render_orden_gestion(row, nombre_activo, df_users, usuario):
                         if st.button("✏️", key=f"btn_edit_{b['id']}", help="Editar"):
                             editar_avance_dialog(b['id'], b['mensaje'], b['archivo_url'])
                         if st.button("🗑️", key=f"btn_del_{b['id']}", help="Eliminar"):
-                            supabase.table("bitacora").delete().eq("id", b['id']).execute()
+                            db_delete("bitacora", "id", b['id'])
                             st.toast("Eliminado")
                             time.sleep(0.5)
                             st.rerun()
@@ -671,11 +650,11 @@ def _render_orden_gestion(row, nombre_activo, df_users, usuario):
                     if archivo_gestion:
                         with st.spinner("Subiendo archivo..."):
                             url_doc = subir_archivo_generico(archivo_gestion)
-                    supabase.table("bitacora").insert({
+                    db_insert("bitacora", {
                         "orden_id": row['id'], "usuario_text": usuario,
                         "mensaje": nuevo_mensaje, "archivo_url": url_doc,
                         "fecha": datetime.now().isoformat()
-                    }).execute()
+                    })
                     st.toast("✅ Avance registrado correctamente.")
                     time.sleep(1)
                     st.rerun()
@@ -691,15 +670,15 @@ def _render_orden_gestion(row, nombre_activo, df_users, usuario):
             motivo_cierre = st.text_input("Comentario final de cierre (Opcional)", key=f"cierre_text_{row['id']}")
             if st.button("CONFIRMAR Y FINALIZAR ORDEN", key=f"btn_fin_seguro_{row['id']}", type="primary", use_container_width=True):
                 msg_final = f"[CIERRE ADMIN] {motivo_cierre}" if motivo_cierre else "[CIERRE ADMIN] Gestión finalizada."
-                supabase.table("ordenes").update({
+                db_update("ordenes", {
                     "estado": "Concluida", "comentarios_cierre": msg_final,
                     "fecha_cierre": datetime.now().isoformat()
-                }).eq("id", row['id']).execute()
-                supabase.table("bitacora").insert({
+                }, "id", row['id'])
+                db_insert("bitacora", {
                     "orden_id": row['id'], "usuario_text": usuario,
                     "mensaje": "🏁 Orden finalizada administrativamente.",
                     "fecha": datetime.now().isoformat()
-                }).execute()
+                })
                 st.balloons()
                 st.toast("🏆 Orden finalizada correctamente.")
                 time.sleep(1.5)
@@ -764,27 +743,27 @@ def _render_buzon(df_act, df_users, df_ordenes, df_solicitudes):
                         st.error("⚠️ Falta seleccionar: Activo, Tipo o Técnico.")
                     else:
                         try:
-                            res_orden = supabase.table("ordenes").insert({
+                            res_orden = db_insert("ordenes", {
                                 "activo_id": int(act_map_nombre_id[activo_final_nombre]),
                                 "chat_id": sol.get('chat_id'),
                                 "descripcion": f"[Solicitud #{sol['id']}] {sol['descripcion']}",
                                 "criticidad": criticidad_final, "tipo_mantenimiento": tipo_ot,
                                 "estado": "Abierta", "tecnico_asignado": str(tech_options[asignar_a]),
                                 "fecha_creacion": datetime.now().isoformat(),
-                            }).execute()
+                            })
                             if res_orden.data:
                                 nuevo_id = res_orden.data[0]['id']
                                 if sol.get('foto_url'):
                                     es_imagen = sol['foto_url'].lower().endswith(('.png', '.jpg', '.jpeg', '.webp'))
                                     icono_msg = "📸" if es_imagen else "📎"
-                                    supabase.table("bitacora").insert({
+                                    db_insert("bitacora", {
                                         "orden_id": nuevo_id, "usuario_text": f"Solicitante: {sol['solicitante_id']}",
                                         "mensaje": f"{icono_msg} Evidencia original del reporte.",
                                         "archivo_url": sol['foto_url'], "fecha": datetime.now().isoformat()
-                                    }).execute()
+                                    })
                                 msj_ok = f"✅ **¡Solicitud Aprobada!**\n\nOrden **#{nuevo_id}** ({tipo_ot}). Prioridad: {criticidad_final}."
                                 notificar_telegram(sol.get('chat_id'), msj_ok)
-                                supabase.table("solicitudes").update({"estado": "Aprobada"}).eq("id", sol['id']).execute()
+                                db_update("solicitudes", {"estado": "Aprobada"}, "id", sol['id'])
                                 st.toast(f"✅ Orden #{nuevo_id} creada.")
                                 time.sleep(1)
                                 st.rerun()
@@ -794,7 +773,7 @@ def _render_buzon(df_act, df_users, df_ordenes, df_solicitudes):
                             error_amigable(e)
 
                 if btn_rechazar:
-                    supabase.table("solicitudes").update({"estado": "Rechazada"}).eq("id", sol['id']).execute()
+                    db_update("solicitudes", {"estado": "Rechazada"}, "id", sol['id'])
                     notificar_telegram(sol.get('chat_id'), "🚫 Solicitud Rechazada.")
                     st.warning("Rechazada.")
                     st.rerun()
@@ -838,7 +817,7 @@ def _render_calidad(df_act, df_users):
                 st.info(f"{row.get('comentarios_cierre', 'Sin reporte')}")
                 st.markdown("---")
                 if st.button("✅ APROBAR Y CERRAR", key=f"apr_fin_{row['id']}", type="primary", use_container_width=True):
-                    supabase.table("ordenes").update({"estado": "Concluida"}).eq("id", row['id']).execute()
+                    db_update("ordenes", {"estado": "Concluida"}, "id", row['id'])
                     if row.get('chat_id'):
                         notificar_telegram(row.get('chat_id'),
                             f"🎉 **¡Solucionado!**\n\nOrden **#{row['id']}** cerrada.",
@@ -850,9 +829,9 @@ def _render_calidad(df_act, df_users):
                     motivo = st.text_input("Motivo", key=f"mot_{row['id']}")
                     if st.button("CONFIRMAR DEVOLUCIÓN", key=f"dev_{row['id']}", type="secondary", use_container_width=True):
                         if motivo:
-                            supabase.table("ordenes").update({
+                            db_update("ordenes", {
                                 "estado": "Abierta", "comentarios_validacion": f"DEVUELTA: {motivo}"
-                            }).eq("id", row['id']).execute()
+                            }, "id", row['id'])
                             st.warning("Devuelta.")
                             st.rerun()
                         else:
@@ -876,11 +855,9 @@ def _render_gestion_global(df_act, df_users, df_ordenes):
     col_filtros = st.columns(3)
     filtro_estado = col_filtros[0].selectbox("Filtrar Estado", ["Todas", "Abierta", "Por Validar", "Concluida", "Cancelada"], index=0)
 
-    # Paginación
     if 'gestion_pagina' not in st.session_state:
         st.session_state.gestion_pagina = 1
 
-    # Construir filtros para query paginada
     query_filters = {}
     if filtro_estado != "Todas":
         query_filters['estado'] = filtro_estado
@@ -888,7 +865,6 @@ def _render_gestion_global(df_act, df_users, df_ordenes):
     PER_PAGE = 20
 
     if filtro_ot_externo:
-        # Búsqueda directa por ID — sin paginación
         try:
             oid_filtro = int(filtro_ot_externo)
             res = supabase.table("ordenes").select("*").eq("id", oid_filtro).execute()
@@ -920,7 +896,6 @@ def _render_gestion_global(df_act, df_users, df_ordenes):
         df_display['Activo Nombre'] = df_display['activo_id'].map(map_act).fillna("Desconocido")
         df_display['Técnico Nombre'] = df_display['tecnico_asignado'].map(map_user).fillna("Sin Asignar")
 
-        # Controles de paginación arriba
         nueva_pag = render_paginacion("gestion_ordenes", st.session_state.gestion_pagina, total_pag, total)
         if nueva_pag != st.session_state.gestion_pagina:
             st.session_state.gestion_pagina = nueva_pag
@@ -934,7 +909,6 @@ def _render_gestion_global(df_act, df_users, df_ordenes):
         if len(event.selection.rows) > 0:
             idx_tabla = event.selection.rows[0]
             id_orden_selec = df_display.iloc[idx_tabla]['id']
-            # Cargar datos completos de la orden seleccionada
             try:
                 res_sel = supabase.table("ordenes").select("*").eq("id", int(id_orden_selec)).execute()
                 if res_sel.data:
@@ -945,7 +919,6 @@ def _render_gestion_global(df_act, df_users, df_ordenes):
                 orden_actual = df_display.iloc[idx_tabla]
             _render_orden_detalle(id_orden_selec, orden_actual, df_display, idx_tabla, df_users)
 
-        # Controles de paginación abajo
         render_paginacion("gestion_ordenes_bottom", st.session_state.gestion_pagina, total_pag, total)
     else:
         st.info("No hay órdenes registradas con los filtros actuales.")
@@ -989,10 +962,10 @@ def _render_orden_detalle(id_orden_selec, orden_actual, df_display, idx_tabla, d
 
             if st.form_submit_button("💾 GUARDAR CAMBIOS", type="primary", use_container_width=True):
                 try:
-                    supabase.table("ordenes").update({
+                    db_update("ordenes", {
                         "estado": nuevo_estado, "tecnico_asignado": str(tech_dict[nuevo_tec_nom]),
                         "criticidad": nueva_crit, "descripcion": nueva_desc
-                    }).eq("id", int(id_orden_selec)).execute()
+                    }, "id", int(id_orden_selec))
                     st.toast("Orden actualizada correctamente.")
                     time.sleep(1)
                     st.rerun()
@@ -1005,14 +978,14 @@ def _render_orden_detalle(id_orden_selec, orden_actual, df_display, idx_tabla, d
             if st.button("🔄 RE-ABRIR ORDEN", key=f"reopen_{id_orden_selec}", type="secondary", use_container_width=True):
                 try:
                     id_limpio = int(id_orden_selec)
-                    supabase.table("ordenes").update({
+                    db_update("ordenes", {
                         "estado": "Abierta", "fecha_cierre": None
-                    }).eq("id", id_limpio).execute()
-                    supabase.table("bitacora").insert({
+                    }, "id", id_limpio)
+                    db_insert("bitacora", {
                         "orden_id": id_limpio, "usuario_text": str(st.session_state.get('usuario', '')),
                         "mensaje": "🔄 Orden RE-ABIERTA administrativamente.",
                         "fecha": datetime.now().isoformat()
-                    }).execute()
+                    })
                     st.toast("✅ Orden reactivada.")
                     time.sleep(1)
                     st.rerun()
@@ -1021,7 +994,7 @@ def _render_orden_detalle(id_orden_selec, orden_actual, df_display, idx_tabla, d
 
         with st.expander("🗑️ Zona de Peligro (Eliminar)"):
             if st.button("ELIMINAR DEFINITIVAMENTE", key=f"del_g_{id_orden_selec}", type="secondary", use_container_width=True):
-                supabase.table("ordenes").delete().eq("id", int(id_orden_selec)).execute()
+                db_delete("ordenes", "id", int(id_orden_selec))
                 registrar_accion_critica("ELIMINAR_ORDEN", st.session_state.get('usuario', '?'), f"Orden #{id_orden_selec} eliminada (Gestión Global)")
                 st.toast("Eliminado.")
                 time.sleep(1)
@@ -1040,11 +1013,9 @@ def _render_bitacora(id_orden_selec):
         st.error("ID de orden no válido.")
         return
 
-    # Time tracker compacto
     usuario = st.session_state.get('usuario', '')
     rol = st.session_state.get('rol', '')
 
-    # Obtener estado actual de la orden
     estado_orden = "Abierta"
     try:
         res_estado = supabase.table("ordenes").select("estado").eq("id", oid).execute()
@@ -1118,12 +1089,12 @@ def _render_crear_directa(df_act, df_users, df_ordenes):
                     st.error("La descripción es obligatoria.")
                 else:
                     try:
-                        res_orden = supabase.table("ordenes").insert({
+                        res_orden = db_insert("ordenes", {
                             "activo_id": int(act_dict[sel_act_dir]), "descripcion": desc_d,
                             "criticidad": crit_d, "tipo_mantenimiento": tipo_d,
                             "estado": "Abierta", "tecnico_asignado": str(tech_opts_d[asig_d]),
                             "fecha_creacion": datetime.now().isoformat()
-                        }).execute()
+                        })
                         if res_orden.data:
                             nuevo_id_ot = res_orden.data[0]['id']
                             st.toast(f"✅ Orden #{nuevo_id_ot} creada correctamente.")
@@ -1131,11 +1102,11 @@ def _render_crear_directa(df_act, df_users, df_ordenes):
                                 with st.spinner("Subiendo archivo adjunto..."):
                                     url_doc = subir_archivo_generico(archivo_inicial)
                                     if url_doc:
-                                        supabase.table("bitacora").insert({
+                                        db_insert("bitacora", {
                                             "orden_id": nuevo_id_ot, "usuario_text": st.session_state.get('usuario', ''),
                                             "mensaje": "📎 Documento inicial adjunto al crear la orden.",
                                             "archivo_url": url_doc, "fecha": datetime.now().isoformat()
-                                        }).execute()
+                                        })
                                         st.toast("Documento vinculado a la bitácora")
                                     else:
                                         st.error("La orden se creó, pero falló la subida del archivo.")
@@ -1165,13 +1136,12 @@ def _render_preventivos(df_act, df_users):
     st.info("Aquí configuras las tareas que se repiten (ej: Limpieza mensual).")
 
     with st.expander("➕ Crear Nuevo Plan Preventivo"):
-        # Checklist FUERA del form para poder agregar/eliminar dinámicamente
         st.markdown("#### ✅ Checklist de Verificación")
         st.caption("Agrega los pasos que el técnico debe verificar en cada ejecución.")
-    
+
         if 'checklist_items' not in st.session_state:
             st.session_state.checklist_items = ["", ""]
-    
+
         for i in range(len(st.session_state.checklist_items)):
             c_item, c_del = st.columns([5, 1])
             nuevo_val = c_item.text_input(
@@ -1186,13 +1156,13 @@ def _render_preventivos(df_act, df_users):
                 if c_del.button("🗑️", key=f"prev_dc_{i}", help="Eliminar paso"):
                     st.session_state.checklist_items.pop(i)
                     st.rerun()
-    
+
         if st.button("➕ Agregar paso", key="prev_add_step"):
             st.session_state.checklist_items.append("")
             st.rerun()
-    
+
         st.markdown("---")
-    
+
         with st.form("form_plan_prev"):
             c1, c2 = st.columns(2)
             act_nombres = df_act['nombre'].values if not df_act.empty else []
@@ -1203,21 +1173,21 @@ def _render_preventivos(df_act, df_users):
             c3, c4 = st.columns(2)
             dias = c3.number_input("Frecuencia (Días)", min_value=1, value=30)
             fecha_base = c4.date_input("Fecha de Inicio / Última vez hecho")
-    
+
             enviado = st.form_submit_button("GUARDAR PLAN")
-    
+
             if enviado:
                 id_act = df_act[df_act['nombre'] == act_sel].iloc[0]['id']
                 id_tec = users_dict[tec_sel]
                 checklist_limpio = [item.strip() for item in st.session_state.checklist_items if item.strip()]
                 checklist_json = checklist_limpio if checklist_limpio else None
                 try:
-                    supabase.table("planes_mantenimiento").insert({
+                    db_insert("planes_mantenimiento", {
                         "activo_id": int(id_act), "descripcion": desc,
                         "frecuencia_dias": int(dias), "ultima_ejecucion": fecha_base.isoformat(),
                         "tecnico_default": str(id_tec),
                         "checklist": checklist_json
-                    }).execute()
+                    })
                     st.session_state.checklist_items = ["", ""]
                     st.toast(f"✅ Plan guardado con {len(checklist_limpio)} pasos de verificación.")
                     st.rerun()
@@ -1247,9 +1217,6 @@ def _render_preventivos(df_act, df_users):
     map_act = dict(zip(df_act['id'], df_act['nombre']))
     df_planes['Activo'] = df_planes['activo_id'].map(map_act)
 
-    # =====================================================================
-    # 📅 CALENDARIO VISUAL
-    # =====================================================================
     tab_cal, tab_lista = st.tabs(["📅 Calendario Visual", "📋 Lista de Planes"])
 
     with tab_cal:
@@ -1267,7 +1234,6 @@ def _render_preventivos(df_act, df_users):
             use_container_width=True, hide_index=True
         )
 
-        # Mostrar checklists por plan
         st.markdown("#### ✅ Checklists por Plan")
         if "checklist" in df_planes.columns:
             planes_con_checklist = df_planes[df_planes["checklist"].apply(lambda x: isinstance(x, list) and len(x) > 0 if x is not None else False)]
@@ -1299,36 +1265,34 @@ def _render_preventivos(df_act, df_users):
         for idx, plan in df_planes.iterrows():
             if plan['proxima_fecha'] <= now:
                 try:
-                    # Construir descripción con checklist si existe
                     desc_orden = f"[PREVENTIVO] {plan['descripcion']}"
                     checklist = plan.get('checklist')
                     if checklist and isinstance(checklist, list) and len(checklist) > 0:
                         checklist_texto = "\n".join([f"☐ {item}" for item in checklist])
                         desc_orden = f"{desc_orden}\n\n✅ CHECKLIST:\n{checklist_texto}"
 
-                    res_orden = supabase.table("ordenes").insert({
+                    res_orden = db_insert("ordenes", {
                         "activo_id": int(plan['activo_id']),
                         "descripcion": desc_orden,
                         "criticidad": "Media", "tipo_mantenimiento": "Preventivo",
                         "estado": "Abierta", "tecnico_asignado": str(plan['tecnico_default']),
                         "fecha_creacion": now.isoformat()
-                    }).execute()
+                    })
 
-                    # Registrar checklist en bitácora si existe
                     if checklist and isinstance(checklist, list) and len(checklist) > 0 and res_orden.data:
                         nuevo_id = res_orden.data[0]['id']
                         checklist_log = "📋 CHECKLIST DEL PREVENTIVO:\n" + "\n".join(
                             [f"{i+1}. {item}" for i, item in enumerate(checklist)]
                         )
-                        supabase.table("bitacora").insert({
+                        db_insert("bitacora", {
                             "orden_id": nuevo_id, "usuario_text": "SISTEMA",
                             "mensaje": checklist_log,
                             "fecha": now.isoformat()
-                        }).execute()
+                        })
 
-                    supabase.table("planes_mantenimiento").update({
+                    db_update("planes_mantenimiento", {
                         "ultima_ejecucion": now.isoformat()
-                    }).eq("id", plan['id']).execute()
+                    }, "id", plan['id'])
                     contador += 1
                 except Exception as e:
                     error_amigable(e, f"generar preventivo del plan #{plan['id']}")
@@ -1343,11 +1307,8 @@ def _render_preventivos(df_act, df_users):
 
 
 def _render_calendario_preventivo(df_planes, map_act):
-    """Renderiza un calendario mensual visual con preventivos marcados."""
-
     now = datetime.now()
 
-    # Selector de mes/año
     c_mes, c_ano, c_nav = st.columns([2, 1, 2])
     with c_mes:
         meses_nombres = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
@@ -1358,31 +1319,21 @@ def _render_calendario_preventivo(df_planes, map_act):
         ano_sel = st.selectbox("Año", [now.year - 1, now.year, now.year + 1],
                                index=1, label_visibility="collapsed")
 
-    # Construir mapa de fechas → tareas
     tareas_por_fecha = {}
     for _, plan in df_planes.iterrows():
         prox = plan['proxima_fecha']
         if pd.isna(prox):
             continue
-        # Calcular próximas fechas dentro del mes seleccionado (incluyendo recurrencias)
         fecha_base = prox
         dias_freq = plan['frecuencia_dias']
-
-        # Generar instancias dentro del mes
         inicio_mes = datetime(ano_sel, mes_num, 1)
         fin_mes = datetime(ano_sel, mes_num, cal_lib.monthrange(ano_sel, mes_num)[1], 23, 59, 59)
-
-        # Ir hacia atrás desde fecha_base hasta inicio_mes
         fecha_calc = fecha_base
         fechas_instancias = []
-
-        # Hacia adelante
         while fecha_calc <= fin_mes:
             if fecha_calc >= inicio_mes:
                 fechas_instancias.append(fecha_calc)
             fecha_calc = fecha_calc + pd.Timedelta(days=dias_freq)
-
-        # Hacia atrás (para planes que empezaron antes)
         fecha_calc = fecha_base - pd.Timedelta(days=dias_freq)
         while fecha_calc >= inicio_mes:
             fechas_instancias.append(fecha_calc)
@@ -1392,7 +1343,6 @@ def _render_calendario_preventivo(df_planes, map_act):
             clave = fecha_inst.day
             if clave not in tareas_por_fecha:
                 tareas_por_fecha[clave] = []
-
             dias_restantes = (fecha_inst - now).days
             if dias_restantes < 0:
                 estado = "vencido"
@@ -1406,7 +1356,6 @@ def _render_calendario_preventivo(df_planes, map_act):
                 estado = "ok"
                 color = "#10B981"
                 icono = "🟢"
-
             nombre_activo = map_act.get(plan.get('activo_id'), 'Activo')
             tareas_por_fecha[clave].append({
                 'desc': plan['descripcion'],
@@ -1417,17 +1366,14 @@ def _render_calendario_preventivo(df_planes, map_act):
                 'dias': dias_restantes
             })
 
-    # Generar HTML del calendario
-    cal = cal_lib.Calendar(firstweekday=6)  # Domingo primero
+    cal = cal_lib.Calendar(firstweekday=6)
     semanas = cal.monthdayscalendar(ano_sel, mes_num)
     dias_semana = ["Dom", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb"]
 
-    # Estadísticas del mes
     total_venc = sum(1 for tareas in tareas_por_fecha.values() for t in tareas if t['estado'] == 'vencido')
     total_prox = sum(1 for tareas in tareas_por_fecha.values() for t in tareas if t['estado'] == 'proximo')
     total_ok = sum(1 for tareas in tareas_por_fecha.values() for t in tareas if t['estado'] == 'ok')
 
-    # Header de estadísticas
     st.markdown(f"""
     <div style="display:flex;gap:15px;margin-bottom:20px;justify-content:center;">
         <div style="background:rgba(239,68,68,0.15);border:1px solid #EF4444;border-radius:8px;padding:10px 20px;text-align:center;">
@@ -1449,98 +1395,23 @@ def _render_calendario_preventivo(df_planes, map_act):
     </div>
     """, unsafe_allow_html=True)
 
-    # Construir HTML del calendario
     html_cal = """
     <style>
-        .cal-container {
-            background: rgba(30, 41, 59, 0.7);
-            border-radius: 12px;
-            padding: 20px;
-            border: 1px solid rgba(255,255,255,0.08);
-        }
-        .cal-header {
-            text-align: center;
-            font-size: 1.3rem;
-            font-weight: 800;
-            color: #F59E0B;
-            margin-bottom: 15px;
-            text-transform: uppercase;
-            letter-spacing: 2px;
-        }
-        .cal-grid {
-            display: grid;
-            grid-template-columns: repeat(7, 1fr);
-            gap: 4px;
-        }
-        .cal-day-name {
-            text-align: center;
-            font-size: 0.75rem;
-            font-weight: 700;
-            color: #9CA3AF;
-            padding: 8px 0;
-            text-transform: uppercase;
-        }
-        .cal-day {
-            background: rgba(255,255,255,0.03);
-            border-radius: 8px;
-            min-height: 90px;
-            padding: 6px;
-            position: relative;
-            border: 1px solid rgba(255,255,255,0.05);
-            transition: all 0.2s;
-        }
-        .cal-day:hover {
-            background: rgba(255,255,255,0.06);
-            border-color: rgba(255,255,255,0.15);
-        }
-        .cal-day.empty {
-            background: transparent;
-            border: none;
-        }
-        .cal-day.today {
-            border: 2px solid #60A5FA;
-            box-shadow: 0 0 10px rgba(96,165,250,0.3);
-        }
-        .cal-day-num {
-            font-size: 0.85rem;
-            font-weight: 700;
-            color: #E5E7EB;
-            margin-bottom: 4px;
-        }
-        .cal-day.today .cal-day-num {
-            color: #60A5FA;
-        }
-        .cal-task {
-            font-size: 0.6rem;
-            padding: 2px 4px;
-            border-radius: 3px;
-            margin-bottom: 2px;
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
-            cursor: default;
-        }
-        .cal-task.vencido {
-            background: rgba(239,68,68,0.2);
-            color: #FCA5A5;
-            border-left: 2px solid #EF4444;
-        }
-        .cal-task.proximo {
-            background: rgba(245,158,11,0.2);
-            color: #FDE68A;
-            border-left: 2px solid #F59E0B;
-        }
-        .cal-task.ok {
-            background: rgba(16,185,129,0.15);
-            color: #A7F3D0;
-            border-left: 2px solid #10B981;
-        }
-        .cal-more {
-            font-size: 0.6rem;
-            color: #9CA3AF;
-            padding: 1px 4px;
-            font-style: italic;
-        }
+        .cal-container { background: rgba(30, 41, 59, 0.7); border-radius: 12px; padding: 20px; border: 1px solid rgba(255,255,255,0.08); }
+        .cal-header { text-align: center; font-size: 1.3rem; font-weight: 800; color: #F59E0B; margin-bottom: 15px; text-transform: uppercase; letter-spacing: 2px; }
+        .cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; }
+        .cal-day-name { text-align: center; font-size: 0.75rem; font-weight: 700; color: #9CA3AF; padding: 8px 0; text-transform: uppercase; }
+        .cal-day { background: rgba(255,255,255,0.03); border-radius: 8px; min-height: 90px; padding: 6px; position: relative; border: 1px solid rgba(255,255,255,0.05); transition: all 0.2s; }
+        .cal-day:hover { background: rgba(255,255,255,0.06); border-color: rgba(255,255,255,0.15); }
+        .cal-day.empty { background: transparent; border: none; }
+        .cal-day.today { border: 2px solid #60A5FA; box-shadow: 0 0 10px rgba(96,165,250,0.3); }
+        .cal-day-num { font-size: 0.85rem; font-weight: 700; color: #E5E7EB; margin-bottom: 4px; }
+        .cal-day.today .cal-day-num { color: #60A5FA; }
+        .cal-task { font-size: 0.6rem; padding: 2px 4px; border-radius: 3px; margin-bottom: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: default; }
+        .cal-task.vencido { background: rgba(239,68,68,0.2); color: #FCA5A5; border-left: 2px solid #EF4444; }
+        .cal-task.proximo { background: rgba(245,158,11,0.2); color: #FDE68A; border-left: 2px solid #F59E0B; }
+        .cal-task.ok { background: rgba(16,185,129,0.15); color: #A7F3D0; border-left: 2px solid #10B981; }
+        .cal-more { font-size: 0.6rem; color: #9CA3AF; padding: 1px 4px; font-style: italic; }
     </style>
     """
 
@@ -1550,11 +1421,9 @@ def _render_calendario_preventivo(df_planes, map_act):
         <div class="cal-grid">
     """
 
-    # Nombres de días
     for dia_nombre in dias_semana:
         html_cal += f'<div class="cal-day-name">{dia_nombre}</div>'
 
-    # Días del mes
     for semana in semanas:
         for dia in semana:
             if dia == 0:
@@ -1563,16 +1432,13 @@ def _render_calendario_preventivo(df_planes, map_act):
                 clase_hoy = "today" if (dia == now.day and mes_num == now.month and ano_sel == now.year) else ""
                 html_cal += f'<div class="cal-day {clase_hoy}">'
                 html_cal += f'<div class="cal-day-num">{dia}</div>'
-
                 if dia in tareas_por_fecha:
                     tareas = tareas_por_fecha[dia]
-                    # Mostrar máximo 3 tareas por día
                     for tarea in tareas[:3]:
                         tooltip = f"{tarea['icono']} {tarea['activo']}: {tarea['desc']} ({tarea['dias']}d)"
                         html_cal += f'<div class="cal-task {tarea["estado"]}" title="{tooltip}">{tarea["icono"]} {tarea["desc"][:15]}</div>'
                     if len(tareas) > 3:
                         html_cal += f'<div class="cal-more">+{len(tareas) - 3} más</div>'
-
                 html_cal += '</div>'
 
     html_cal += """
@@ -1581,11 +1447,8 @@ def _render_calendario_preventivo(df_planes, map_act):
     """
 
     st.markdown(html_cal, unsafe_allow_html=True)
-
-    # Leyenda
     st.caption("🔴 Vencido | 🟡 Próximo (≤5 días) | 🟢 A tiempo | Los tooltips muestran detalles al pasar el mouse")
 
-    # Resumen de tareas del día seleccionado
     st.markdown("---")
     st.markdown("#### 🔍 Explorar Día")
     dia_explorar = st.number_input("Seleccionar día del mes",
