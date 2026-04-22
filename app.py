@@ -117,11 +117,11 @@ with st.sidebar:
         st.session_state.current_page = "Tablero de Mando"
 
     if rol == "Admin":
-        menu = [("🔍", "Búsqueda"), ("📊", "Tablero"), ("📦", "Inventario Activos"), ("🛠️", "Órdenes de Trabajo"), ("🔩", "Repuestos"), ("👤", "Usuarios")]
-        valores = ["Busqueda Global", "Tablero de Mando", "Inventario Activos", "Ordenes de Trabajo", "Repuestos", "Usuarios"]
+        menu = [("🔍", "Búsqueda"), ("📊", "Tablero"), ("🏗️", "Jerarquía"), ("📦", "Inventario Activos"), ("🛠️", "Órdenes de Trabajo"), ("🔩", "Repuestos"), ("👤", "Usuarios")]
+        valores = ["Busqueda Global", "Tablero de Mando", "Jerarquia Activos", "Inventario Activos", "Ordenes de Trabajo", "Repuestos", "Usuarios"]
     elif rol == "Programador":
-        menu = [("🔍", "Búsqueda"), ("📊", "Tablero"), ("🛠️", "Órdenes de Trabajo"), ("🔩", "Repuestos"), ("👤", "Usuarios")]
-        valores = ["Busqueda Global", "Tablero de Mando", "Ordenes de Trabajo", "Repuestos", "Usuarios"]
+        menu = [("🔍", "Búsqueda"), ("📊", "Tablero"), ("🏗️", "Jerarquía"), ("🛠️", "Órdenes de Trabajo"), ("🔩", "Repuestos"), ("👤", "Usuarios")]
+        valores = ["Busqueda Global", "Tablero de Mando", "Jerarquia Activos", "Ordenes de Trabajo", "Repuestos", "Usuarios"]
     elif rol == "Tecnico":
         menu = [("🔍", "Búsqueda"), ("🛠️", "Órdenes de Trabajo")]
         valores = ["Busqueda Global", "Ordenes de Trabajo"]
@@ -147,6 +147,10 @@ with st.sidebar:
 if choice == "Busqueda Global":
     from views.busqueda import render as render_busqueda
     render_busqueda()
+
+elif choice == "Jerarquia Activos":
+    from views.jerarquia import render as render_jerarquia
+    render_jerarquia()
 
 elif choice == "Tablero de Mando":
     from views.dashboard import render as render_dashboard
