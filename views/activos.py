@@ -26,6 +26,28 @@ def render():
     if 'draft_data' not in st.session_state:
         st.session_state.draft_data = {}
 
+    # ── Manejar navegación desde búsqueda/jerarquía ──
+    jump = st.session_state.get('jump_target')
+    jump_id = st.session_state.get('jump_id')
+
+    if jump == "activo" and jump_id:
+        # Limpiar jump
+        st.session_state.jump_target = None
+        st.session_state.jump_id = None
+
+        # Buscar el activo y mostrar su ficha directamente
+        activo_sel = df_act[df_act['id'] == int(jump_id)] if not df_act.empty else pd.DataFrame()
+        if not activo_sel.empty:
+            _render_ficha_activo(activo_sel.iloc[0])
+            st.markdown("---")
+            if st.button("📋 Ver lista completa de activos", use_container_width=True):
+                st.rerun()
+            return
+        else:
+            st.error(f"Activo #{jump_id} no encontrado.")
+            st.markdown("---")
+
+    # ── Navegación normal con tabs ──
     tab_lista, tab_nuevo, tab_edit = st.tabs(["📋 LISTA DE ACTIVOS", "➕ NUEVO ACTIVO", "✏️ EDITAR / QR"])
 
     with tab_lista:
@@ -112,6 +134,140 @@ def _render_lista(df_act):
                 st.warning("⚠️ No se encontraron activos con estos filtros.")
     else:
         st.info("Aún no hay activos registrados.")
+
+
+# ==============================================================================
+# 🔍 FICHA DETALLE DE ACTIVO
+# ==============================================================================
+def _render_ficha_activo(activo):
+    """Renderiza la vista detalle de un activo con sus órdenes relacionadas."""
+    nombre = html_module.escape(str(activo.get('nombre', 'Sin nombre')))
+    st.title(f"🔧 {nombre}")
+
+    # Breadcrumb
+    area = html_module.escape(str(activo.get('area', 'N/A')))
+    ubic = html_module.escape(str(activo.get('ubicacion', 'N/A')))
+    st.caption(f"📦 Inventario > {area} > {ubic} > {nombre}")
+
+    # ── Foto + Datos principales ──
+    col_foto, col_datos = st.columns([1, 2])
+
+    with col_foto:
+        url_foto = activo.get('foto_url')
+        if url_foto and isinstance(url_foto, str) and len(url_foto) > 10:
+            try:
+                st.image(url_foto, use_container_width=True, caption="Fotografía")
+            except Exception:
+                st.info("📷 Foto no disponible")
+        else:
+            st.markdown("<div style='text-align:center;font-size:4rem;padding:40px;background:#1F2937;border-radius:10px;'>🔧</div>", unsafe_allow_html=True)
+
+        # QR
+        url_qr = activo.get('qr_url')
+        if url_qr and isinstance(url_qr, str) and len(url_qr) > 10:
+            st.image(url_qr, width=150, caption="Código QR")
+
+    with col_datos:
+        st.markdown(f"""
+        <div style="background:rgba(30,41,59,0.6);border-radius:10px;padding:20px;">
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+                <div>
+                    <div style="color:#9CA3AF;font-size:0.8rem;text-transform:uppercase;">ID</div>
+                    <div style="color:#E5E7EB;font-weight:600;">#{activo['id']}</div>
+                </div>
+                <div>
+                    <div style="color:#9CA3AF;font-size:0.8rem;text-transform:uppercase;">Categoría</div>
+                    <div style="color:#E5E7EB;font-weight:600;">{html_module.escape(str(activo.get('categoria', 'N/A')))}</div>
+                </div>
+                <div>
+                    <div style="color:#9CA3AF;font-size:0.8rem;text-transform:uppercase;">Área</div>
+                    <div style="color:#E5E7EB;font-weight:600;">{area}</div>
+                </div>
+                <div>
+                    <div style="color:#9CA3AF;font-size:0.8rem;text-transform:uppercase;">Ubicación</div>
+                    <div style="color:#E5E7EB;font-weight:600;">{ubic}</div>
+                </div>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+
+        # Especificaciones
+        detalles = activo.get('detalles')
+        if detalles and isinstance(detalles, dict) and len(detalles) > 0:
+            st.markdown("#### ⚙️ Especificaciones")
+            for k, v in detalles.items():
+                st.markdown(f"**{html_module.escape(str(k))}:** {html_module.escape(str(v))}")
+
+    st.markdown("---")
+
+    # ── Órdenes relacionadas ──
+    st.markdown("#### 🛠️ Órdenes de Trabajo Relacionadas")
+    try:
+        res_ordenes = supabase.table("ordenes").select("*") \
+            .eq("activo_id", int(activo['id'])) \
+            .order("fecha_creacion", desc=True).limit(10).execute()
+
+        if res_ordenes.data:
+            # KPIs rápidos
+            total = len(res_ordenes.data)
+            abiertas = sum(1 for o in res_ordenes.data if o['estado'] == 'Abierta')
+            concluidas = sum(1 for o in res_ordenes.data if o['estado'] == 'Concluida')
+
+            k1, k2, k3 = st.columns(3)
+            k1.metric("Total OTs", total)
+            k2.metric("🔨 Abiertas", abiertas)
+            k3.metric("✅ Concluidas", concluidas)
+
+            # Tabla de órdenes
+            for orden in res_ordenes.data:
+                icono = "✅" if orden['estado'] == 'Concluida' else "🔨" if orden['estado'] == 'Abierta' else "🧐"
+                fecha = (orden.get('fecha_creacion', '') or '')[:10]
+                desc = (orden.get('descripcion', '') or '')[:60]
+
+                col_info, col_btn = st.columns([4, 1])
+                with col_info:
+                    st.markdown(f"""
+                    <div style="background:rgba(255,255,255,0.03);border-left:3px solid {'#10B981' if orden['estado'] == 'Concluida' else '#F59E0B'};padding:8px 12px;border-radius:0 6px 6px 0;margin-bottom:4px;">
+                        <div style="display:flex;justify-content:space-between;font-size:0.85rem;">
+                            <span style="color:#E5E7EB;font-weight:600;">{icono} OT #{orden['id']}</span>
+                            <span style="color:#9CA3AF;">{fecha}</span>
+                        </div>
+                        <div style="color:#9CA3AF;font-size:0.8rem;">{desc}{'...' if len(orden.get('descripcion', '') or '') > 60 else ''}</div>
+                        <div style="font-size:0.75rem;color:#6B7280;">{orden.get('estado', '?')} · {orden.get('criticidad', '?')} · {orden.get('tipo_mantenimiento', '?')}</div>
+                    </div>
+                    """, unsafe_allow_html=True)
+                with col_btn:
+                    if st.button("⚙️ Gestionar", key=f"ficha_ot_{orden['id']}", type="secondary", use_container_width=True):
+                        st.session_state.current_page = "Ordenes de Trabajo"
+                        st.session_state.jump_target = "orden"
+                        st.session_state.jump_id = orden['id']
+                        st.rerun()
+
+            # Link para ver todas
+            if st.button("📋 Ver todas las órdenes de este activo", key="ver_todas_ot_ficha"):
+                st.session_state.current_page = "Ordenes de Trabajo"
+                st.session_state.jump_target = "ordenes_por_activo"
+                st.session_state.jump_id = int(activo['id'])
+                st.rerun()
+        else:
+            st.info("Este activo no tiene órdenes de trabajo registradas.")
+            if st.button("➕ Crear orden para este activo", type="primary"):
+                st.session_state.current_page = "Ordenes de Trabajo"
+                st.session_state.jump_target = "crear_para_activo"
+                st.session_state.jump_id = int(activo['id'])
+                st.rerun()
+    except Exception as e:
+        st.error("No se pudieron cargar las órdenes.")
+        print(f"Error cargando OTs del activo: {e}")
+
+    # ── Botón para editar ──
+    st.markdown("---")
+    if st.button("✏️ Editar este activo", use_container_width=True):
+        st.session_state.current_page = "Inventario Activos"
+        # Clear jump so it falls through to normal tabs
+        st.session_state.jump_target = None
+        st.session_state.jump_id = None
+        st.rerun()
 
 
 # ==============================================================================

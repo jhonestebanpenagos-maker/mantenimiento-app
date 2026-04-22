@@ -27,9 +27,17 @@ def render():
         return
 
     # Interceptor
-    if 'jump_target' in st.session_state and st.session_state.jump_target:
-        _render_interceptor(df_act, df_users, df_ordenes)
-        return
+    jump = st.session_state.get('jump_target')
+    if jump:
+        if jump in ("orden", "preventivo"):
+            _render_interceptor(df_act, df_users, df_ordenes)
+            return
+        elif jump == "ordenes_por_activo":
+            _render_ordenes_por_activo(df_act, df_users, df_ordenes)
+            return
+        elif jump == "crear_para_activo":
+            _render_crear_para_activo(df_act, df_users, df_ordenes)
+            return
 
     tab_mis_gestiones, tab_kanban, tab_buzon, tab_calidad, tab_gestion, tab_crear_directa, tab_preventivos = st.tabs([
         "📂 Mis Gestiones", "📋 Kanban", "📥 Buzón Solicitudes", "🧐 Control Calidad",
@@ -65,6 +73,10 @@ def _render_interceptor(df_act, df_users, df_ordenes):
     target_type = st.session_state.jump_target
     target_id = st.session_state.jump_id
 
+    # Guardar origen de navegación si no está guardado
+    if 'nav_origin' not in st.session_state:
+        st.session_state.nav_origin = st.session_state.get('current_page', 'Busqueda Global')
+
     st.markdown(f"""
     <div style="background-color:#1F2937;padding:15px;border-radius:8px;border-left:5px solid #3B82F6;margin-bottom:20px;">
         <h3 style="color:#60A5FA;margin:0;">🛠️ Gestión de Dependencia #{target_id}</h3>
@@ -72,10 +84,12 @@ def _render_interceptor(df_act, df_users, df_ordenes):
     </div>
     """, unsafe_allow_html=True)
 
-    if st.button("⬅️ VOLVER A EDICIÓN DE ACTIVO", use_container_width=True):
-        st.session_state.current_page = "Inventario Activos"
+    if st.button("⬅️ VOLVER", use_container_width=True):
+        destino = st.session_state.get('nav_origin', 'Busqueda Global')
+        st.session_state.current_page = destino
         st.session_state.jump_target = None
         st.session_state.jump_id = None
+        st.session_state.nav_origin = None
         st.rerun()
 
     st.markdown("---")
@@ -171,6 +185,181 @@ def _interceptor_preventivo(target_id, df_act, df_users):
                 st.rerun()
     except Exception as e:
         error_amigable(e, "gestión de preventivos")
+
+
+# ==============================================================================
+# 🔍 ÓRDENES POR ACTIVO (vista filtrada)
+# ==============================================================================
+def _render_ordenes_por_activo(df_act, df_users, df_ordenes):
+    """Muestra las órdenes de un activo específico, con opción de volver."""
+    activo_id = st.session_state.get('jump_id')
+
+    # Limpiar jump
+    st.session_state.jump_target = None
+    st.session_state.jump_id = None
+
+    # Buscar nombre del activo
+    nombre_activo = "Activo"
+    if not df_act.empty:
+        match = df_act[df_act['id'] == int(activo_id)]
+        if not match.empty:
+            nombre_activo = match.iloc[0]['nombre']
+
+    st.title(f"🛠️ Órdenes de: {nombre_activo}")
+    st.caption(f"📦 Inventario > {nombre_activo} > Órdenes de Trabajo")
+
+    # Botón volver
+    if st.button("⬅️ Volver a la ficha del activo", use_container_width=True):
+        st.session_state.current_page = "Inventario Activos"
+        st.session_state.jump_target = "activo"
+        st.session_state.jump_id = int(activo_id)
+        st.rerun()
+
+    st.markdown("---")
+
+    # Filtrar órdenes
+    if df_ordenes.empty:
+        st.info("Este activo no tiene órdenes registradas.")
+        if st.button("➕ Crear primera orden", type="primary"):
+            st.session_state.jump_target = "crear_para_activo"
+            st.session_state.jump_id = int(activo_id)
+            st.rerun()
+        return
+
+    df_filtrado = df_ordenes[df_ordenes['activo_id'] == int(activo_id)].copy()
+
+    if df_filtrado.empty:
+        st.info("Este activo no tiene órdenes registradas.")
+        if st.button("➕ Crear primera orden", type="primary"):
+            st.session_state.jump_target = "crear_para_activo"
+            st.session_state.jump_id = int(activo_id)
+            st.rerun()
+        return
+
+    # KPIs
+    total = len(df_filtrado)
+    abiertas = len(df_filtrado[df_filtrado['estado'] == 'Abierta'])
+    por_validar = len(df_filtrado[df_filtrado['estado'] == 'Por Validar'])
+    concluidas = len(df_filtrado[df_filtrado['estado'] == 'Concluida'])
+
+    k1, k2, k3, k4 = st.columns(4)
+    k1.metric("Total", total)
+    k2.metric("🔨 Abiertas", abiertas)
+    k3.metric("🧐 Por Validar", por_validar)
+    k4.metric("✅ Concluidas", concluidas)
+
+    st.markdown("---")
+
+    # Filtro por estado
+    filtro = st.selectbox("Filtrar por estado", ["Todas", "Abierta", "Por Validar", "Concluida", "Cancelada"])
+    if filtro != "Todas":
+        df_filtrado = df_filtrado[df_filtrado['estado'] == filtro]
+
+    map_user = dict(zip(df_users['id'].astype(str), df_users['nombre'])) if not df_users.empty else {}
+
+    for _, orden in df_filtrado.sort_values('fecha_creacion', ascending=False).iterrows():
+        icono = "✅" if orden['estado'] == 'Concluida' else "🔨" if orden['estado'] == 'Abierta' else "🧐"
+        fecha = (orden.get('fecha_creacion', '') or '')[:10]
+        tecnico = map_user.get(str(orden.get('tecnico_asignado', '')), 'Sin asignar')
+
+        col_info, col_btn = st.columns([4, 1])
+        with col_info:
+            st.markdown(f"""
+            <div style="background:rgba(255,255,255,0.03);border-left:3px solid {'#10B981' if orden['estado'] == 'Concluida' else '#F59E0B' if orden['estado'] == 'Abierta' else '#60A5FA'};padding:10px 14px;border-radius:0 6px 6px 0;margin-bottom:6px;">
+                <div style="display:flex;justify-content:space-between;font-size:0.9rem;">
+                    <span style="color:#E5E7EB;font-weight:600;">{icono} OT #{orden['id']}</span>
+                    <span style="color:#9CA3AF;">{fecha}</span>
+                </div>
+                <div style="color:#D1D5DB;font-size:0.85rem;margin:4px 0;">{orden.get('descripcion', '')[:80]}</div>
+                <div style="font-size:0.75rem;color:#6B7280;">{orden.get('estado', '?')} · {orden.get('criticidad', '?')} · 👷 {tecnico}</div>
+            </div>
+            """, unsafe_allow_html=True)
+        with col_btn:
+            st.markdown("<br>", unsafe_allow_html=True)
+            if st.button("⚙️ Gestionar", key=f"opa_{orden['id']}", type="secondary", use_container_width=True):
+                st.session_state.jump_target = "orden"
+                st.session_state.jump_id = orden['id']
+                st.rerun()
+
+    # Botón para crear nueva
+    st.markdown("---")
+    if st.button("➕ Nueva orden para este activo", type="primary", use_container_width=True):
+        st.session_state.jump_target = "crear_para_activo"
+        st.session_state.jump_id = int(activo_id)
+        st.rerun()
+
+
+# ==============================================================================
+# ➕ CREAR ORDEN PARA ACTIVO ESPECÍFICO
+# ==============================================================================
+def _render_crear_para_activo(df_act, df_users, df_ordenes):
+    """Muestra el formulario de creación rápida con el activo preseleccionado."""
+    activo_id = st.session_state.get('jump_id')
+
+    # Limpiar jump
+    st.session_state.jump_target = None
+    st.session_state.jump_id = None
+
+    # Buscar nombre del activo
+    nombre_activo = "Activo"
+    if not df_act.empty:
+        match = df_act[df_act['id'] == int(activo_id)]
+        if not match.empty:
+            nombre_activo = match.iloc[0]['nombre']
+
+    st.title(f"➕ Nueva Orden para: {nombre_activo}")
+    st.caption(f"📦 Inventario > {nombre_activo} > Crear Orden")
+
+    # Botón volver
+    if st.button("⬅️ Volver a la ficha del activo", use_container_width=True):
+        st.session_state.current_page = "Inventario Activos"
+        st.session_state.jump_target = "activo"
+        st.session_state.jump_id = int(activo_id)
+        st.rerun()
+
+    st.markdown("---")
+
+    # Formulario con activo preseleccionado
+    nom_sugerido = render_sugerencia_tecnico(df_ordenes, df_users)
+
+    with st.form("ot_para_activo", clear_on_submit=True):
+        st.info(f"📍 **Activo:** {nombre_activo} (ID: {activo_id})")
+
+        c1, c2 = st.columns(2)
+        tipo_d = c1.selectbox("Tipo", ["Correctivo", "Preventivo", "Predictivo", "Mejora"])
+        crit_d = c2.select_slider("Criticidad", ["Baja", "Media", "Alta", "Crítica"])
+        desc_d = st.text_area("Descripción del problema o tarea")
+
+        tech_opts_d = {u['nombre']: u['id'] for _, u in df_users.iterrows()} if not df_users.empty else {}
+        idx_sug = 0
+        if nom_sugerido and nom_sugerido in list(tech_opts_d.keys()):
+            idx_sug = list(tech_opts_d.keys()).index(nom_sugerido)
+        asig_d = st.selectbox("Asignar Técnico", list(tech_opts_d.keys()), index=idx_sug if tech_opts_d else 0) if tech_opts_d else None
+
+        if st.form_submit_button("✅ CREAR ORDEN", type="primary", use_container_width=True):
+            if not desc_d:
+                st.error("La descripción es obligatoria.")
+            elif not asig_d:
+                st.error("Debe asignar un técnico.")
+            else:
+                try:
+                    res = supabase.table("ordenes").insert({
+                        "activo_id": int(activo_id), "descripcion": desc_d,
+                        "criticidad": crit_d, "tipo_mantenimiento": tipo_d,
+                        "estado": "Abierta", "tecnico_asignado": str(tech_opts_d[asig_d]),
+                        "fecha_creacion": datetime.now().isoformat()
+                    }).execute()
+                    if res.data:
+                        nuevo_id = res.data[0]['id']
+                        st.toast(f"✅ Orden #{nuevo_id} creada para {nombre_activo}.")
+                        time.sleep(1)
+                        # Ir a gestionar la orden recién creada
+                        st.session_state.current_page = "Ordenes de Trabajo"
+                        st.session_state.jump_target = "orden"
+                        st.session_state.jump_id = nuevo_id
+                        st.rerun()
+                except Exception as e:
+                    error_amigable(e, "crear orden")
 
 
 # ==============================================================================

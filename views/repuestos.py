@@ -22,6 +22,16 @@ def render():
     df_mov = run_query("movimientos_repuestos")
     df_users = run_query("usuarios")
 
+    # ── Manejar navegación desde búsqueda ──
+    jump = st.session_state.get('jump_target')
+    jump_id = st.session_state.get('jump_id')
+
+    if jump == "repuesto" and jump_id:
+        st.session_state.jump_target = None
+        st.session_state.jump_id = None
+        # Forzar filtro por este repuesto
+        st.session_state.repuesto_focus = int(jump_id)
+
     tab_stock, tab_nuevo, tab_movimientos, tab_alertas = st.tabs([
         "📋 STOCK ACTUAL", "➕ NUEVO REPUESTO", "🔄 MOVIMIENTOS", "🚨 ALERTAS DE STOCK"
     ])
@@ -46,6 +56,35 @@ def _render_stock(df_rep):
     if df_rep.empty:
         st.info("No hay repuestos registrados aún.")
         return
+
+    # ── Si hay un repuesto en foco desde búsqueda, mostrarlo primero ──
+    focus_id = st.session_state.pop('repuesto_focus', None)
+    if focus_id is not None:
+        rep_focus = df_rep[df_rep['id'] == focus_id]
+        if not rep_focus.empty:
+            r = rep_focus.iloc[0]
+            stock = r.get('stock_actual', 0)
+            minimo = r.get('stock_minimo', 0)
+            icono = "🔴" if stock == 0 else "🟡" if stock <= minimo else "🟢"
+
+            st.markdown(f"""
+            <div style="background:rgba(59,130,246,0.1);border:1px solid #3B82F6;border-radius:10px;padding:20px;margin-bottom:20px;">
+                <div style="display:flex;justify-content:space-between;align-items:center;">
+                    <div>
+                        <div style="color:#60A5FA;font-size:0.8rem;text-transform:uppercase;">Repuesto Seleccionado</div>
+                        <div style="color:#E5E7EB;font-size:1.3rem;font-weight:700;margin:4px 0;">{icono} {r['nombre']}</div>
+                        <div style="color:#9CA3AF;font-size:0.85rem;">Ref: {r.get('referencia', 'N/A')} · {r.get('categoria', 'N/A')} · {r.get('ubicacion', 'N/A')}</div>
+                    </div>
+                    <div style="text-align:center;">
+                        <div style="color:#9CA3AF;font-size:0.75rem;">Stock</div>
+                        <div style="color:{'#10B981' if stock > minimo else '#EF4444' if stock == 0 else '#F59E0B'};font-size:2rem;font-weight:800;">{stock}</div>
+                        <div style="color:#6B7280;font-size:0.7rem;">mín: {minimo} {r.get('unidad', '')}</div>
+                    </div>
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+
+            st.markdown("---")
 
     total_rep = len(df_rep)
     bajo_stock = len(df_rep[df_rep['stock_actual'] <= df_rep['stock_minimo']])

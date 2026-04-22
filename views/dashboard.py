@@ -33,6 +33,30 @@ def render():
     mostrar_metricas_inteligentes(df, df_users, df_solicitudes)
 
     if not df.empty:
+        # ── Acciones rápidas ──
+        st.markdown("#### ⚡ Acciones Rápidas")
+        qa1, qa2, qa3, qa4 = st.columns(4)
+        with qa1:
+            n_abiertas = len(df[df['estado'] == 'Abierta']) if not df.empty else 0
+            if st.button(f"🔨 Ver {n_abiertas} Abiertas", use_container_width=True, key="dash_qa_abiertas"):
+                st.session_state.current_page = "Ordenes de Trabajo"
+                st.rerun()
+        with qa2:
+            n_solic = len(df_solicitudes[df_solicitudes['estado'] == 'Pendiente']) if not df_solicitudes.empty else 0
+            if st.button(f"📥 Buzón ({n_solic})", use_container_width=True, key="dash_qa_buzon"):
+                st.session_state.current_page = "Ordenes de Trabajo"
+                st.rerun()
+        with qa3:
+            if st.button("🔍 Buscar", use_container_width=True, key="dash_qa_buscar"):
+                st.session_state.current_page = "Busqueda Global"
+                st.rerun()
+        with qa4:
+            if st.button("➕ Nueva Orden", use_container_width=True, key="dash_qa_nueva", type="primary"):
+                st.session_state.current_page = "Ordenes de Trabajo"
+                st.rerun()
+
+        st.markdown("---")
+
         col_exp1, col_exp2, col_exp3 = st.columns([3, 1, 1])
         with col_exp3:
             try:

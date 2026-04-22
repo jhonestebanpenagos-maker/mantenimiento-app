@@ -135,7 +135,40 @@ with st.sidebar:
         tipo = "primary" if activo else "secondary"
         if st.button(f"{icono} {texto}", key=f"menu_{valor}", use_container_width=True, type=tipo):
             st.session_state.current_page = valor
+            st.session_state.jump_target = None
+            st.session_state.jump_id = None
             st.rerun()
+
+    # ── Indicador de ubicación actual ──
+    st.divider()
+    page = st.session_state.get('current_page', '')
+    page_icons = {
+        "Busqueda Global": "🔍", "Tablero de Mando": "📊", "Jerarquia Activos": "🏗️",
+        "Inventario Activos": "📦", "Ordenes de Trabajo": "🛠️", "Repuestos": "🔩", "Usuarios": "👤"
+    }
+    icon = page_icons.get(page, "📋")
+    st.caption(f"📍 {icon} {page}")
+
+    # Últimos accesos (si hay)
+    ultimos = st.session_state.get('ultimos_accesos', [])
+    if ultimos:
+        with st.expander("🕐 Últimos vistos", expanded=False):
+            for item in ultimos[:3]:
+                tipo_icon = {"activo": "🔧", "orden": "🛠️", "repuesto": "🔩"}.get(item['tipo'], "📋")
+                if st.button(f"{tipo_icon} {item['nombre'][:25]}", key=f"sidebar_ultimo_{item['tipo']}_{item['id']}", use_container_width=True):
+                    if item['tipo'] == 'activo':
+                        st.session_state.current_page = "Inventario Activos"
+                        st.session_state.jump_target = "activo"
+                        st.session_state.jump_id = item['id']
+                    elif item['tipo'] == 'orden':
+                        st.session_state.current_page = "Ordenes de Trabajo"
+                        st.session_state.jump_target = "orden"
+                        st.session_state.jump_id = item['id']
+                    elif item['tipo'] == 'repuesto':
+                        st.session_state.current_page = "Repuestos"
+                        st.session_state.jump_target = "repuesto"
+                        st.session_state.jump_id = item['id']
+                    st.rerun()
 
     render_selector_tema()
 

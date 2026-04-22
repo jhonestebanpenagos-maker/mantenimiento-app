@@ -14,6 +14,8 @@ def render():
     )
 
     if not query or len(query.strip()) < 2:
+        # Mostrar últimos accesos si existen
+        _render_ultimos_accesos()
         st.info("✍️ Escribe al menos 2 caracteres para buscar.")
         return
 
@@ -37,10 +39,66 @@ def render():
         _buscar_repuestos(query)
 
 
+# ==============================================================================
+# 🕐 ÚLTIMOS ACCESOS
+# ==============================================================================
+def _render_ultimos_accesos():
+    """Muestra los últimos items visitados desde búsqueda."""
+    ultimos = st.session_state.get('ultimos_accesos', [])
+    if not ultimos:
+        return
+
+    st.markdown("#### 🕐 Últimos Accesos")
+    cols = st.columns(min(len(ultimos), 5))
+    for i, item in enumerate(ultimos[:5]):
+        with cols[i]:
+            icono = {"activo": "🔧", "orden": "🛠️", "repuesto": "🔩"}.get(item['tipo'], "📋")
+            if st.button(f"{icono} {item['nombre'][:20]}", key=f"ultimo_{i}", use_container_width=True):
+                _navegar_a_item(item)
+
+
+def _registrar_acceso(tipo, item_id, nombre):
+    """Registra un acceso rápido para la lista de últimos visitados."""
+    if 'ultimos_accesos' not in st.session_state:
+        st.session_state.ultimos_accesos = []
+
+    # Evitar duplicados
+    st.session_state.ultimos_accesos = [
+        a for a in st.session_state.ultimos_accesos
+        if not (a['tipo'] == tipo and a['id'] == item_id)
+    ]
+
+    st.session_state.ultimos_accesos.insert(0, {
+        'tipo': tipo, 'id': item_id, 'nombre': nombre
+    })
+
+    # Máximo 10
+    st.session_state.ultimos_accesos = st.session_state.ultimos_accesos[:10]
+
+
+def _navegar_a_item(item):
+    """Navega al módulo correcto y selecciona el item."""
+    tipo = item['tipo']
+    item_id = item['id']
+
+    if tipo == 'activo':
+        st.session_state.current_page = "Inventario Activos"
+        st.session_state.jump_target = "activo"
+        st.session_state.jump_id = item_id
+    elif tipo == 'orden':
+        st.session_state.current_page = "Ordenes de Trabajo"
+        st.session_state.jump_target = "orden"
+        st.session_state.jump_id = item_id
+    elif tipo == 'repuesto':
+        st.session_state.current_page = "Repuestos"
+        st.session_state.jump_target = "repuesto"
+        st.session_state.jump_id = item_id
+    st.rerun()
+
+
 def _buscar_activos(query):
     st.markdown("#### 📦 Activos")
     try:
-        # Buscar por nombre, categoría, ubicación o área
         res_nom = supabase.table("activos").select("id, nombre, categoria, area, ubicacion") \
             .ilike("nombre", f"%{query}%").limit(10).execute()
         res_cat = supabase.table("activos").select("id, nombre, categoria, area, ubicacion") \
@@ -48,7 +106,6 @@ def _buscar_activos(query):
         res_ubi = supabase.table("activos").select("id, nombre, categoria, area, ubicacion") \
             .ilike("ubicacion", f"%{query}%").limit(10).execute()
 
-        # Combinar y deduplicar
         todos = {}
         for res in [res_nom, res_cat, res_ubi]:
             if res.data:
@@ -62,13 +119,23 @@ def _buscar_activos(query):
                 with st.expander(f"🔧 {a['nombre']}", expanded=False):
                     st.caption(f"📍 {a.get('area', 'N/A')} / {a.get('ubicacion', 'N/A')}")
                     st.caption(f"🔧 {a.get('categoria', 'N/A')}")
-                    if st.button("Ver detalle", key=f"search_act_{a['id']}", type="secondary"):
+                    if st.button("📋 Ver ficha completa", key=f"search_act_{a['id']}", type="primary"):
+                        _registrar_acceso('activo', a['id'], a['nombre'])
                         st.session_state.current_page = "Inventario Activos"
+                        st.session_state.jump_target = "activo"
+                        st.session_state.jump_id = a['id']
+                        st.rerun()
+                    if st.button("🛠️ Ver sus órdenes", key=f"search_act_ord_{a['id']}", type="secondary"):
+                        _registrar_acceso('activo', a['id'], a['nombre'])
+                        st.session_state.current_page = "Ordenes de Trabajo"
+                        st.session_state.jump_target = "ordenes_por_activo"
+                        st.session_state.jump_id = a['id']
                         st.rerun()
         else:
             st.caption("Sin resultados")
     except Exception as e:
         st.caption(f"Error en búsqueda: activos")
+        print(f"Error búsqueda activos: {e}")
 
 
 def _buscar_ordenes(query):
@@ -79,7 +146,6 @@ def _buscar_ordenes(query):
 
         resultados = res_desc.data if res_desc.data else []
 
-        # También buscar por ID si el query es numérico
         if query.isdigit():
             res_id = supabase.table("ordenes").select("id, descripcion, estado, criticidad, tipo_mantenimiento, fecha_creacion") \
                 .eq("id", int(query)).execute()
@@ -96,7 +162,8 @@ def _buscar_ordenes(query):
                     st.caption(f"Estado: {o['estado']} | Criticidad: {o.get('criticidad', 'N/A')}")
                     st.caption(f"Tipo: {o.get('tipo_mantenimiento', 'N/A')}")
                     st.caption(f"Fecha: {o.get('fecha_creacion', '')[:10]}")
-                    if st.button("Gestionar", key=f"search_ot_{o['id']}", type="secondary"):
+                    if st.button("⚙️ Gestionar", key=f"search_ot_{o['id']}", type="primary"):
+                        _registrar_acceso('orden', o['id'], f"OT #{o['id']}")
                         st.session_state.current_page = "Ordenes de Trabajo"
                         st.session_state.jump_target = "orden"
                         st.session_state.jump_id = o['id']
@@ -105,6 +172,7 @@ def _buscar_ordenes(query):
             st.caption("Sin resultados")
     except Exception as e:
         st.caption(f"Error en búsqueda: órdenes")
+        print(f"Error búsqueda órdenes: {e}")
 
 
 def _buscar_repuestos(query):
@@ -131,10 +199,14 @@ def _buscar_repuestos(query):
                 with st.expander(f"{icono} {r['nombre']}", expanded=False):
                     st.caption(f"Ref: {r.get('referencia', 'N/A')} | Cat: {r.get('categoria', 'N/A')}")
                     st.caption(f"Stock: {stock} / mín: {minimo}")
-                    if st.button("Ver repuestos", key=f"search_rep_{r['id']}", type="secondary"):
+                    if st.button("📦 Ver en inventario", key=f"search_rep_{r['id']}", type="primary"):
+                        _registrar_acceso('repuesto', r['id'], r['nombre'])
                         st.session_state.current_page = "Repuestos"
+                        st.session_state.jump_target = "repuesto"
+                        st.session_state.jump_id = r['id']
                         st.rerun()
         else:
             st.caption("Sin resultados")
     except Exception as e:
         st.caption(f"Error en búsqueda: repuestos")
+        print(f"Error búsqueda repuestos: {e}")

@@ -141,17 +141,27 @@ def mostrar_tops_ordenes(df_ordenes):
     with c1:
         st.markdown("### 🐢 Top 10 Más Antiguas")
         df_old = df_abiertas.sort_values('dias_abierta', ascending=False).head(10)
-        st.dataframe(
-            df_old[['id', 'descripcion', 'dias_abierta', 'tecnico_asignado']],
-            column_config={
-                "id": st.column_config.NumberColumn("ID", format="#%d", width="small"),
-                "descripcion": st.column_config.TextColumn("Problema", width="medium"),
-                "dias_abierta": st.column_config.ProgressColumn("Días Esperando",
-                                  format="%d días", min_value=0, max_value=30),
-                "tecnico_asignado": st.column_config.TextColumn("Técnico ID")
-            },
-            hide_index=True, use_container_width=True, height=300
-        )
+        for _, row in df_old.iterrows():
+            col_info, col_btn = st.columns([4, 1])
+            with col_info:
+                dias = int(row['dias_abierta'])
+                color_bar = "#EF4444" if dias > 14 else "#F59E0B" if dias > 7 else "#60A5FA"
+                st.markdown(f"""
+                <div style="background:rgba(255,255,255,0.03);border-left:3px solid {color_bar};padding:6px 10px;border-radius:0 4px 4px 0;margin-bottom:3px;">
+                    <div style="display:flex;justify-content:space-between;font-size:0.8rem;">
+                        <span style="color:#E5E7EB;font-weight:600;">OT #{row['id']}</span>
+                        <span style="color:{color_bar};font-weight:700;">{dias} días</span>
+                    </div>
+                    <div style="color:#9CA3AF;font-size:0.7rem;">{(row.get('descripcion', '') or '')[:45]}...</div>
+                </div>
+                """, unsafe_allow_html=True)
+            with col_btn:
+                if st.button("⚙️", key=f"top_old_{row['id']}", help="Gestionar"):
+                    st.session_state.current_page = "Ordenes de Trabajo"
+                    st.session_state.jump_target = "orden"
+                    st.session_state.jump_id = row['id']
+                    st.rerun()
+
     with c2:
         st.markdown("### 🔥 Top Críticas Pendientes")
         df_crit = df_abiertas[df_abiertas['criticidad'].isin(['Alta', 'Crítica'])] \
@@ -159,16 +169,25 @@ def mostrar_tops_ordenes(df_ordenes):
         if df_crit.empty:
             st.info("No hay órdenes críticas pendientes.")
         else:
-            st.dataframe(
-                df_crit[['id', 'criticidad', 'descripcion', 'estado']],
-                column_config={
-                    "id": st.column_config.NumberColumn("ID", format="#%d", width="small"),
-                    "criticidad": st.column_config.TextColumn("Nivel"),
-                    "descripcion": st.column_config.TextColumn("Problema"),
-                    "estado": st.column_config.TextColumn("Estado")
-                },
-                hide_index=True, use_container_width=True, height=300
-            )
+            for _, row in df_crit.iterrows():
+                crit_icon = "🔴" if row['criticidad'] == 'Crítica' else "🟠"
+                col_info, col_btn = st.columns([4, 1])
+                with col_info:
+                    st.markdown(f"""
+                    <div style="background:rgba(255,255,255,0.03);border-left:3px solid #EF4444;padding:6px 10px;border-radius:0 4px 4px 0;margin-bottom:3px;">
+                        <div style="display:flex;justify-content:space-between;font-size:0.8rem;">
+                            <span style="color:#E5E7EB;font-weight:600;">{crit_icon} OT #{row['id']}</span>
+                            <span style="color:#9CA3AF;">{row.get('estado', '?')}</span>
+                        </div>
+                        <div style="color:#9CA3AF;font-size:0.7rem;">{(row.get('descripcion', '') or '')[:45]}...</div>
+                    </div>
+                    """, unsafe_allow_html=True)
+                with col_btn:
+                    if st.button("⚙️", key=f"top_crit_{row['id']}", help="Gestionar"):
+                        st.session_state.current_page = "Ordenes de Trabajo"
+                        st.session_state.jump_target = "orden"
+                        st.session_state.jump_id = row['id']
+                        st.rerun()
 
 
 def graficar_torta_tipo(df):
@@ -621,7 +640,7 @@ def semaforo_tecnicos(df_ordenes, df_users):
     conteo['tecnico_asignado'] = conteo['tecnico_asignado'].astype(str)
 
     st.markdown("### 🚦 Estado de Carga — Técnicos")
-    st.caption("Basado en órdenes con estado Abierta.")
+    st.caption("Haz clic en un técnico para ver sus órdenes abiertas.")
 
     cols = st.columns(len(df_users))
     for i, (_, user) in enumerate(df_users.iterrows()):
@@ -654,6 +673,11 @@ def semaforo_tecnicos(df_ordenes, df_users):
                 <div style="color:{color};font-size:0.7rem;font-weight:700;letter-spacing:1px;margin-top:4px;">{estado}</div>
             </div>
             """, unsafe_allow_html=True)
+            if st.button(f"Ver órdenes", key=f"sem_tec_{uid}", use_container_width=True):
+                st.session_state.current_page = "Ordenes de Trabajo"
+                st.session_state.jump_target = "ordenes_por_activo"  # Reuse filter by showing all open
+                st.session_state.jump_id = None
+                st.rerun()
 
 
 # ==============================================================================

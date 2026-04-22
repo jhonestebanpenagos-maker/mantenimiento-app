@@ -113,8 +113,15 @@ def render():
                                             st.markdown(f"**{k}:** {v}")
 
                                 # Botón para ir al activo
-                                if st.button(f"Ver ficha completa", key=f"jer_act_{oid}", type="secondary"):
+                                if st.button(f"📋 Ver ficha completa", key=f"jer_act_{oid}", type="primary"):
                                     st.session_state.current_page = "Inventario Activos"
+                                    st.session_state.jump_target = "activo"
+                                    st.session_state.jump_id = oid
+                                    st.rerun()
+                                if st.button(f"🛠️ Ver sus órdenes", key=f"jer_ot_{oid}", type="secondary"):
+                                    st.session_state.current_page = "Ordenes de Trabajo"
+                                    st.session_state.jump_target = "ordenes_por_activo"
+                                    st.session_state.jump_id = oid
                                     st.rerun()
 
     # ── SUB-ÁREAS SIN ÁREA ASIGNADA ──
