@@ -715,13 +715,31 @@ def mostrar_metricas_inteligentes(df_ordenes, df_users, df_solicitudes):
 
     c1, c2, c3, c4, c5 = st.columns(5)
     with c1:
-        color_sol = "normal" if n_solicitudes == 0 else "inverse"
-        st.metric("📬 Solicitudes Pendientes", n_solicitudes, "en Buzón", delta_color=color_sol)
-        if st.button("Ver solicitudes", key="nav_solicitudes", use_container_width=True):
-            st.session_state['_filtro_estado_ots'] = None
-            st.session_state.current_page = "Ordenes de Trabajo"
-            st.toast("📬 Ir a la pestaña Buzón de Solicitudes", icon="📥")
-            st.rerun()
+        if n_solicitudes > 0:
+            st.markdown(
+                '<div style="background:linear-gradient(135deg,rgba(245,158,11,0.15),rgba(239,68,68,0.1));'
+                'border:1px solid #F59E0B;border-radius:12px;padding:16px;text-align:center;cursor:pointer;">'
+                '<div style="font-size:2rem;margin-bottom:4px;">📬</div>'
+                '<div style="font-size:2.2rem;font-weight:800;color:#F59E0B;line-height:1;">' + str(n_solicitudes) + '</div>'
+                '<div style="color:#FDE68A;font-size:0.8rem;margin-top:4px;font-weight:600;">SOLICITUDES PENDIENTES</div>'
+                '<div style="color:#F59E0B;font-size:0.7rem;margin-top:6px;">⚡ Click para revisar en Kanban</div>'
+                '</div>',
+                unsafe_allow_html=True
+            )
+            if st.button("📬 Revisar Solicitudes", key="nav_solicitudes", use_container_width=True, type="primary"):
+                st.session_state.current_page = "Ordenes de Trabajo"
+                st.session_state.ordenes_tab = "kanban"
+                st.session_state.kanban_filtro_solicitudes = True
+                st.rerun()
+        else:
+            st.markdown(
+                '<div style="background:rgba(16,185,129,0.1);border:1px solid #10B981;border-radius:12px;padding:16px;text-align:center;">'
+                '<div style="font-size:2rem;margin-bottom:4px;">✨</div>'
+                '<div style="font-size:2.2rem;font-weight:800;color:#10B981;line-height:1;">0</div>'
+                '<div style="color:#A7F3D0;font-size:0.8rem;margin-top:4px;">SOLICITUDES PENDIENTES</div>'
+                '</div>',
+                unsafe_allow_html=True
+            )
     with c2:
         delta_text = str(devueltas_calidad) + " Devueltas" if devueltas_calidad > 0 else None
         st.metric("🔨 OT en Ejecución", pendientes, delta_text, delta_color="inverse")

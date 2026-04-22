@@ -52,7 +52,7 @@ def render():
         _render_mis_gestiones(df_act, df_users, df_ordenes)
 
     with tab_kanban:
-        _render_kanban(df_act, df_users, df_ordenes)
+        _render_kanban(df_act, df_users, df_ordenes, df_solicitudes)
 
     with tab_buzon:
         _render_buzon(df_act, df_users, df_ordenes, df_solicitudes)
@@ -380,9 +380,54 @@ def _render_crear_para_activo(df_act, df_users, df_ordenes):
 # ==============================================================================
 # 📋 VISTA KANBAN
 # ==============================================================================
-def _render_kanban(df_act, df_users, df_ordenes):
+def _render_kanban(df_act, df_users, df_ordenes, df_solicitudes=None):
     st.markdown("### 📋 Tablero Kanban")
     st.caption("Vista visual de todas las órdenes. Haz clic en una tarjeta para gestionarla.")
+
+    # ── Solicitudes pendientes (viene del tablero) ──
+    mostrar_solicitudes = st.session_state.pop('kanban_filtro_solicitudes', False)
+    if mostrar_solicitudes and df_solicitudes is not None and not df_solicitudes.empty:
+        solicitudes_pend = df_solicitudes[df_solicitudes['estado'] == 'Pendiente']
+        if not solicitudes_pend.empty:
+            st.markdown(
+                '<div style="background:linear-gradient(135deg,rgba(245,158,11,0.12),rgba(239,68,68,0.08));'
+                'border:1px solid #F59E0B;border-radius:12px;padding:20px;margin-bottom:20px;">'
+                '<div style="display:flex;align-items:center;gap:12px;margin-bottom:15px;">'
+                '<span style="font-size:1.5rem;">📬</span>'
+                '<div>'
+                '<div style="color:#F59E0B;font-weight:800;font-size:1.1rem;">SOLICITUDES PENDIENTES — '
+                + str(len(solicitudes_pend)) + '</div>'
+                '<div style="color:#9CA3AF;font-size:0.8rem;">Reportes desde Telegram esperando aprobación</div>'
+                '</div></div>',
+                unsafe_allow_html=True
+            )
+            for _, sol in solicitudes_pend.iterrows():
+                fecha = (sol.get('fecha_solicitud', '') or '')[:10]
+                desc = (sol.get('descripcion', '') or '')[:80]
+                prioridad = sol.get('prioridad_sugerida', 'Media')
+                prio_color = {"Crítica": "#EF4444", "Alta": "#F59E0B", "Media": "#60A5FA", "Baja": "#10B981"}.get(prioridad, "#6B7280")
+                st.markdown(
+                    '<div style="background:rgba(30,41,59,0.6);border-left:3px solid ' + prio_color
+                    + ';border-radius:6px;padding:10px 14px;margin-bottom:6px;">'
+                    '<div style="display:flex;justify-content:space-between;align-items:center;">'
+                    '<span style="color:#E5E7EB;font-weight:600;font-size:0.9rem;">Solicitud #' + str(sol['id']) + '</span>'
+                    '<span style="background:' + prio_color + ';color:white;padding:2px 8px;border-radius:8px;font-size:0.65rem;font-weight:700;">'
+                    + prioridad + '</span></div>'
+                    '<div style="color:#D1D5DB;font-size:0.8rem;margin-top:4px;">' + desc + '</div>'
+                    '<div style="color:#9CA3AF;font-size:0.7rem;margin-top:4px;">📅 ' + fecha
+                    + ' · 👤 ' + str(sol.get('solicitante_id', 'N/A')) + '</div>'
+                    '</div>',
+                    unsafe_allow_html=True
+                )
+            st.markdown(
+                '<div style="text-align:center;margin-top:10px;">'
+                '<span style="color:#F59E0B;font-size:0.8rem;">👇 Gestiona estas solicitudes en la pestaña '
+                '<b>📥 Buzón Solicitudes</b></span></div></div>',
+                unsafe_allow_html=True
+            )
+            st.markdown("---")
+        else:
+            st.toast("✨ No hay solicitudes pendientes", icon="✅")
 
     if df_ordenes.empty:
         st.info("No hay órdenes para mostrar.")
