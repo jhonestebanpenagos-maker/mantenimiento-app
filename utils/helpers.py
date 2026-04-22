@@ -83,15 +83,46 @@ def check_open_orders(user_id):
 
 
 # ==============================================================================
-# 🔐 HASH DE CONTRASEÑAS (bcrypt)
+# 🔐 HASH DE CONTRASEÑAS (bcrypt) + POLÍTICA DE SEGURIDAD
 # ==============================================================================
 import bcrypt
 import hashlib
+import re
 import json
 import os
 
 # Ruta del archivo de auditoría local
 _AUDIT_LOG_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), "logs", "auditoria.log")
+
+# Configuración de política de contraseñas
+PASSWORD_MIN_LENGTH = 8
+PASSWORD_REQUIRE_UPPER = True
+PASSWORD_REQUIRE_LOWER = True
+PASSWORD_REQUIRE_DIGIT = True
+PASSWORD_REQUIRE_SPECIAL = False  # Opcional para no frustrar técnicos en campo
+
+
+def validar_politica_password(password: str) -> tuple[bool, str]:
+    """
+    Valida que una contraseña cumpla la política de seguridad.
+    Retorna (es_valida, mensaje_error).
+    """
+    if len(password) < PASSWORD_MIN_LENGTH:
+        return False, f"La contraseña debe tener al menos {PASSWORD_MIN_LENGTH} caracteres."
+
+    if PASSWORD_REQUIRE_UPPER and not re.search(r'[A-Z]', password):
+        return False, "La contraseña debe incluir al menos una letra mayúscula."
+
+    if PASSWORD_REQUIRE_LOWER and not re.search(r'[a-z]', password):
+        return False, "La contraseña debe incluir al menos una letra minúscula."
+
+    if PASSWORD_REQUIRE_DIGIT and not re.search(r'\d', password):
+        return False, "La contraseña debe incluir al menos un número."
+
+    if PASSWORD_REQUIRE_SPECIAL and not re.search(r'[!@#$%^&*(),.?":{}|<>_\-+=\[\]\\;/~`]', password):
+        return False, "La contraseña debe incluir al menos un carácter especial (!@#$%...)."
+
+    return True, ""
 
 
 def hashear_password(password: str) -> str:

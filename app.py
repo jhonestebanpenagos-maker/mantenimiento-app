@@ -89,6 +89,25 @@ with st.sidebar:
         </div>
     """, unsafe_allow_html=True)
 
+    # Indicador de sesión
+    from auth import _sesion_expirada, SESSION_MAX_HOURS
+    from datetime import datetime, timedelta
+    creada = st.session_state.get('session_created_at')
+    if creada:
+        try:
+            creada_dt = datetime.fromisoformat(creada) if isinstance(creada, str) else creada
+            restante = timedelta(hours=SESSION_MAX_HOURS) - (datetime.now() - creada_dt)
+            horas_rest = max(0, int(restante.total_seconds() // 3600))
+            mins_rest = max(0, int((restante.total_seconds() % 3600) // 60))
+            if restante.total_seconds() <= 0:
+                st.error("⏰ Sesión expirada")
+            elif restante.total_seconds() <= 3600:
+                st.warning(f"⏰ Sesión: {mins_rest}m restantes")
+            else:
+                st.caption(f"🔒 Sesión activa: {horas_rest}h {mins_rest}m")
+        except Exception:
+            pass
+
     if st.button("🔓 Salir", use_container_width=True, type="secondary"):
         logout()
 

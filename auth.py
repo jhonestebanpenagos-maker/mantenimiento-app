@@ -2,9 +2,12 @@ import streamlit as st
 import time
 import uuid
 import pandas as pd
-from datetime import datetime
+from datetime import datetime, timedelta
 from utils.db import supabase
 from utils.helpers import hashear_password, verificar_password, migrar_password_si_sha256, agregar_notificacion, registrar_login
+
+# Duración máxima de sesión (horas)
+SESSION_MAX_HOURS = 8
 
 
 # ==============================================================================
@@ -46,6 +49,7 @@ def init_session_state():
         'rol': None,
         'user_doc': None,
         'session_token': None,
+        'session_created_at': None,
         'sla_alertas_count': 0,
         'login_intentos': 0,
         'login_bloqueado': None,
@@ -65,6 +69,7 @@ def logout():
     st.session_state['rol'] = None
     st.session_state['user_doc'] = None
     st.session_state['session_token'] = None
+    st.session_state['session_created_at'] = None
     st.session_state['sla_verificado'] = False
     st.session_state['sla_alertas_count'] = 0
     st.query_params.clear()
@@ -74,8 +79,39 @@ def logout():
 # ==============================================================================
 # 🔄 RECUPERAR SESIÓN DESDE URL
 # ==============================================================================
+def _sesion_expirada() -> bool:
+    """Verifica si la sesión actual ha expirado."""
+    creada = st.session_state.get('session_created_at')
+    if not creada:
+        return True
+    try:
+        if isinstance(creada, str):
+            creada_dt = datetime.fromisoformat(creada)
+        else:
+            creada_dt = creada
+        return datetime.now() - creada_dt > timedelta(hours=SESSION_MAX_HOURS)
+    except Exception:
+        return True
+
+
+def _forzar_cierre_sesion(motivo: str):
+    """Fuerza el cierre de sesión por expiración u otro motivo."""
+    usuario = st.session_state.get('usuario', 'DESCONOCIDO')
+    registrar_login(usuario, exito=False, motivo=motivo)
+    st.session_state['usuario'] = None
+    st.session_state['rol'] = None
+    st.session_state['user_doc'] = None
+    st.session_state['session_token'] = None
+    st.session_state['session_created_at'] = None
+    st.query_params.clear()
+
+
 def try_restore_session():
     if st.session_state['usuario'] is not None:
+        # Verificar expiración en sesión activa
+        if _sesion_expirada():
+            _forzar_cierre_sesion(f"Sesión expirada (>{SESSION_MAX_HOURS}h)")
+            st.rerun()
         return
 
     query_params = st.query_params
@@ -84,6 +120,12 @@ def try_restore_session():
         token_guardado = st.session_state.get('session_token')
         doc_guardado = st.session_state.get('user_doc')
         if token_guardado and token_url == token_guardado and doc_guardado:
+            # Verificar expiración al restaurar
+            if _sesion_expirada():
+                _forzar_cierre_sesion(f"Sesión expirada al restaurar (>{SESSION_MAX_HOURS}h)")
+                st.query_params.clear()
+                st.rerun()
+                return
             try:
                 res = supabase.table("usuarios").select("*").eq("documento", doc_guardado).execute()
                 if res.data:
@@ -94,7 +136,7 @@ def try_restore_session():
                         st.session_state.current_page = query_params["last_page"]
                     st.rerun()
             except Exception as e:
-                st.error(f"Error recuperando sesión: {e}")
+                st.error("Error de conexión. Intente nuevamente.")
 
 
 # ==============================================================================
@@ -163,6 +205,7 @@ def show_login():
                                 st.session_state['usuario'] = user['nombre']
                                 st.session_state['rol'] = user['rol']
                                 st.session_state['user_doc'] = documento
+                                st.session_state['session_created_at'] = datetime.now().isoformat()
                                 token_sesion = str(uuid.uuid4())
                                 st.session_state['session_token'] = token_sesion
                                 st.query_params["session_id"] = token_sesion

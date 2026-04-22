@@ -3,7 +3,8 @@ import pandas as pd
 from utils.db import supabase, run_query
 from utils.helpers import (
     mostrar_notificaciones, agregar_notificacion, validar_usuario_unico,
-    check_open_orders, hashear_password, registrar_accion_critica
+    check_open_orders, hashear_password, registrar_accion_critica,
+    validar_politica_password, PASSWORD_MIN_LENGTH
 )
 
 
@@ -30,6 +31,7 @@ def _render_crear():
         documento = c1.text_input("Documento/ID", key="new_user_doc")
         nombre = c2.text_input("Nombre Completo", key="new_user_name")
         password = c1.text_input("Contraseña", type="password", key="new_user_pass")
+        st.caption(f"🔒 Mínimo {PASSWORD_MIN_LENGTH} caracteres, mayúscula, minúscula y número.")
         rol = c2.selectbox("Rol", ["Tecnico", "Programador", "Admin"], key="new_user_rol")
         submitted = st.form_submit_button("REGISTRAR USUARIO", type="primary")
 
@@ -37,23 +39,25 @@ def _render_crear():
             if documento and nombre and password and rol:
                 if not validar_usuario_unico(documento):
                     agregar_notificacion('error', 'El documento ya existe en el sistema.')
-                elif len(password) < 4:
-                    agregar_notificacion('error', 'La contraseña debe tener al menos 4 caracteres.')
                 else:
-                    try:
-                        res = supabase.table("usuarios").insert({
-                            "documento": documento, "nombre": nombre,
-                            "password": hashear_password(password), "rol": rol
-                        }).execute()
-                        if res.data:
-                            st.cache_data.clear()
-                            registrar_accion_critica("CREAR_USUARIO", documento, f"Nombre: {nombre}, Rol: {rol}")
-                            agregar_notificacion('success', f'Usuario {nombre} registrado con éxito.')
-                            st.rerun()
-                        else:
-                            agregar_notificacion('error', 'Error al registrar el usuario.')
-                    except Exception as e:
-                        agregar_notificacion('error', f'Error de base de datos: {e}')
+                    pass_valida, pass_error = validar_politica_password(password)
+                    if not pass_valida:
+                        agregar_notificacion('error', pass_error)
+                    else:
+                        try:
+                            res = supabase.table("usuarios").insert({
+                                "documento": documento, "nombre": nombre,
+                                "password": hashear_password(password), "rol": rol
+                            }).execute()
+                            if res.data:
+                                st.cache_data.clear()
+                                registrar_accion_critica("CREAR_USUARIO", documento, f"Nombre: {nombre}, Rol: {rol}")
+                                agregar_notificacion('success', f'Usuario {nombre} registrado con éxito.')
+                                st.rerun()
+                            else:
+                                agregar_notificacion('error', 'Error al registrar el usuario.')
+                        except Exception as e:
+                            agregar_notificacion('error', f'Error de base de datos: {e}')
             else:
                 agregar_notificacion('warning', 'Por favor, complete todos los campos.')
 
@@ -87,6 +91,8 @@ def _render_gestionar():
                 current_rol_index = rol_options.index(selected_user['rol']) if selected_user['rol'] in rol_options else 0
                 new_rol = st.selectbox("Rol", rol_options, index=current_rol_index)
                 new_password = st.text_input("Nueva Contraseña (Dejar vacío para no cambiar)", type="password")
+                if new_password:
+                    st.caption(f"🔒 Mínimo {PASSWORD_MIN_LENGTH} caracteres, mayúscula, minúscula y número.")
                 st.markdown("<br>", unsafe_allow_html=True)
                 update_submitted = st.form_submit_button("✅ ACTUALIZAR USUARIO", type="primary", use_container_width=True)
 
@@ -104,11 +110,12 @@ def _render_gestionar():
                         if new_rol != selected_user['rol']:
                             cambios.append(f"Rol: {selected_user['rol']} → {new_rol}")
                         if new_password:
-                            if len(new_password) < 4:
-                                agregar_notificacion('error', 'La contraseña debe tener al menos 4 caracteres.')
-                            else:
-                                update_data["password"] = hashear_password(new_password)
-                                cambios.append("Contraseña actualizada")
+                            pass_valida, pass_error = validar_politica_password(new_password)
+                            if not pass_valida:
+                                agregar_notificacion('error', pass_error)
+                                st.stop()
+                            update_data["password"] = hashear_password(new_password)
+                            cambios.append("Contraseña actualizada")
                         try:
                             supabase.table("usuarios").update(update_data).eq("id", user_id).execute()
                             st.cache_data.clear()
