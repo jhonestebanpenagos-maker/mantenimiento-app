@@ -7,6 +7,7 @@ from utils.helpers import mostrar_notificaciones, agregar_notificacion, registra
 from utils.uploads import subir_archivo_generico
 from utils.notifications import notificar_telegram
 from utils.charts import sugerir_tecnico, render_sugerencia_tecnico
+from utils.time_tracking import render_time_tracker
 from pdf_utils import generar_pdf_orden
 
 
@@ -376,6 +377,11 @@ def _render_orden_gestion(row, nombre_activo, df_users, usuario):
             </div>
         </div>
         """, unsafe_allow_html=True)
+
+        # Time tracker
+        if row['estado'] != 'Concluida':
+            render_time_tracker(row['id'], usuario)
+            st.markdown("---")
 
         st.markdown("##### 📜 Historial de Gestión")
         try:
@@ -787,6 +793,12 @@ def _render_orden_detalle(id_orden_selec, orden_actual, df_display, idx_tabla, d
 
 def _render_bitacora(id_orden_selec):
     st.markdown("#### 📜 Bitácora y Adjuntos")
+
+    # Time tracker compacto
+    usuario = st.session_state.get('usuario', '')
+    render_time_tracker(id_orden_selec, usuario)
+
+    st.markdown("---")
     st.caption("Historial de avances y archivos cargados.")
     with st.container(height=500, border=True):
         try:
