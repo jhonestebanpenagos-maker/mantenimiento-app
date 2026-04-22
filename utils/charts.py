@@ -1,12 +1,24 @@
 # ==============================================================================
-# utils/charts.py — OPTIMIZADO Y CORREGIDO
+# utils/charts.py — VERSIÓN LIMPIA SIN ERRORES
 # ==============================================================================
 import streamlit as st
 import pandas as pd
-import numpy as np
 import plotly.express as px
 import plotly.graph_objects as go
 from datetime import datetime
+
+
+# ==============================================================================
+# 🛠️ HELPERS
+# ==============================================================================
+def _df_to_records(df):
+    if hasattr(df, 'to_dict'):
+        return df.to_dict('records')
+    return list(df) if df is not None else []
+
+
+def _df_hash(df):
+    return len(df) if hasattr(df, '__len__') else 0
 
 
 # ==============================================================================
@@ -14,7 +26,6 @@ from datetime import datetime
 # ==============================================================================
 @st.cache_data(ttl=60, show_spinner=False)
 def _calcular_datos_tecnicos(ordenes_hash, df_ordenes_data, df_users_data):
-    """Cachea el procesamiento de datos por técnico."""
     df_ordenes = pd.DataFrame(df_ordenes_data)
     df_users = pd.DataFrame(df_users_data)
 
@@ -33,13 +44,17 @@ def _calcular_datos_tecnicos(ordenes_hash, df_ordenes_data, df_users_data):
     for tecnico in df['tecnico_nombre'].unique():
         a = abiertas[abiertas['tecnico_nombre'] == tecnico]['cantidad'].sum()
         c = concluidas[concluidas['tecnico_nombre'] == tecnico]['cantidad'].sum()
-        datos.append({'Técnico': tecnico, 'Abiertas': int(a), 'Concluidas': int(c), 'Total': int(a + c)})
+        datos.append({
+            'Técnico': tecnico,
+            'Abiertas': int(a),
+            'Concluidas': int(c),
+            'Total': int(a + c)
+        })
     return datos
 
 
 @st.cache_data(ttl=60, show_spinner=False)
 def _calcular_kpis(ordenes_hash, df_ordenes_data, df_act_data, df_planes_data):
-    """Cachea todos los cálculos KPI de una vez."""
     df_ordenes = pd.DataFrame(df_ordenes_data)
     df_act = pd.DataFrame(df_act_data)
 
@@ -68,7 +83,10 @@ def _calcular_kpis(ordenes_hash, df_ordenes_data, df_act_data, df_planes_data):
         backlog_horas = 0
         backlog_ordenes = 0
 
-    mttr_prom = mtbf_prom = disponibilidad = tasa_falla = 0
+    mttr_prom = 0
+    mtbf_prom = 0
+    disponibilidad = 0
+    tasa_falla = 0
     mttr_por_activo = []
     mtbf_por_activo = []
     disponibilidad_por_activo = []
@@ -114,8 +132,7 @@ def _calcular_kpis(ordenes_hash, df_ordenes_data, df_act_data, df_planes_data):
 
     cumplimiento_planes = None
     total_planes = 0
-    if df_planes_data:
-        df_planes = pd.DataFrame(df_planes_data)
+    if_data)
         if not df_planes.empty:
             df_planes['ultima_ejecucion'] = pd.to_datetime(df_planes['ultima_ejecucion'])
             df_planes['proxima'] = df_planes['ultima_ejecucion'] + pd.to_timedelta(df_planes['frecuencia_dias'], unit='D')
@@ -124,18 +141,29 @@ def _calcular_kpis(ordenes_hash, df_ordenes_data, df_act_data, df_planes_data):
             cumplimiento_planes = ((total_planes - vencidos) / total_planes * 100) if total_planes > 0 else 100
 
     return {
-        'total': total, 'concluidas': concluidas, 'abiertas': abiertas, 'por_validar': por_validar,
-        'preventivas': preventivas, 'correctivas': correctivas, 'pct_preventivo': pct_preventivo,
-        'backlog_horas': backlog_horas, 'backlog_ordenes': backlog_ordenes,
-        'mttr_prom': mttr_prom, 'mtbf_prom': mtbf_prom, 'disponibilidad': disponibilidad,
-        'tasa_falla': tasa_falla, 'cumplimiento_planes': cumplimiento_planes, 'total_planes': total_planes,
-        'mttr_por_activo': mttr_por_activo, 'mtbf_por_activo': mtbf_por_activo,
+        'total': total,
+        'concluidas': concluidas,
+        'abiertas': abiertas,
+        'por_validar': por_validar,
+        'preventivas': preventivas,
+        'correctivas': correctivas,
+        'pct_preventivo': pct_preventivo,
+        'backlog_horas': backlog_horas,
+        'backlog_ordenes': backlog_ordenes,
+        'mttr_prom': mttr_prom,
+        'mtbf_prom': mtbf_prom,
+        'disponibilidad': disponibilidad,
+        'tasa_falla': tasa_falla,
+        'cumplimiento_planes': cumplimiento_planes,
+        'total_planes': total_planes,
+        'mttr_por_activo': mttr_por_activo,
+        'mtbf_por_activo': mtbf_por_activo,
         'disponibilidad_por_activo': disponibilidad_por_activo,
     }
 
 
-@st.cache_data(ttl=60enes_hash, df_ordenes_data):
-    """Cachea cálculos de tops (más antiguas, críticas)."""
+@st.cache_data(ttl=60, show_spinner=False)
+def _calcular_tops(ordenes_hash, df_ordenes_data):
     df = pd.DataFrame(df_ordenes_data)
     if df.empty:
         return [], []
@@ -151,14 +179,23 @@ def _calcular_kpis(ordenes_hash, df_ordenes_data, df_act_data, df_planes_data):
 
     top_antiguas = df_abiertas.sort_values('dias_abierta', ascending=False).head(10)
     top_antiguas_list = [
-        {'id': r['id'], 'dias': int(r['dias_abierta']), 'desc': (r.get('descripcion', '') or '')[:45]}
+        {
+            'id': r['id'],
+            'dias': int(r['dias_abierta']),
+            'desc': (r.get('descripcion', '') or '')[:45]
+        }
         for _, r in top_antiguas.iterrows()
     ]
 
     top_criticas = df_abiertas[df_abiertas['criticidad'].isin(['Alta', 'Crítica'])].sort_values('fecha_dt').head(10)
     top_criticas_list = [
-        {'id': r['id'], 'criticidad': r.get('criticidad', '?'), 'estado': r.get('estado', '?'),
-         'desc': (r.get('descripcion', '') or '')[:45]}
+        {
+            'id': r['id'],
+            'criticidad': r.get('criticidad', '?'),
+            'estado': r.get('estado', '? df_planes_data:
+        df_planes = pd.DataFrame(df_planes'),
+            'desc': (r.get('descripcion', '') or '')[:45]
+        }
         for _, r in top_criticas.iterrows()
     ]
 
@@ -167,7 +204,6 @@ def _calcular_kpis(ordenes_hash, df_ordenes_data, df_act_data, df_planes_data):
 
 @st.cache_data(ttl=60, show_spinner=False)
 def _calcular_flujo_datos(ordenes_hash, df_ordenes_data, df_users_data):
-    """Cachea datos para gráfico de flujo y tiempos."""
     df = pd.DataFrame(df_ordenes_data)
     df_users = pd.DataFrame(df_users_data)
 
@@ -187,12 +223,10 @@ def _calcular_flujo_datos(ordenes_hash, df_ordenes_data, df_users_data):
 
 @st.cache_data(ttl=60, show_spinner=False)
 def _calcular_semaforo(ordenes_hash, df_ordenes_data, df_users_data):
-    """Cachea los datos del semáforo de técnicos."""
     df_ordenes = pd.DataFrame(df_ordenes_data)
     df_users = pd.DataFrame(df_users_data)
 
-    if df_ordenes.empty or df_users.empty, show_spinner=False)
-def _calcular_tops(ord:
+    if df_ordenes.empty or df_users.empty:
         return []
 
     LIMITE_OCUPADO = 3
@@ -218,26 +252,16 @@ def _calcular_tops(ord:
             color, estado, icono, barra = "#EF4444", "CRÍTICO", "🔴", 100
 
         resultado.append({
-            'id': uid, 'nombre': user['nombre'], 'rol': user['rol'],
-            'ordenes': n, 'color': color, 'estado': estado,
-            'icono': icono, 'barra': barra
+            'id': uid,
+            'nombre': user['nombre'],
+            'rol': user['rol'],
+            'ordenes': n,
+            'color': color,
+            'estado': estado,
+            'icono': icono,
+            'barra': barra
         })
     return resultado
-
-
-# ==============================================================================
-# 🛠️ HELPERS
-# ==============================================================================
-def _df_to_records(df):
-    """Convierte DataFrame a lista de dicts para caché."""
-    if hasattr(df, 'to_dict'):
-        return df.to_dict('records')
-    return list(df) if df is not None else []
-
-
-def _df_hash(df):
-    """Hash simple para invalidar caché cuando cambian los datos."""
-    return len(df) if hasattr(df, '__len__') else 0
 
 
 # ==============================================================================
@@ -246,7 +270,9 @@ def _df_hash(df):
 
 def graficar_ordenes_por_tecnico(df_ordenes, df_users):
     datos = _calcular_datos_tecnicos(
-        _df_hash(df_ordenes), _df_to_records(df_ordenes), _df_to_records(df_users)
+        _df_hash(df_ordenes),
+        _df_to_records(df_ordenes),
+        _df_to_records(df_users)
     )
 
     if not datos:
@@ -257,25 +283,44 @@ def graficar_ordenes_por_tecnico(df_ordenes, df_users):
 
     fig = go.Figure()
     fig.add_trace(go.Bar(
-        name='Concluidas', y=df_final['Técnico'], x=df_final['Concluidas'],
-        orientation='h', marker=dict(color='#10B981', line=dict(width=0)),
-        text=df_final['Concluidas'], textposition='inside',
+        name='Concluidas',
+        y=df_final['Técnico'],
+        x=df_final['Concluidas'],
+        orientation='h',
+        marker=dict(color='#10B981', line=dict(width=0)),
+        text=df_final['Concluidas'],
+        textposition='inside',
         textfont=dict(color='white', size=12),
         hovertemplate='<b>%{y}</b><br>Concluidas: %{x}<extra></extra>'
     ))
     fig.add_trace(go.Bar(
-        name='Abiertas', y=df_final['Técnico'], x=df_final['Abiertas'],
-        orientation='h', marker=dict(color='#F59E0B', line=dict(width=0)),
-        text=df_final['Abiertas'], textposition='inside',
+        name='Abiertas',
+        y=df_final['Técnico'],
+        x=df_final['Abiertas'],
+        orientation='h',
+        marker=dict(color='#F59E0B', line=dict(width=0)),
+        text=df_final['Abiertas'],
+        textposition='inside',
         textfont=dict(color='white', size=12),
         hovertemplate='<b>%{y}</b><br>Abiertas: %{x}<extra></extra>'
     ))
     fig.update_layout(
-        barmode='stack', paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)',
-        font=dict(color='white', size=12), height=250,
-        margin=dict(l=0, r=0, t=10, b=0), showlegend=True,
-        legend=dict(orientation="h", yanchor="bottom", y=-0.25, xanchor="center", x=0.5,
-                    font=dict(color='white', size=12), bgcolor='rgba(0,0,0,0)'),
+        barmode='stack',
+        paper_bgcolor='rgba(0,0,0,0)',
+        plot_bgcolor='rgba(0,0,0,0)',
+        font=dict(color='white', size=12),
+        height=250,
+        margin=dict(l=0, r=0, t=10, b=0),
+        showlegend=True,
+        legend=dict(
+            orientation="h",
+            yanchor="bottom",
+            y=-0.25,
+            xanchor="center",
+            x=0.5,
+            font=dict(color='white', size=12),
+            bgcolor='rgba(0,0,0,0)'
+        ),
         xaxis=dict(showgrid=True, gridcolor='rgba(255,255,255,0.1)', title=None),
         yaxis=dict(title=None, tickfont=dict(size=11))
     )
@@ -294,13 +339,22 @@ def graficar_criticidad(df):
     colores = {"Baja": "#10B981", "Media": "#F59E0B", "Alta": "#EA580C", "Crítica": "#EF4444"}
     conteo = conteo[conteo['Nivel'].isin(orden_oficial)]
 
-    fig = px.bar(conteo, x='Nivel', y='Cantidad', color='Nivel',
-                 color_discrete_map=colores, text='Cantidad',
-                 category_orders={"Nivel": orden_oficial})
+    fig = px.bar(
+        conteo,
+        x='Nivel',
+        y='Cantidad',
+        color='Nivel',
+        color_discrete_map=colores,
+        text='Cantidad',
+        category_orders={"Nivel": orden_oficial}
+    )
     fig.update_layout(
-        paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)',
-        font=dict(color='white'), showlegend=False,
-        margin=dict(l=0, r=0, t=10, b=0), height=250,
+        paper_bgcolor='rgba(0,0,0,0)',
+        plot_bgcolor='rgba(0,0,0,0)',
+        font=dict(color='white'),
+        showlegend=False,
+        margin=dict(l=0, r=0, t=10, b=0),
+        height=250,
         xaxis=dict(title=None),
         yaxis=dict(showgrid=True, gridcolor='rgba(255,255,255,0.1)')
     )
@@ -315,13 +369,19 @@ def graficar_torta_tipo(df):
     conteo.columns = ['Tipo', 'Cantidad']
     colores_torta = ["#3B82F6", "#8B5CF6", "#EC4899"]
     fig = go.Figure(data=[go.Pie(
-        labels=conteo['Tipo'], values=conteo['Cantidad'], hole=.5,
+        labels=conteo['Tipo'],
+        values=conteo['Cantidad'],
+        hole=.5,
         marker=dict(colors=colores_torta, line=dict(color='#111827', width=2)),
-        textinfo='label+percent', textfont=dict(color='white')
+        textinfo='label+percent',
+        textfont=dict(color='white')
     )])
     fig.update_layout(
-        paper_bgcolor='rgba(0,0,0,0)', font=dict(color='white'),
-        height=250, showlegend=False, margin=dict(l=0, r=0, t=10, b=10)
+        paper_bgcolor='rgba(0,0,0,0)',
+        font=dict(color='white'),
+        height=250,
+        showlegend=False,
+        margin=dict(l=0, r=0, t=10, b=10)
     )
     st.plotly_chart(fig, use_container_width=True)
 
@@ -332,13 +392,24 @@ def graficar_estado_barras(df):
     conteo = df['estado'].value_counts().reset_index()
     conteo.columns = ['Estado', 'Cantidad']
     colores = {"Abierta": "#F59E0B", "Concluida": "#10B981"}
-    fig = px.bar(conteo, x='Cantidad', y='Estado', orientation='h',
-                 color='Estado', color_discrete_map=colores, text='Cantidad')
+    fig = px.bar(
+        conteo,
+        x='Cantidad',
+        y='Estado',
+        orientation='h',
+        color='Estado',
+        color_discrete_map=colores,
+        text='Cantidad'
+    )
     fig.update_layout(
-        paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)',
-        font=dict(color='white'), showlegend=False,
-        margin=dict(l=0, r=0, t=10, b=0), height=250,
-        xaxis=dict(showgrid=False), yaxis=dict(title=None)
+        paper_bgcolor='rgba(0,0,0,0)',
+        plot_bgcolor='rgba(0,0,0,0)',
+        font=dict(color='white'),
+        showlegend=False,
+        margin=dict(l=0, r=0, t=10, b=0),
+        height=250,
+        xaxis=dict(showgrid=False),
+        yaxis=dict(title=None)
     )
     fig.update_traces(textfont_size=14, textposition='inside')
     st.plotly_chart(fig, use_container_width=True)
@@ -346,7 +417,9 @@ def graficar_estado_barras(df):
 
 def graficar_alternativas_visuales(df_ordenes, df_users):
     df_vis = _calcular_flujo_datos(
-        _df_hash(df_ordenes), _df_to_records(df_ordenes), _df_to_records(df_users)
+        _df_hash(df_ordenes),
+        _df_to_records(df_ordenes),
+        _df_to_records(df_users)
     )
 
     if df_vis.empty:
@@ -358,13 +431,17 @@ def graficar_alternativas_visuales(df_ordenes, df_users):
     st.markdown("### 🌊 Flujo de Distribución")
     st.caption("Sigue las líneas: Técnico ➔ Criticidad ➔ Estado actual.")
     fig_flow = px.parallel_categories(
-        df_limitado, dimensions=['Tecnico', 'criticidad', 'estado'],
-        color="Dias_Activa", color_continuous_scale=px.colors.sequential.Inferno,
+        df_limitado,
+        dimensions=['Tecnico', 'criticidad', 'estado'],
+        color="Dias_Activa",
+        color_continuous_scale=px.colors.sequential.Inferno,
         labels={'Tecnico': 'Personal', 'criticidad': 'Urgencia', 'estado': 'Situación'}
     )
     fig_flow.update_layout(
-        paper_bgcolor='rgba(0,0,0,0)', margin=dict(l=20, r=20, t=20, b=20),
-        font=dict(color='white'), height=350
+        paper_bgcolor='rgba(0,0,0,0)',
+        margin=dict(l=20, r=20, t=20, b=20),
+        font=dict(color='white'),
+        height=350
     )
     st.plotly_chart(fig_flow, use_container_width=True)
 
@@ -374,24 +451,31 @@ def graficar_alternativas_visuales(df_ordenes, df_users):
 
     color_map_crit = {"Alta": "#EF4444", "Media": "#F59E0B", "Baja": "#10B981", "Crítica": "#7F1D1D"}
     fig_race = px.strip(
-        df_vis, x="Dias_Activa", y="Tecnico", color="criticidad",
-        color_discrete_map=color_map_crit, orientation="h", stripmode="overlay",
+        df_vis,
+        x="Dias_Activa",
+        y="Tecnico",
+        color="criticidad",
+        color_discrete_map=color_map_crit,
+        orientation="h",
+        stripmode="overlay",
         hover_data=["id", "descripcion", "estado"]
     )
     fig_race.update_layout(
-        paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(255,255,255,0.05)',
-        font=dict(color='white'), height=300,
+        paper_bgcolor='rgba(0,0,0,0)',
+        plot_bgcolor='rgba(255,255,255,0.05)',
+        font=dict(color='white'),
+        height=300,
         xaxis=dict(title="Días desde creación", showgrid=True, gridcolor='rgba(255,255,255,0.1)'),
         yaxis=dict(title=None)
     )
-    fig_race.add_vline(x=7, line_width=1, line_dash="dash", line_color="white",
-                       annotation_text="Límite 7 días")
+    fig_race.add_vline(x=7, line_width=1, line_dash="dash", line_color="white", annotation_text="Límite 7 días")
     st.plotly_chart(fig_race, use_container_width=True)
 
 
 def mostrar_tops_ordenes(df_ordenes):
     top_antiguas, top_criticas = _calcular_tops(
-        _df_hash(df_ordenes), _df_to_records(df_ordenes)
+        _df_hash(df_ordenes),
+        _df_to_records(df_ordenes)
     )
 
     if not top_antiguas and not top_criticas:
@@ -553,15 +637,19 @@ def mostrar_kpis_industriales(df_ordenes, df_act, df_planes=None):
         <div style="background:rgba(30,41,59,0.5);border-radius:10px;padding:15px;">
             <h5 style="color:#F59E0B;margin:0 0 12px 0;">🔧 Fiabilidad</h5>
         """, unsafe_allow_html=True)
-        for nombre, valor, desc in [
+        kpi_fiab = [
             ("⏱️ MTTR Promedio", f"{mttr_prom:.1f}h", "Tiempo medio de reparación"),
             ("🔁 MTBF Promedio", f"{mtbf_prom:.1f}h" if not pd.isna(mtbf_prom) and mtbf_prom > 0 else "N/A", "Tiempo medio entre fallas"),
             ("📊 Disponibilidad", f"{disponibilidad:.1f}%", "MTBF/(MTBF+MTTR)"),
             ("💥 Tasa de Falla", f"{tasa_falla:.2f}", "Fallas por 1000 horas"),
-        ]:
+        ]
+        for nombre, valor, desc in kpi_fiab:
             st.markdown(f"""
             <div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid rgba(255,255,255,0.05);">
-                <div><div style="color:#E5E7EB;font-size:0.9rem;">{nombre}</div><div style="color:#6B7280;font-size:0.7rem;">{desc}</div></div>
+                <div>
+                    <div style="color:#E5E7EB;font-size:0.9rem;">{nombre}</div>
+                    <div style="color:#6B7280;font-size:0.7rem;">{desc}</div>
+                </div>
                 <div style="color:#60A5FA;font-weight:700;font-size:1.1rem;">{valor}</div>
             </div>
             """, unsafe_allow_html=True)
@@ -572,15 +660,19 @@ def mostrar_kpis_industriales(df_ordenes, df_act, df_planes=None):
         <div style="background:rgba(30,41,59,0.5);border-radius:10px;padding:15px;">
             <h5 style="color:#10B981;margin:0 0 12px 0;">📈 Gestión</h5>
         """, unsafe_allow_html=True)
-        for nombre, valor, desc in [
+        kpi_gest = [
             ("🛡️ % Preventivo", f"{pct_preventivo:.1f}%", f"{preventivas} preventivas de {total} total"),
             ("📋 Órdenes Totales", str(total), f"{concluidas} concluidas, {abiertas} abiertas"),
             ("⏳ Backlog", f"{backlog_horas:.0f}h", f"{backlog_ordenes} órdenes sin cerrar"),
             ("📐 Cumplimiento", f"{cumplimiento_planes:.1f}%" if cumplimiento_planes is not None else "N/A", f"{total_planes} planes de mantenimiento"),
-        ]:
+        ]
+        for nombre, valor, desc in kpi_gest:
             st.markdown(f"""
             <div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid rgba(255,255,255,0.05);">
-                <div><div style="color:#E5E7EB;font-size:0.9rem;">{nombre}</div><div style="color:#6B7280;font-size:0.7rem;">{desc}</div></div>
+                <div>
+                    <div style="color:#E5E7EB;font-size:0.9rem;">{nombre}</div>
+                    <div style="color:#6B7280;font-size:0.7rem;">{desc}</div>
+                </div>
                 <div style="color:#60A5FA;font-weight:700;font-size:1.1rem;">{valor}</div>
             </div>
             """, unsafe_allow_html=True)
@@ -596,12 +688,26 @@ def mostrar_kpis_industriales(df_ordenes, df_act, df_planes=None):
             st.caption("Menos horas = más fácil de reparar")
             if mttr_por_activo:
                 df_mttr = pd.DataFrame(mttr_por_activo)
-                fig_mttr = px.bar(df_mttr, x='MTTR_horas', y='Activo', orientation='h',
-                                  color='MTTR_horas', color_continuous_scale='Reds', text='MTTR_horas')
-                fig_mttr.update_layout(paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)',
-                                       font=dict(color='white'), height=300, showlegend=False,
-                                       coloraxis_showscale=False, margin=dict(l=0, r=0, t=10, b=0),
-                                       yaxis=dict(title=None), xaxis=dict(title="Horas promedio"))
+                fig_mttr = px.bar(
+                    df_mttr,
+                    x='MTTR_horas',
+                    y='Activo',
+                    orientation='h',
+                    color='MTTR_horas',
+                    color_continuous_scale='Reds',
+                    text='MTTR_horas'
+                )
+                fig_mttr.update_layout(
+                    paper_bgcolor='rgba(0,0,0,0)',
+                    plot_bgcolor='rgba(0,0,0,0)',
+                    font=dict(color='white'),
+                    height=300,
+                    showlegend=False,
+                    coloraxis_showscale=False,
+                    margin=dict(l=0, r=0, t=10, b=0),
+                    yaxis=dict(title=None),
+                    xaxis=dict(title="Horas promedio")
+                )
                 fig_mttr.update_traces(texttemplate='%{text}h', textposition='outside')
                 st.plotly_chart(fig_mttr, use_container_width=True)
 
@@ -610,12 +716,26 @@ def mostrar_kpis_industriales(df_ordenes, df_act, df_planes=None):
             st.caption("Más horas = equipo más confiable")
             if mtbf_por_activo:
                 df_mtbf = pd.DataFrame(mtbf_por_activo)
-                fig_mtbf = px.bar(df_mtbf, x='MTBF_horas', y='Activo', orientation='h',
-                                  color='MTBF_horas', color_continuous_scale='Greens', text='MTBF_horas')
-                fig_mtbf.update_layout(paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)',
-                                       font=dict(color='white'), height=300, showlegend=False,
-                                       coloraxis_showscale=False, margin=dict(l=0, r=0, t=10, b=0),
-                                       yaxis=dict(title=None), xaxis=dict(title="Horas promedio"))
+                fig_mtbf = px.bar(
+                    df_mtbf,
+                    x='MTBF_horas',
+                    y='Activo',
+                    orientation='h',
+                    color='MTBF_horas',
+                    color_continuous_scale='Greens',
+                    text='MTBF_horas'
+                )
+                fig_mtbf.update_layout(
+                    paper_bgcolor='rgba(0,0,0,0)',
+                    plot_bgcolor='rgba(0,0,0,0)',
+                    font=dict(color='white'),
+                    height=300,
+                    showlegend=False,
+                    coloraxis_showscale=False,
+                    margin=dict(l=0, r=0, t=10, b=0),
+                    yaxis=dict(title=None),
+                    xaxis=dict(title="Horas promedio")
+                )
                 fig_mtbf.update_traces(texttemplate='%{text}h', textposition='outside')
                 st.plotly_chart(fig_mtbf, use_container_width=True)
 
@@ -627,20 +747,34 @@ def mostrar_kpis_industriales(df_ordenes, df_act, df_planes=None):
         if disponibilidad_por_activo:
             df_disp = pd.DataFrame(disponibilidad_por_activo)
             fig_disp = go.Figure()
-            colores_disp = ['#10B981' if d >= 90 else '#F59E0B' if d >= 70 else '#EF4444' for d in df_disp['Disponibilidad']]
+            colores_disp = [
+                '#10B981' if d >= 90 else '#F59E0B' if d >= 70 else '#EF4444'
+                for d in df_disp['Disponibilidad']
+            ]
             fig_disp.add_trace(go.Bar(
-                y=df_disp['Activo'], x=df_disp['Disponibilidad'], orientation='h',
+                y=df_disp['Activo'],
+                x=df_disp['Disponibilidad'],
+                orientation='h',
                 marker=dict(color=colores_disp),
                 text=[f"{d:.1f}%" for d in df_disp['Disponibilidad']],
-                textposition='outside', textfont=dict(color='white', size=11)
+                textposition='outside',
+                textfont=dict(color='white', size=11)
             ))
             fig_disp.add_vline(x=90, line_dash="dash", line_color="#10B981", annotation_text="Meta: 90%")
             fig_disp.add_vline(x=70, line_dash="dash", line_color="#F59E0B", annotation_text="Mínimo: 70%")
             fig_disp.update_layout(
-                paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)',
-                font=dict(color='white'), height=max(250, len(df_disp) * 30),
-                margin=dict(l=0, r=0, t=10, b=0), showlegend=False,
-                xaxis=dict(title="% Disponibilidad", range=[0, 105], showgrid=True, gridcolor='rgba(255,255,255,0.1)'),
+                paper_bgcolor='rgba(0,0,0,0)',
+                plot_bgcolor='rgba(0,0,0,0)',
+                font=dict(color='white'),
+                height=max(250, len(df_disp) * 30),
+                margin=dict(l=0, r=0, t=10, b=0),
+                showlegend=False,
+                xaxis=dict(
+                    title="% Disponibilidad",
+                    range=[0, 105],
+                    showgrid=True,
+                    gridcolor='rgba(255,255,255,0.1)'
+                ),
                 yaxis=dict(title=None)
             )
             st.plotly_chart(fig_disp, use_container_width=True)
@@ -658,14 +792,21 @@ def mostrar_kpis_industriales(df_ordenes, df_act, df_planes=None):
             })
             colores_tipo = {"Preventivo": "#10B981", "Correctivo": "#EF4444"}
             fig_comp = go.Figure(data=[go.Pie(
-                labels=conteo_tipo['Tipo'], values=conteo_tipo['Cantidad'], hole=.55,
-                marker=dict(colors=[colores_tipo.get(t, '#6B7280') for t in conteo_tipo['Tipo']],
-                           line=dict(color='#111827', width=2)),
-                textinfo='label+percent', textfont=dict(color='white', size=12)
+                labels=conteo_tipo['Tipo'],
+                values=conteo_tipo['Cantidad'],
+                hole=.55,
+                marker=dict(
+                    colors=[col') for t in conteo_tipo['Tipo']],
+                    line=dict(color='#111827', width=2)
+                ),
+                textinfo='label+percent',
+                textfont=dict(color='white', size=12)
             )])
             fig_comp.update_layout(
-                paper_bgcolor='rgba(0,0,0,0)', font=dict(color='white'),
-                height=280, showlegend=True,
+                paper_bgcolor='rgba(0,0,0,0)',
+                font=dict(color='white'),
+                height=280,
+                showlegend=True,
                 legend=dict(font=dict(color='white')),
                 margin=dict(l=0, r=0, t=10, b=10)
             )
@@ -676,7 +817,7 @@ def mostrar_kpis_industriales(df_ordenes, df_act, df_planes=None):
             st.caption("¿Qué tan maduro es tu mantenimiento?")
 
             if pct_preventivo >= 70:
-                nivel, color_nivel, emoji_nivel = "EXCELENTE", "#10B981", "🏆"
+                nivelores_tipo.get(t, '#6B7280, color_nivel, emoji_nivel = "EXCELENTE", "#10B981", "🏆"
             elif pct_preventivo >= 50:
                 nivel, color_nivel, emoji_nivel = "BUENO", "#3B82F6", "👍"
             elif pct_preventivo >= 30:
@@ -707,7 +848,9 @@ def mostrar_kpis_industriales(df_ordenes, df_act, df_planes=None):
 # ==============================================================================
 def semaforo_tecnicos(df_ordenes, df_users):
     datos = _calcular_semaforo(
-        _df_hash(df_ordenes), _df_to_records(df_ordenes), _df_to_records(df_users)
+        _df_hash(df_ordenes),
+        _df_to_records(df_ordenes),
+        _df_to_records(df_users)
     )
 
     if not datos:
@@ -796,7 +939,10 @@ def mostrar_metricas_inteligentes(df_ordenes, df_users, df_solicitudes):
         n_solicitudes = len(df_solicitudes[df_solicitudes['estado'].astype(str).str.strip() == 'Pendiente'])
 
     total = len(df_ordenes)
-    pendientes = por_validar = concluidas = devueltas_calidad = 0
+    pendientes = 0
+    por_validar = 0
+    concluidas = 0
+    devueltas_calidad = 0
     porcentaje_concluidas = 0
 
     if not df_ordenes.empty:
