@@ -177,7 +177,8 @@ def _calcular_tendencia_semanal(ordenes_hash, df_ordenes_data):
     semanas['Cerradas'] = semanas['Cerradas'].fillna(0).astype(int)
 
     semanas['Semana'] = semanas.apply(
-        lambda r: "S{} '{}'".format(int(r['semana']), str(int(r['anio']))[-2:]), axis=1
+        lambda r: pd.Timestamp.fromisocalendar(int(r['anio']), int(r['semana']), 1).strftime('%d %b'),
+        axis=1
     )
     semanas['Backlog'] = (semanas['Creadas'] - semanas['Cerradas']).cumsum()
 
