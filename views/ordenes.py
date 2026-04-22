@@ -923,6 +923,34 @@ def _render_preventivos(df_act, df_users):
     st.info("Aquí configuras las tareas que se repiten (ej: Limpieza mensual).")
 
     with st.expander("➕ Crear Nuevo Plan Preventivo"):
+        # Checklist FUERA del form para poder agregar/eliminar dinámicamente
+        st.markdown("#### ✅ Checklist de Verificación")
+        st.caption("Agrega los pasos que el técnico debe verificar en cada ejecución.")
+    
+        if 'checklist_items' not in st.session_state:
+            st.session_state.checklist_items = ["", ""]
+    
+        for i in range(len(st.session_state.checklist_items)):
+            c_item, c_del = st.columns([5, 1])
+            nuevo_val = c_item.text_input(
+                f"Paso {i+1}",
+                value=st.session_state.checklist_items[i],
+                key=f"prev_ci_{i}",
+                placeholder=f"Ej: Verificar temperatura del motor",
+                label_visibility="collapsed"
+            )
+            st.session_state.checklist_items[i] = nuevo_val
+            if len(st.session_state.checklist_items) > 1:
+                if c_del.button("🗑️", key=f"prev_dc_{i}", help="Eliminar paso"):
+                    st.session_state.checklist_items.pop(i)
+                    st.rerun()
+    
+        if st.button("➕ Agregar paso", key="prev_add_step"):
+            st.session_state.checklist_items.append("")
+            st.rerun()
+    
+        st.markdown("---")
+    
         with st.form("form_plan_prev"):
             c1, c2 = st.columns(2)
             act_nombres = df_act['nombre'].values if not df_act.empty else []
@@ -933,45 +961,14 @@ def _render_preventivos(df_act, df_users):
             c3, c4 = st.columns(2)
             dias = c3.number_input("Frecuencia (Días)", min_value=1, value=30)
             fecha_base = c4.date_input("Fecha de Inicio / Última vez hecho")
-
-            st.markdown("---")
-            st.markdown("#### ✅ Checklist de Verificación")
-            st.caption("Agrega los pasos que el técnico debe verificar en cada ejecución.")
-
-            # Inicializar checklist en session state
-            if 'checklist_items' not in st.session_state:
-                st.session_state.checklist_items = ["", ""]
-
-            # Mostrar items actuales
-            for i in range(len(st.session_state.checklist_items)):
-                c_item, c_del = st.columns([5, 1])
-                nuevo_val = c_item.text_input(
-                    f"Paso {i+1}",
-                    value=st.session_state.checklist_items[i],
-                    key=f"prev_ci_{i}",
-                    placeholder=f"Ej: Verificar temperatura del motor",
-                    label_visibility="collapsed"
-                )
-                st.session_state.checklist_items[i] = nuevo_val
-                if len(st.session_state.checklist_items) > 1:
-                    c_del.button("🗑️", key=f"prev_dc_{i}", help="Eliminar paso",
-                                 on_click=lambda idx=i: st.session_state.checklist_items.pop(idx))
-
-            c_add1, c_add2 = st.columns(2)
-            with c_add1:
-                if st.form_submit_button("➕ Agregar paso"):
-                    st.session_state.checklist_items.append("")
-
+    
             enviado = st.form_submit_button("GUARDAR PLAN")
-
+    
             if enviado:
                 id_act = df_act[df_act['nombre'] == act_sel].iloc[0]['id']
                 id_tec = users_dict[tec_sel]
-
-                # Filtrar items vacíos
                 checklist_limpio = [item.strip() for item in st.session_state.checklist_items if item.strip()]
                 checklist_json = checklist_limpio if checklist_limpio else None
-
                 try:
                     supabase.table("planes_mantenimiento").insert({
                         "activo_id": int(id_act), "descripcion": desc,
