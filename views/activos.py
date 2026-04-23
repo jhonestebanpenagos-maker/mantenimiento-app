@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 import time
+import io
 import html as html_module
 from datetime import datetime
 from utils.db import supabase, run_query, render_paginacion
@@ -472,6 +473,53 @@ def _render_nuevo(df_act):
     sub_area = c_loc2.selectbox("Sub-área", sub_areas, index=idx_sub_def, key="new_asset_sub_out")
 
     st.write("")
+
+    # ── Fotografía: zona de drag-and-drop (fuera del form para feedback inmediato) ──
+    st.markdown("#### 📸 Fotografía (Obligatorio)")
+
+    # Preview de foto previa (draft)
+    if draft.get('foto_url'):
+        st.image(draft['foto_url'], width=120, caption="Foto guardada (Draft)")
+        st.caption("Arrastra una nueva imagen para reemplazarla, o deja la actual.")
+
+    # Zona de drop estilizada + file uploader
+    st.markdown("""
+    <div style="
+        border: 2px dashed rgba(245,158,11,0.4);
+        border-radius: 12px;
+        padding: 24px 16px;
+        text-align: center;
+        background: rgba(245,158,11,0.04);
+        margin-bottom: 4px;
+        transition: all 0.2s;
+    ">
+        <div style="font-size: 2rem; margin-bottom: 6px;">🖼️</div>
+        <div style="color: #F59E0B; font-weight: 700; font-size: 0.95rem;">
+            Arrastra y suelta la imagen aquí
+        </div>
+        <div style="color: #9CA3AF; font-size: 0.8rem; margin-top: 4px;">
+            o haz clic para seleccionar · JPG, PNG · Máx. 200MB
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    foto_archivo = st.file_uploader(
+        "Subir imagen",
+        type=["jpg", "png", "jpeg"],
+        key="new_asset_photo",
+        label_visibility="collapsed"
+    )
+
+    # Guardar foto en draft en tiempo real (fuera del form)
+    if foto_archivo is not None:
+        st.session_state.draft_data['foto_bytes'] = foto_archivo.getvalue()
+        st.image(foto_archivo, width=200, caption="✅ Imagen lista para guardar")
+        st.success("Foto cargada. Se guardará al enviar el formulario.")
+    elif draft.get('foto_bytes') is not None:
+        st.image(draft['foto_bytes'], width=200, caption="Foto del draft")
+
+    st.markdown("---")
+
     with st.form("form_crear_activo", clear_on_submit=False):
         st.markdown("📝 **Paso 2: Detalles del Activo**")
         c1, c2 = st.columns(2)
@@ -492,25 +540,31 @@ def _render_nuevo(df_act):
         cat = c1.selectbox("Categoría", CATEGORIAS_LIST, index=get_idx(CATEGORIAS_LIST, draft.get('categoria')))
 
         st.markdown("---")
-        st.markdown("#### 📸 Fotografía (Obligatorio)")
-        if draft.get('foto_url'):
-            st.image(draft['foto_url'], width=100, caption="Foto actual (Draft)")
-        foto_archivo = st.file_uploader("Subir imagen", type=["jpg", "png", "jpeg"])
-
-        st.markdown("---")
         st.markdown("#### ⚙️ Especificaciones")
         edited_df = st.data_editor(st.session_state.specs_data, num_rows="dynamic", use_container_width=True)
         st.markdown("<br>", unsafe_allow_html=True)
         enviado = st.form_submit_button("💾 GUARDAR ACTIVO", type="primary", use_container_width=True)
 
     if enviado:
-        _guardar_nuevo_activo(nom, cat, area_principal, sub_area, ubic_detalle, foto_archivo, edited_df, draft)
+        # Usar foto del uploader o del draft
+        foto_final = foto_archivo
+        if foto_final is None and draft.get('foto_bytes') is not None:
+            foto_final = io.BytesIO(draft['foto_bytes'])
+            foto_final.name = "foto_draft.jpg"
+        _guardar_nuevo_activo(nom, cat, area_principal, sub_area, ubic_detalle, foto_final, edited_df, draft)
 
 
 def _guardar_nuevo_activo(nom, cat, area_principal, sub_area, ubic_detalle, foto_archivo, edited_df, draft):
     final_url = None
+    foto_bytes_local = None
+
     if foto_archivo:
         with st.spinner("Subiendo foto a Cloudinary..."):
+            # Soportar tanto UploadedFile como BytesIO (desde draft)
+            if hasattr(foto_archivo, 'getvalue'):
+                foto_bytes_local = foto_archivo.getvalue()
+            else:
+                foto_bytes_local = foto_archivo.read()
             final_url = subir_imagen(foto_archivo)
     elif draft.get('foto_url'):
         final_url = draft['foto_url']
@@ -536,11 +590,10 @@ def _guardar_nuevo_activo(nom, cat, area_principal, sub_area, ubic_detalle, foto
             supabase.table("activos").update({"qr_url": qr}).eq("id", nid).execute()
             st.cache_data.clear()
             st.session_state.draft_data = {}
-            img_local = foto_archivo.getvalue() if foto_archivo else None
             st.session_state.activo_creado_info = {
                 "id": nid, "nombre": nom, "area": area_principal,
                 "ubicacion": ubic_final, "categoria": cat,
-                "foto_url": final_url, "foto_bytes": img_local,
+                "foto_url": final_url, "foto_bytes": foto_bytes_local,
                 "detalles": detalles_json, "qr_url": qr
             }
             st.rerun()
