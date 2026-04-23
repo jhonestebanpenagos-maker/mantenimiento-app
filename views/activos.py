@@ -104,19 +104,70 @@ def _render_lista(df_act):
         if not df_filtered.empty:
             st.markdown(f"###### 🧬 Resultados: {len(df_filtered)}")
 
-            # Renderizar como tarjetas HTML (sin st.dataframe para evitar error React #185)
+            # Lightbox CSS + JS (una sola vez)
+            st.markdown("""
+            <style>
+            .lb-overlay{display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.85);z-index:9999;justify-content:center;align-items:center;cursor:pointer;backdrop-filter:blur(4px);}
+            .lb-overlay:target{display:flex;}
+            .lb-overlay img{max-width:90%;max-height:90%;border-radius:10px;box-shadow:0 0 40px rgba(0,0,0,0.5);}
+            .lb-close{position:absolute;top:20px;right:30px;color:#fff;font-size:2rem;text-decoration:none;font-weight:bold;cursor:pointer;z-index:10000;}
+            .lb-close:hover{color:#F59E0B;}
+            .lb-caption{text-align:center;color:#D1D5DB;font-size:0.95rem;margin-top:12px;}
+            </style>
+            <script>
+            document.addEventListener('keydown',function(e){if(e.key==='Escape'){var o=document.querySelector('.lb-overlay:target');if(o)window.location='#';}});
+            </script>
+            """, unsafe_allow_html=True)
+
+            # Renderizar como tarjetas HTML con lightbox
             cards = []
             for _, row in df_filtered.iterrows():
-                if isinstance(row.get("foto_url"), str) and row["foto_url"].startswith("http"):
-                    foto = '<img src="' + row["foto_url"] + '" style="width:100%;height:160px;object-fit:cover;border-radius:6px;" />'
+                act_id = str(row["id"])
+                foto_url = row.get("foto_url", "")
+                qr_url = row.get("qr_url", "")
+                nombre_escaped = html_module.escape(str(row["nombre"]))
+
+                # Foto con lightbox
+                if isinstance(foto_url, str) and foto_url.startswith("http"):
+                    foto = (
+                        f'<a href="#lb-{act_id}" style="display:block;cursor:pointer;">'
+                        f'<img src="{foto_url}" style="width:100%;height:160px;object-fit:cover;border-radius:6px;transition:transform 0.2s;" '
+                        f'onmouseover="this.style.transform=\'scale(1.02)\'" onmouseout="this.style.transform=\'none\'" />'
+                        f'</a>'
+                    )
+                    # Modal de foto
+                    foto_modal = (
+                        f'<div id="lb-{act_id}" class="lb-overlay">'
+                        f'<a class="lb-close" href="#">&times;</a>'
+                        f'<div style="text-align:center;">'
+                        f'<img src="{foto_url}" style="max-width:90vw;max-height:80vh;border-radius:10px;" />'
+                        f'<div class="lb-caption">📷 {nombre_escaped}</div>'
+                        f'</div></div>'
+                    )
                 else:
                     foto = '<div style="width:100%;height:160px;background:#1F2937;border-radius:6px;display:flex;align-items:center;justify-content:center;color:#6B7280;font-size:2rem;">📷</div>'
-                if isinstance(row.get("qr_url"), str) and row["qr_url"].startswith("http"):
-                    qr = '<img src="' + row["qr_url"] + '" style="width:60px;height:60px;border-radius:4px;" />'
+                    foto_modal = ""
+
+                # QR con lightbox
+                if isinstance(qr_url, str) and qr_url.startswith("http"):
+                    qr = (
+                        f'<a href="#lb-qr-{act_id}" style="display:block;cursor:pointer;">'
+                        f'<img src="{qr_url}" style="width:60px;height:60px;border-radius:4px;transition:transform 0.2s;" '
+                        f'onmouseover="this.style.transform=\'scale(1.1)\'" onmouseout="this.style.transform=\'none\'" />'
+                        f'</a>'
+                    )
+                    qr_modal = (
+                        f'<div id="lb-qr-{act_id}" class="lb-overlay">'
+                        f'<a class="lb-close" href="#">&times;</a>'
+                        f'<div style="text-align:center;">'
+                        f'<img src="{qr_url}" style="max-width:50vw;max-height:60vh;border-radius:10px;" />'
+                        f'<div class="lb-caption">QR — {nombre_escaped}</div>'
+                        f'</div></div>'
+                    )
                 else:
                     qr = ""
-                nombre = html_module.escape(str(row["nombre"]))
-                act_id = str(row["id"])
+                    qr_modal = ""
+
                 cat = html_module.escape(str(row.get("categoria", "N/A")))
                 area = html_module.escape(str(row.get("area", "")))
                 ubic = html_module.escape(str(row.get("ubicacion", "")))
@@ -126,13 +177,14 @@ def _render_lista(df_act):
                     + '<div style="padding:12px;">'
                     + '<div style="display:flex;justify-content:space-between;align-items:start;">'
                     + '<div>'
-                    + '<div style="color:#F3F4F6;font-weight:600;font-size:0.95rem;">' + nombre + '</div>'
+                    + '<div style="color:#F3F4F6;font-weight:600;font-size:0.95rem;">' + nombre_escaped + '</div>'
                     + '<div style="color:#9CA3AF;font-size:0.8rem;margin-top:2px;">ID: ' + act_id + ' · ' + cat + '</div>'
                     + '</div>'
                     + qr
                     + '</div>'
                     + '<div style="margin-top:8px;font-size:0.8rem;color:#6B7280;">📍 ' + area + ' / ' + ubic + '</div>'
                     + '</div></div>'
+                    + foto_modal + qr_modal
                 )
                 cards.append(card)
             grid = '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:16px;">' + "".join(cards) + "</div>"
