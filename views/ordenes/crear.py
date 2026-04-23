@@ -20,6 +20,9 @@ def render_crear_directa(df_act, df_users, df_ordenes):
             st.session_state['_crear_form_counter'] = 0
         fc = st.session_state['_crear_form_counter']
 
+        # ── Notificación de éxito (se muestra DEBAJO del form) ──
+        msg_exito = st.session_state.pop('_crear_exito_msg', None)
+
         st.info("Creación rápida: Los campos se limpian automáticamente al guardar.")
 
         # ── Paso 1: Activo + Tipo + Criticidad ──
@@ -61,15 +64,18 @@ def render_crear_directa(df_act, df_users, df_ordenes):
                         })
                         if res_orden.data:
                             nuevo_id_ot = res_orden.data[0]['id']
-                            # Incrementar contador → nuevos keys → campos vacíos
                             st.session_state['_crear_form_counter'] = fc + 1
-                            agregar_notificacion('success', f'Orden #{nuevo_id_ot} creada. Puedes crear otra.')
-                            time.sleep(0.3)
+                            st.session_state['_crear_exito_msg'] = nuevo_id_ot
                             st.rerun()
                         else:
                             st.error("No se pudo obtener el ID de la nueva orden.")
                     except Exception as e:
                         error_amigable(e, "crear orden")
+
+        # ── Mensaje de éxito DEBAJO del formulario ──
+        if msg_exito:
+            st.success(f"✅ Orden #{msg_exito} creada correctamente. Los campos se han limpiado para crear otra.")
+            st.balloons()
     else:
         st.warning("No hay activos registrados.")
 
