@@ -538,11 +538,11 @@ def _guardar_nuevo_activo(nom, cat, area_principal, sub_area, ubic_detalle, foto
 
     if foto_archivo:
         with st.spinner("Subiendo foto a Cloudinary..."):
-            # Soportar tanto UploadedFile como BytesIO (desde draft)
-            if hasattr(foto_archivo, 'getvalue'):
-                foto_bytes_local = foto_archivo.getvalue()
-            else:
-                foto_bytes_local = foto_archivo.read()
+            # Obtener bytes del archivo (UploadedFile o BytesIO)
+            try:
+                foto_bytes_local = foto_archivo.getvalue() if hasattr(foto_archivo, 'getvalue') else foto_archivo.read()
+            except Exception:
+                foto_bytes_local = None
             final_url = subir_imagen(foto_archivo)
     elif draft.get('foto_url'):
         final_url = draft['foto_url']
@@ -591,20 +591,22 @@ def _render_activo_creado():
     c_foto, c_datos, c_qr = st.columns([1, 1.5, 1])
     with c_foto:
         st.markdown("#### 🖼️ Foto")
-        foto_local = info.get('foto_bytes')
         foto_nube = info.get('foto_url')
-        if foto_local is not None:
+        foto_local = info.get('foto_bytes')
+        # Prioridad 1: URL de Cloudinary (ya subida, siempre funciona)
+        if foto_nube and isinstance(foto_nube, str) and len(foto_nube) > 10:
             try:
-                st.image(foto_local, use_container_width=True, caption="Previsualización")
+                st.image(foto_nube, use_container_width=True, caption="Fotografía")
+            except Exception as e:
+                st.warning("No se pudo cargar la imagen desde la nube.")
+                print(f"Error cargando imagen nube: {e}")
+        # Prioridad 2: Bytes locales como fallback
+        elif foto_local is not None and len(foto_local) > 0:
+            try:
+                st.image(io.BytesIO(foto_local), use_container_width=True, caption="Previsualización")
             except Exception as e:
                 st.warning("No se pudo cargar la vista previa local.")
                 print(f"Error cargando preview local: {e}")
-        elif pd.notna(foto_nube) and isinstance(foto_nube, str) and len(foto_nube) > 10:
-            try:
-                st.image(foto_nube, use_container_width=True)
-            except Exception as e:
-                st.error("Error al cargar imagen desde la nube.")
-                print(f"Error cargando imagen nube: {e}")
         else:
             st.info("ℹ️ Sin imagen disponible.")
     with c_datos:
