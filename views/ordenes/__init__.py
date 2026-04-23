@@ -19,6 +19,7 @@ from .preventivos import render_preventivos
 from .buzon import render_buzon
 from .mis_gestiones import render_mis_gestiones
 from .interceptor import render_interceptor
+from utils.email_monitor import render_buzon_correo
 
 
 def render():
@@ -70,6 +71,7 @@ def render():
     GRUPO_SUPERVISION = [
         ("buzon",   "📥", "Buzón"),
         ("calidad", "🧐", "Calidad"),
+        ("correo",  "📧", "Correo"),
         ("gestion", "🎛️", "Global"),
     ]
 
@@ -110,6 +112,8 @@ def render():
         render_crear_directa(df_act, df_users, df_ordenes)
     elif tab_activa == 'preventivos':
         render_preventivos(df_act, df_users)
+    elif tab_activa == 'correo':
+        render_buzon_correo()
 
 
 # ==============================================================================
