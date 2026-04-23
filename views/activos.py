@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 import time
 import io
+import base64
 import html as html_module
 from datetime import datetime
 from PIL import Image
@@ -512,16 +513,26 @@ def _render_nuevo(df_act):
     if foto_archivo is not None:
         st.session_state.draft_data['foto_bytes'] = foto_archivo.getvalue()
         try:
-            foto_archivo.seek(0)
             img_bytes = foto_archivo.getvalue()
-            img = Image.open(io.BytesIO(img_bytes))
-            st.image(img, width=200, caption="✅ Imagen lista para guardar")
+            b64 = base64
+            b64_str = b64.b64encode(img_bytes).decode()
+            nombre_lower = foto_archivo.name.lower() if hasattr(foto_archivo, 'name') else ""
+            if nombre_lower.endswith(".png"):
+                mime = "image/png"
+            elif nombre_lower.endswith((".jpg", ".jpeg")):
+                mime = "image/jpeg"
+            else:
+                mime = "image/png"
+            st.markdown(
+                f'<div style="text-align:center;">'
+                f'<img src="data:{mime};base64,{b64_str}" '
+                f'style="max-width:200px;height:auto;border-radius:8px;" />'
+                f'<p style="color:#10B981;font-size:0.85rem;margin-top:4px;">✅ Imagen lista para guardar</p>'
+                f'</div>',
+                unsafe_allow_html=True
+            )
         except Exception:
-            try:
-                foto_archivo.seek(0)
-                st.image(foto_archivo.getvalue(), width=200, caption="✅ Imagen lista para guardar")
-            except Exception:
-                st.warning("⚠️ No se pudo previsualizar, pero la foto se guardará correctamente.")
+            st.warning("⚠️ No se pudo previsualizar, pero la foto se guardará correctamente.")
         st.success("Foto cargada correctamente.")
     elif draft.get('foto_bytes') is not None:
         st.image(draft['foto_bytes'], width=200, caption="Foto del draft")
@@ -698,17 +709,27 @@ def _render_edit(df_act):
             st.markdown("#### 🖼️ Visualización")
             if nueva_foto_temp:
                 try:
-                    nueva_foto_temp.seek(0)
                     img_bytes = nueva_foto_temp.getvalue()
-                    img = Image.open(io.BytesIO(img_bytes))
-                    st.image(img, use_container_width=True, caption="Nueva imagen (Sin guardar)")
+                    b64 = base64
+                    b64_str = b64.b64encode(img_bytes).decode()
+                    # Detectar tipo de imagen
+                    nombre_lower = nueva_foto_temp.name.lower() if hasattr(nueva_foto_temp, 'name') else ""
+                    if nombre_lower.endswith(".png"):
+                        mime = "image/png"
+                    elif nombre_lower.endswith((".jpg", ".jpeg")):
+                        mime = "image/jpeg"
+                    else:
+                        mime = "image/png"
+                    st.markdown(
+                        f'<div style="text-align:center;">'
+                        f'<img src="data:{mime};base64,{b64_str}" '
+                        f'style="max-width:100%;height:auto;border-radius:8px;" />'
+                        f'<p style="color:#10B981;font-size:0.85rem;margin-top:4px;">✅ Nueva imagen (Sin guardar)</p>'
+                        f'</div>',
+                        unsafe_allow_html=True
+                    )
                 except Exception:
-                    # Fallback: mostrar bytes directamente sin PIL
-                    try:
-                        nueva_foto_temp.seek(0)
-                        st.image(nueva_foto_temp.getvalue(), use_container_width=True, caption="Nueva imagen (Sin guardar)")
-                    except Exception:
-                        st.warning("⚠️ No se pudo previsualizar, pero la foto se guardará correctamente.")
+                    st.warning("⚠️ No se pudo previsualizar, pero la foto se guardará correctamente.")
             else:
                 url_db = dat.get('foto_url')
                 if url_db and isinstance(url_db, str) and len(url_db.strip()) > 10:
