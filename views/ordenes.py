@@ -43,58 +43,71 @@ def render():
             _render_crear_para_activo(df_act, df_users, df_ordenes)
             return
 
-    # ── Tabs con navegación programática ──
-    TABS_LIST = [
-        "📂 Mis Gestiones", "📋 Kanban", "📥 Buzón Solicitudes", "🧐 Control Calidad",
-        "🎛️ Gestión Global", "➕ Crear Directa", "🗓️ Preventivos"
+    # ── Tabs con navegación estilo pills ──
+    TABS_CONFIG = [
+        ("mis_gestiones", "📂", "Mis Gestiones"),
+        ("kanban",        "📋", "Kanban"),
+        ("buzon",         "📥", "Buzón"),
+        ("calidad",       "🧐", "Calidad"),
+        ("gestion",       "🎛️", "Global"),
+        ("crear",         "➕", "Crear"),
+        ("preventivos",   "🗓️", "Preventivos"),
     ]
 
-    # Determinar tab activo desde session_state
-    tab_activa = st.session_state.get('ordenes_tab', 'kanban' if st.session_state.pop('kanban_filtro_solicitudes', False) else None)
+    # Determinar tab activo
+    tab_activa = st.session_state.get('ordenes_tab', None)
     if tab_activa is None:
-        tab_activa = st.session_state.get('_ordenes_tab_activa', 'mis_gestiones')
-
-    tab_map = {
-        'mis_gestiones': 0, 'kanban': 1, 'buzon': 2, 'calidad': 3,
-        'gestion': 4, 'crear': 5, 'preventivos': 6
-    }
-    idx_default = tab_map.get(tab_activa, 0)
-
-    # Usar radio horizontal como tabs (soporta index por defecto)
-    tab_seleccionada_key = st.radio(
-        "Navegación",
-        TABS_LIST,
-        index=idx_default,
-        horizontal=True,
-        label_visibility="collapsed",
-        key="_ordenes_tab_radio"
-    )
-
-    # Guardar tab activa para persistencia
-    st.session_state['_ordenes_tab_activa'] = {v: k for k, v in tab_map.items()}[
-        TABS_LIST.index(tab_seleccionada_key)
-    ] if tab_seleccionada_key in TABS_LIST else 'mis_gestiones'
-
-    # Limpiar ordenes_tab después de usarlo
+        if st.session_state.pop('kanban_filtro_solicitudes', False):
+            tab_activa = 'kanban'
+        else:
+            tab_activa = st.session_state.get('_ordenes_tab_activa', 'mis_gestiones')
     if 'ordenes_tab' in st.session_state:
         del st.session_state['ordenes_tab']
 
-    # Renderizar contenido según tab seleccionada
-    tab_idx = TABS_LIST.index(tab_seleccionada_key)
+    # ── Barra de navegación tipo pills ──
+    pills_html = '<div class="orion-nav">'
+    for key, icon, label in TABS_CONFIG:
+        active = " active" if key == tab_activa else ""
+        pills_html += (
+            f'<div class="orion-pill{active}">'
+            f'<span class="orion-pill-icon">{icon}</span>'
+            f'<span class="orion-pill-label">{label}</span>'
+            f'</div>'
+        )
+    pills_html += '</div>'
+    st.markdown(pills_html, unsafe_allow_html=True)
 
-    if tab_idx == 0:
+    # ── Botones de navegación (una columna por tab) ──
+    nav_cols = st.columns(len(TABS_CONFIG))
+    for i, (key, icon, label) in enumerate(TABS_CONFIG):
+        with nav_cols[i]:
+            btn_label = f"{icon} {label}"
+            is_primary = key == tab_activa
+            if st.button(
+                btn_label,
+                key=f"_nav_{key}",
+                use_container_width=True,
+                type="primary" if is_primary else "secondary",
+            ):
+                st.session_state['_ordenes_tab_activa'] = key
+                st.rerun()
+
+    st.markdown("<div style='margin-top:12px;'></div>", unsafe_allow_html=True)
+
+    # ── Renderizar contenido según tab activo ──
+    if tab_activa == 'mis_gestiones':
         _render_mis_gestiones(df_act, df_users, df_ordenes)
-    elif tab_idx == 1:
+    elif tab_activa == 'kanban':
         _render_kanban(df_act, df_users, df_ordenes, df_solicitudes)
-    elif tab_idx == 2:
+    elif tab_activa == 'buzon':
         _render_buzon(df_act, df_users, df_ordenes, df_solicitudes)
-    elif tab_idx == 3:
+    elif tab_activa == 'calidad':
         _render_calidad(df_act, df_users)
-    elif tab_idx == 4:
+    elif tab_activa == 'gestion':
         _render_gestion_global(df_act, df_users, df_ordenes)
-    elif tab_idx == 5:
+    elif tab_activa == 'crear':
         _render_crear_directa(df_act, df_users, df_ordenes)
-    elif tab_idx == 6:
+    elif tab_activa == 'preventivos':
         _render_preventivos(df_act, df_users)
 
 
