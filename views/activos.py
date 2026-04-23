@@ -458,7 +458,14 @@ def _render_nuevo(df_act):
     st.markdown("### Registrar Nuevo Activo")
     draft = st.session_state.get('draft_data', {})
 
-    st.info("📍 Paso 1: Definir Ubicación")
+    def get_idx(opts, val):
+        try:
+            return list(opts).index(val)
+        except (ValueError, TypeError):
+            return 0
+
+    # ── PASO 1: Ubicación ──
+    st.markdown("##### 📍 Ubicación")
     c_loc1, c_loc2 = st.columns(2)
     keys_areas = sorted(AREAS_DATA.keys())
     idx_area_def = keys_areas.index(draft.get('area')) if draft.get('area') in keys_areas else 0
@@ -472,17 +479,35 @@ def _render_nuevo(df_act):
     idx_sub_def = sub_areas.index(d_sub_prev) if d_sub_prev in sub_areas else 0
     sub_area = c_loc2.selectbox("Sub-área", sub_areas, index=idx_sub_def, key="new_asset_sub_out")
 
-    st.write("")
+    st.markdown("")
 
-    # ── Fotografía: zona de drag-and-drop (fuera del form para feedback inmediato) ──
-    st.markdown("#### 📸 Fotografía (Obligatorio)")
+    # ── PASO 2: Datos del activo ──
+    st.markdown("##### 📝 Datos del Activo")
+    c1, c2 = st.columns(2)
+    nom = c1.text_input("Nombre del Activo", value=draft.get('nombre', ''), key="new_asset_name")
+    d_det_prev = ""
+    if draft.get('ubicacion'):
+        parts = draft['ubicacion'].split('] ', 1)
+        if len(parts) > 1:
+            d_det_prev = parts[1]
+    ubic_detalle = c2.text_input("Ubicación Exacta / Detalle (Opcional)", value=d_det_prev, key="new_asset_detail")
+    cat = c1.selectbox("Categoría", CATEGORIAS_LIST, index=get_idx(CATEGORIAS_LIST, draft.get('categoria')), key="new_asset_cat")
 
-    # Preview de foto previa (draft)
+    st.markdown("---")
+
+    # ── PASO 3: Especificaciones ──
+    st.markdown("##### ⚙️ Especificaciones")
+    edited_df = st.data_editor(st.session_state.specs_data, num_rows="dynamic", use_container_width=True, key="new_asset_specs")
+
+    st.markdown("---")
+
+    # ── PASO 4: Fotografía (fuera del form para drag-and-drop) ──
+    st.markdown("##### 📸 Fotografía (Obligatorio)")
+
     if draft.get('foto_url'):
         st.image(draft['foto_url'], width=120, caption="Foto guardada (Draft)")
         st.caption("Arrastra una nueva imagen para reemplazarla, o deja la actual.")
 
-    # Zona de drop estilizada + file uploader
     st.markdown("""
     <div style="
         border: 2px dashed rgba(245,158,11,0.4);
@@ -510,43 +535,17 @@ def _render_nuevo(df_act):
         label_visibility="collapsed"
     )
 
-    # Guardar foto en draft en tiempo real (fuera del form)
     if foto_archivo is not None:
         st.session_state.draft_data['foto_bytes'] = foto_archivo.getvalue()
         st.image(foto_archivo, width=200, caption="✅ Imagen lista para guardar")
-        st.success("Foto cargada. Se guardará al enviar el formulario.")
+        st.success("Foto cargada correctamente.")
     elif draft.get('foto_bytes') is not None:
         st.image(draft['foto_bytes'], width=200, caption="Foto del draft")
 
     st.markdown("---")
 
-    with st.form("form_crear_activo", clear_on_submit=False):
-        st.markdown("📝 **Paso 2: Detalles del Activo**")
-        c1, c2 = st.columns(2)
-
-        def get_idx(opts, val):
-            try:
-                return list(opts).index(val)
-            except (ValueError, TypeError):
-                return 0
-
-        nom = c1.text_input("Nombre del Activo", value=draft.get('nombre', ''))
-        d_det_prev = ""
-        if draft.get('ubicacion'):
-            parts = draft['ubicacion'].split('] ', 1)
-            if len(parts) > 1:
-                d_det_prev = parts[1]
-        ubic_detalle = c2.text_input("Ubicación Exacta / Detalle (Opcional)", value=d_det_prev)
-        cat = c1.selectbox("Categoría", CATEGORIAS_LIST, index=get_idx(CATEGORIAS_LIST, draft.get('categoria')))
-
-        st.markdown("---")
-        st.markdown("#### ⚙️ Especificaciones")
-        edited_df = st.data_editor(st.session_state.specs_data, num_rows="dynamic", use_container_width=True)
-        st.markdown("<br>", unsafe_allow_html=True)
-        enviado = st.form_submit_button("💾 GUARDAR ACTIVO", type="primary", use_container_width=True)
-
-    if enviado:
-        # Usar foto del uploader o del draft
+    # ── Botón de guardar ──
+    if st.button("💾 GUARDAR ACTIVO", type="primary", use_container_width=True, key="btn_save_new_asset"):
         foto_final = foto_archivo
         if foto_final is None and draft.get('foto_bytes') is not None:
             foto_final = io.BytesIO(draft['foto_bytes'])
