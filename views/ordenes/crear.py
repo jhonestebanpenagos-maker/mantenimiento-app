@@ -11,28 +11,34 @@ from .helpers import generar_adjunto_html, render_archivo_unificado
 from utils.uploads import subir_archivo_generico
 
 def render_crear_directa(df_act, df_users, df_ordenes):
-    st.info("Creación rápida: Los campos se limpiarán automáticamente al guardar.")
     if not df_act.empty:
         act_dict = dict(zip(df_act['nombre'], df_act['id']))
         nom_sugerido = render_sugerencia_tecnico(df_ordenes, df_users)
 
+        # ── Contador para forzar keys únicos tras cada creación ──
+        if '_crear_form_counter' not in st.session_state:
+            st.session_state['_crear_form_counter'] = 0
+        fc = st.session_state['_crear_form_counter']
+
+        st.info("Creación rápida: Los campos se limpian automáticamente al guardar.")
+
         # ── Paso 1: Activo + Tipo + Criticidad ──
-        sel_act_dir = st.selectbox("Activo", sorted(act_dict.keys()), key="crear_dir_activo")
+        sel_act_dir = st.selectbox("Activo", sorted(act_dict.keys()), key=f"crear_dir_activo_{fc}")
         c1, c2 = st.columns(2)
-        tipo_d = c1.selectbox("Tipo", ["Correctivo", "Preventivo", "Predictivo", "Mejora"], key="crear_dir_tipo")
-        crit_d = c2.select_slider("Criticidad", ["Baja", "Media", "Alta", "Crítica"], key="crear_dir_crit")
+        tipo_d = c1.selectbox("Tipo", ["Correctivo", "Preventivo", "Predictivo", "Mejora"], key=f"crear_dir_tipo_{fc}")
+        crit_d = c2.select_slider("Criticidad", ["Baja", "Media", "Alta", "Crítica"], key=f"crear_dir_crit_{fc}")
 
         # ── Paso 2: Archivo/Correo (con callback para parseo en vivo) ──
-        archivo_inicial, email_datos = render_archivo_unificado("crear_directa")
+        archivo_inicial, email_datos = render_archivo_unificado(f"crear_directa_{fc}")
 
         # ── Inicializar descripción desde correo parseado ──
         email_desc = st.session_state.pop('_email_desc_default', '')
         if email_desc:
-            st.session_state['desc_crear_directa'] = email_desc
+            st.session_state[f'desc_crear_directa_{fc}'] = email_desc
 
         # ── Paso 3: Descripción + Técnico + Submit (en form) ──
         with st.form("ot_directa"):
-            desc_d = st.text_area("Descripción", key="desc_crear_directa")
+            desc_d = st.text_area("Descripción", key=f"desc_crear_directa_{fc}")
 
             tech_opts_d = {u['nombre']: u['id'] for i, u in df_users.iterrows()}
             idx_sug = 0
@@ -55,23 +61,8 @@ def render_crear_directa(df_act, df_users, df_ordenes):
                         })
                         if res_orden.data:
                             nuevo_id_ot = res_orden.data[0]['id']
-                            st.success(f"✅ Orden #{nuevo_id_ot} creada correctamente.")
-                            if archivo_inicial:
-                                with st.spinner("Subiendo archivo adjunto..."):
-                                    url_doc = subir_archivo_generico(archivo_inicial)
-                                    if url_doc:
-                                        msg = "📧 Correo adjunto." if email_datos else "📎 Documento adjunto."
-                                        db_insert("bitacora", {
-                                            "orden_id": nuevo_id_ot,
-                                            "usuario_text": st.session_state.get('usuario', ''),
-                                            "mensaje": msg, "archivo_url": url_doc,
-                                            "fecha": datetime.now().isoformat()
-                                        })
-                            # Limpiar TODOS los campos del formulario
-                            for k in ['desc_crear_directa', '_parsed_email_crear_directa',
-                                      '_archivo_unif_crear_directa',
-                                      'crear_dir_activo', 'crear_dir_tipo', 'crear_dir_crit']:
-                                st.session_state.pop(k, None)
+                            # Incrementar contador → nuevos keys → campos vacíos
+                            st.session_state['_crear_form_counter'] = fc + 1
                             agregar_notificacion('success', f'Orden #{nuevo_id_ot} creada. Puedes crear otra.')
                             time.sleep(0.3)
                             st.rerun()
