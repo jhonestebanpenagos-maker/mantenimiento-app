@@ -4,6 +4,7 @@ import time
 import io
 import html as html_module
 from datetime import datetime
+from PIL import Image
 from utils.db import supabase, run_query, render_paginacion
 from utils.helpers import mostrar_notificaciones, agregar_notificacion, registrar_accion_critica, error_amigable
 from utils.uploads import subir_imagen, mostrar_imagen_cloudinary
@@ -512,7 +513,9 @@ def _render_nuevo(df_act):
         st.session_state.draft_data['foto_bytes'] = foto_archivo.getvalue()
         try:
             foto_archivo.seek(0)
-            st.image(foto_archivo, width=200, caption="✅ Imagen lista para guardar")
+
+            img = Image.open(foto_archivo)
+            st.image(img, width=200, caption="✅ Imagen lista para guardar")
         except Exception:
             st.image(foto_archivo.getvalue(), width=200, caption="✅ Imagen lista para guardar")
         st.success("Foto cargada correctamente.")
@@ -692,13 +695,11 @@ def _render_edit(df_act):
             if nueva_foto_temp:
                 try:
                     nueva_foto_temp.seek(0)
-                    st.image(nueva_foto_temp, use_container_width=True, caption="Nueva imagen (Sin guardar)")
+        
+                    img = Image.open(nueva_foto_temp)
+                    st.image(img, use_container_width=True, caption="Nueva imagen (Sin guardar)")
                 except Exception:
-                    try:
-                        nueva_foto_temp.seek(0)
-                        st.image(nueva_foto_temp.read(), use_container_width=True, caption="Nueva imagen (Sin guardar)")
-                    except Exception:
-                        st.warning("⚠️ No se pudo previsualizar, pero la foto se guardará correctamente.")
+                    st.warning("⚠️ No se pudo previsualizar, pero la foto se guardará correctamente.")
             else:
                 url_db = dat.get('foto_url')
                 if url_db and isinstance(url_db, str) and len(url_db.strip()) > 10:
