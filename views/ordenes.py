@@ -346,19 +346,26 @@ def _render_crear_para_activo(df_act, df_users, df_ordenes):
 
     st.markdown("---")
 
-    # ── Archivo/correo unificado (fuera del form) ──
-    archivo_inicial, email_datos = _render_archivo_unificado(f"crear_para_activo_{activo_id}")
+    # ── Inicializar descripción desde correo parseado ──
+    desc_key = f'desc_para_activo_{activo_id}'
+    email_desc = st.session_state.pop('_email_desc_default', '')
+    if email_desc and not st.session_state.get(desc_key):
+        st.session_state[desc_key] = email_desc
 
     nom_sugerido = render_sugerencia_tecnico(df_ordenes, df_users)
-    desc_default = st.session_state.pop('_email_desc_default', '')
 
-    with st.form("ot_para_activo", clear_on_submit=True):
+    # ── Archivo/correo (fuera del form para parseo en vivo) ──
+    archivo_inicial, email_datos = _render_archivo_unificado(f"crear_para_activo_{activo_id}")
+
+    # ── Formulario principal ──
+    with st.form("ot_para_activo"):
         st.info(f"📍 **Activo:** {nombre_activo} (ID: {activo_id})")
 
         c1, c2 = st.columns(2)
         tipo_d = c1.selectbox("Tipo", ["Correctivo", "Preventivo", "Predictivo", "Mejora"])
         crit_d = c2.select_slider("Criticidad", ["Baja", "Media", "Alta", "Crítica"])
-        desc_d = st.text_area("Descripción del problema o tarea", value=desc_default)
+
+        desc_d = st.text_area("Descripción del problema o tarea", key=desc_key)
 
         tech_opts_d = {u['nombre']: u['id'] for _, u in df_users.iterrows()} if not df_users.empty else {}
         idx_sug = 0
@@ -367,14 +374,15 @@ def _render_crear_para_activo(df_act, df_users, df_ordenes):
         asig_d = st.selectbox("Asignar Técnico", list(tech_opts_d.keys()), index=idx_sug if tech_opts_d else 0) if tech_opts_d else None
 
         if st.form_submit_button("✅ CREAR ORDEN", type="primary", use_container_width=True):
-            if not desc_d:
+            desc_val = (desc_d or "").strip()
+            if not desc_val:
                 st.error("La descripción es obligatoria.")
             elif not asig_d:
                 st.error("Debe asignar un técnico.")
             else:
                 try:
                     res = db_insert("ordenes", {
-                        "activo_id": int(activo_id), "descripcion": desc_d,
+                        "activo_id": int(activo_id), "descripcion": desc_val,
                         "criticidad": crit_d, "tipo_mantenimiento": tipo_d,
                         "estado": "Abierta", "tecnico_asignado": str(tech_opts_d[asig_d]),
                         "fecha_creacion": datetime.now().isoformat()
@@ -392,6 +400,7 @@ def _render_crear_para_activo(df_act, df_users, df_ordenes):
                                         "mensaje": msg_adj, "archivo_url": url_doc,
                                         "fecha": datetime.now().isoformat()
                                     })
+                        st.session_state.pop(desc_key, None)
                         time.sleep(1)
                         navegar_a("Ordenes de Trabajo", jump_target="orden", jump_id=nuevo_id)
                 except Exception as e:
@@ -1205,16 +1214,22 @@ def _render_crear_directa(df_act, df_users, df_ordenes):
         act_dict = dict(zip(df_act['nombre'], df_act['id']))
         nom_sugerido = render_sugerencia_tecnico(df_ordenes, df_users)
 
-        # ── Archivo/correo fuera del form (necesario para parseo en vivo) ──
-        archivo_inicial, email_datos = _render_archivo_unificado("crear_directa")
-        desc_default = st.session_state.pop('_email_desc_default', '')
+        # ── Inicializar descripción desde correo parseado ──
+        email_desc = st.session_state.pop('_email_desc_default', '')
+        if email_desc and not st.session_state.get('desc_crear_directa'):
+            st.session_state['desc_crear_directa'] = email_desc
 
-        with st.form("ot_directa", clear_on_submit=True):
+        # ── Archivo/correo (fuera del form para parseo en vivo) ──
+        archivo_inicial, email_datos = _render_archivo_unificado("crear_directa")
+
+        # ── Formulario ──
+        with st.form("ot_directa"):
             sel_act_dir = st.selectbox("Activo", sorted(act_dict.keys()))
             c1, c2 = st.columns(2)
             tipo_d = c1.selectbox("Tipo", ["Correctivo", "Preventivo", "Predictivo", "Mejora"])
             crit_d = c2.select_slider("Criticidad", ["Baja", "Media", "Alta", "Crítica"])
-            desc_d = st.text_area("Descripción", value=desc_default)
+
+            desc_d = st.text_area("Descripción", key="desc_crear_directa")
 
             tech_opts_d = {u['nombre']: u['id'] for i, u in df_users.iterrows()}
             idx_sug = 0
@@ -1224,12 +1239,13 @@ def _render_crear_directa(df_act, df_users, df_ordenes):
                                    help="🤖 Preseleccionado automáticamente por menor carga")
 
             if st.form_submit_button("CREAR ORDEN", type="primary", use_container_width=True):
-                if not desc_d:
+                desc_val = (desc_d or "").strip()
+                if not desc_val:
                     st.error("La descripción es obligatoria.")
                 else:
                     try:
                         res_orden = db_insert("ordenes", {
-                            "activo_id": int(act_dict[sel_act_dir]), "descripcion": desc_d,
+                            "activo_id": int(act_dict[sel_act_dir]), "descripcion": desc_val,
                             "criticidad": crit_d, "tipo_mantenimiento": tipo_d,
                             "estado": "Abierta", "tecnico_asignado": str(tech_opts_d[asig_d]),
                             "fecha_creacion": datetime.now().isoformat()
@@ -1250,6 +1266,8 @@ def _render_crear_directa(df_act, df_users, df_ordenes):
                                         st.toast("Documento vinculado a la bitácora")
                                     else:
                                         st.error("La orden se creó, pero falló la subida del archivo.")
+                            # Limpiar session state
+                            st.session_state.pop('desc_crear_directa', None)
                             time.sleep(1.5)
                             st.rerun()
                         else:
