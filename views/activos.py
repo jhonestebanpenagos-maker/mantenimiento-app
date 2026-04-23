@@ -6,7 +6,7 @@ import base64
 import html as html_module
 from datetime import datetime
 from PIL import Image
-from utils.db import supabase, run_query, render_paginacion
+from utils.db import supabase, run_query, render_paginacion, db_insert, db_update, db_delete, invalidate_cache
 from utils.helpers import mostrar_notificaciones, agregar_notificacion, registrar_accion_critica, error_amigable
 from utils.uploads import subir_imagen, mostrar_imagen_cloudinary
 from utils.helpers import navegar_a
@@ -609,15 +609,14 @@ def _guardar_nuevo_activo(nom, cat, area_principal, sub_area, ubic_detalle, foto
             if row["Componente/Dato"] and row["Valor"]
         }
         ubic_final = f"[{sub_area}] {ubic_detalle}" if ubic_detalle else f"[{sub_area}]"
-        res = supabase.table("activos").insert({
+        res = db_insert("activos", {
             "nombre": nom, "area": area_principal, "ubicacion": ubic_final,
             "categoria": cat, "foto_url": final_url, "detalles": detalles_json
-        }).execute()
+        })
         if res.data:
             nid = res.data[0]['id']
             qr = generar_qr_activo(nid, nom)
-            supabase.table("activos").update({"qr_url": qr}).eq("id", nid).execute()
-            st.cache_data.clear()
+            db_update("activos", {"qr_url": qr}, "id", nid)
             st.session_state.draft_data = {}
             st.session_state.activo_creado_info = {
                 "id": nid, "nombre": nom, "area": area_principal,
@@ -685,8 +684,7 @@ def _render_activo_creado():
             st.rerun()
     with b2:
         if st.button("✏️ EDITAR (CORREGIR)", use_container_width=True):
-            supabase.table("activos").delete().eq("id", info['id']).execute()
-            st.cache_data.clear()
+            db_delete("activos", "id", info['id'])
             st.session_state.draft_data = info
             if info['detalles']:
                 st.session_state.specs_data = pd.DataFrame(
@@ -696,8 +694,7 @@ def _render_activo_creado():
             st.rerun()
     with b3:
         if st.button("🗑️ DESHACER", type="secondary", use_container_width=True):
-            supabase.table("activos").delete().eq("id", info['id']).execute()
-            st.cache_data.clear()
+            db_delete("activos", "id", info['id'])
             del st.session_state['activo_creado_info']
             st.session_state.specs_data = pd.DataFrame(columns=["Componente/Dato", "Valor"])
             st.session_state.draft_data = {}
@@ -832,11 +829,10 @@ def _guardar_edicion_activo(dat, edit_nom, edit_area, edit_sub, edit_det, edit_c
                 for i, row in edited_specs.iterrows()
                 if row["Componente/Dato"] and row["Valor"]
             }
-            supabase.table("activos").update({
+            db_update("activos", {
                 "nombre": edit_nom, "area": edit_area, "ubicacion": final_edit_ubic,
                 "categoria": edit_cat, "foto_url": final_edit_url, "detalles": final_specs_json
-            }).eq("id", dat['id']).execute()
-            st.cache_data.clear()
+            }, "id", dat['id'])
             agregar_notificacion("success", f"Activo '{edit_nom}' actualizado correctamente")
             time.sleep(1.5)
             st.rerun()
@@ -906,8 +902,8 @@ def _render_zona_peligro_activo(dat, id_suffix):
                 try:
                     if ids_historial:
                         supabase.table("ordenes").delete().in_("id", ids_historial).execute()
-                    supabase.table("activos").delete().eq("id", dat['id']).execute()
-                    st.cache_data.clear()
+                        invalidate_cache("ordenes")
+                    db_delete("activos", "id", dat['id'])
                     registrar_accion_critica("ELIMINAR_ACTIVO", st.session_state.get('usuario', '?'),
                                              f"Activo: {dat['nombre']} (ID: {dat['id']}) — {len(ids_historial)} OTs eliminadas")
                     agregar_notificacion("delete", "Activo eliminado correctamente.")
