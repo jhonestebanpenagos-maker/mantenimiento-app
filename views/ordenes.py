@@ -346,12 +346,10 @@ def _render_crear_para_activo(df_act, df_users, df_ordenes):
 
     st.markdown("---")
 
-    # ── Parseo automático de correo ──
-    _render_email_uploader(f"crear_para_activo_{activo_id}")
+    # ── Archivo/correo unificado (fuera del form) ──
+    archivo_inicial, email_datos = _render_archivo_unificado(f"crear_para_activo_{activo_id}")
 
     nom_sugerido = render_sugerencia_tecnico(df_ordenes, df_users)
-
-    # Descripción pre-rellenada si se parseó un correo
     desc_default = st.session_state.pop('_email_desc_default', '')
 
     with st.form("ot_para_activo", clear_on_submit=True):
@@ -384,6 +382,16 @@ def _render_crear_para_activo(df_act, df_users, df_ordenes):
                     if res.data:
                         nuevo_id = res.data[0]['id']
                         st.toast(f"✅ Orden #{nuevo_id} creada para {nombre_activo}.")
+                        if archivo_inicial:
+                            with st.spinner("Subiendo archivo adjunto..."):
+                                url_doc = subir_archivo_generico(archivo_inicial)
+                                if url_doc:
+                                    msg_adj = "📧 Correo electrónico adjunto." if email_datos else "📎 Documento adjunto."
+                                    db_insert("bitacora", {
+                                        "orden_id": nuevo_id, "usuario_text": st.session_state.get('usuario', ''),
+                                        "mensaje": msg_adj, "archivo_url": url_doc,
+                                        "fecha": datetime.now().isoformat()
+                                    })
                         time.sleep(1)
                         navegar_a("Ordenes de Trabajo", jump_target="orden", jump_id=nuevo_id)
                 except Exception as e:
@@ -1134,47 +1142,58 @@ def _render_bitacora(id_orden_selec):
 
 
 # ==============================================================================
-# 📧 PARSEO AUTOMÁTICO DE CORREO
+# 📧 COMPONENTE UNIFICADO: ARCHIVO / CORREO
 # ==============================================================================
-def _render_email_uploader(context_key: str):
+def _render_archivo_unificado(context_key: str):
     """
-    Componente reutilizable: subir correo .msg/.eml y parsearlo automáticamente.
-    Guarda la descripción generada en session_state['_email_desc_default'].
+    Un solo uploader que detecta si es correo (.msg/.eml) o archivo normal.
+    - Si es correo: parsea y rellena la descripción automáticamente
+    - Si es archivo normal: lo guarda para subir como adjunto después
     """
-    st.markdown("##### 📧 Cargar correo electrónico (opcional)")
-    st.caption("Arrastra un archivo .msg o .eml para extraer datos automáticamente")
-
-    email_file = st.file_uploader(
-        "Correo electrónico",
-        type=["msg", "eml"],
-        key=f"_email_upload_{context_key}",
-        label_visibility="collapsed",
+    archivo = st.file_uploader(
+        "📎 Adjunto (PDF, Excel, Foto, Correo .msg/.eml)",
+        type=["pdf", "docx", "xlsx", "jpg", "png", "msg", "eml"],
+        key=f"_archivo_unif_{context_key}",
     )
 
-    if email_file is not None:
-        # Parsear solo si no lo hemos procesado ya
-        cache_key = f'_email_parsed_{context_key}'
-        nombre_key = f'_email_parsed_name_{context_key}'
+    if archivo is None:
+        # Limpiar estado previo si el usuario quitó el archivo
+        st.session_state.pop(f'_parsed_email_{context_key}', None)
+        st.session_state.pop('_email_desc_default', None)
+        return None, None
 
-        if st.session_state.get(nombre_key) != email_file.name:
+    nombre = archivo.name.lower()
+    cache_key = f'_parsed_email_{context_key}'
+    nombre_key = f'_parsed_name_{context_key}'
+
+    # ── Es un correo ──
+    if nombre.endswith(('.msg', '.eml')):
+        # Parsear solo una vez por archivo
+        if st.session_state.get(nombre_key) != archivo.name:
             with st.spinner("📧 Parseando correo..."):
-                datos = parse_email_file(email_file)
+                datos = parse_email_file(archivo)
                 if datos:
                     st.session_state[cache_key] = datos
-                    st.session_state[nombre_key] = email_file.name
+                    st.session_state[nombre_key] = archivo.name
                     st.session_state['_email_desc_default'] = construir_descripcion_email(datos)
-                    st.toast("✅ Correo parseado — descripción rellenada automáticamente")
+                    st.toast("📧 Correo parseado — descripción rellenada")
                 else:
-                    st.warning("⚠️ No se pudo parsear el archivo. Asegúrate de que sea un .msg o .eml válido.")
+                    st.warning("⚠️ No se pudo parsear el correo")
                     st.session_state[cache_key] = None
-                    st.session_state[nombre_key] = email_file.name
+                    st.session_state[nombre_key] = archivo.name
 
-        # Mostrar preview si se parseó correctamente
         datos = st.session_state.get(cache_key)
         if datos:
             render_email_preview(datos)
+        return archivo, datos  # Devolver el archivo para subirlo como adjunto también
 
-    st.markdown("---")
+    # ── Es un archivo normal ──
+    else:
+        st.session_state.pop(cache_key, None)
+        st.session_state.pop(nombre_key, None)
+        st.session_state.pop('_email_desc_default', None)
+        st.caption(f"📄 {archivo.name} — listo para adjuntar")
+        return archivo, None
 
 
 # ==============================================================================
@@ -1182,15 +1201,12 @@ def _render_email_uploader(context_key: str):
 # ==============================================================================
 def _render_crear_directa(df_act, df_users, df_ordenes):
     st.info("Creación rápida: Los campos se limpiarán automáticamente al guardar.")
-
-    # ── Parseo automático de correo (fuera del form) ──
-    _render_email_uploader("crear_directa")
-
     if not df_act.empty:
         act_dict = dict(zip(df_act['nombre'], df_act['id']))
         nom_sugerido = render_sugerencia_tecnico(df_ordenes, df_users)
 
-        # Descripción pre-rellenada si se parseó un correo
+        # ── Archivo/correo fuera del form (necesario para parseo en vivo) ──
+        archivo_inicial, email_datos = _render_archivo_unificado("crear_directa")
         desc_default = st.session_state.pop('_email_desc_default', '')
 
         with st.form("ot_directa", clear_on_submit=True):
@@ -1206,12 +1222,6 @@ def _render_crear_directa(df_act, df_users, df_ordenes):
                 idx_sug = list(tech_opts_d.keys()).index(nom_sugerido)
             asig_d = st.selectbox("Asignar Técnico", list(tech_opts_d.keys()), index=idx_sug,
                                    help="🤖 Preseleccionado automáticamente por menor carga")
-
-            st.markdown("---")
-            st.markdown("##### 📎 Adjuntos Iniciales")
-            archivo_inicial = st.file_uploader("Soporte (PDF, Excel, Foto, Correo)",
-                                                type=["pdf", "docx", "xlsx", "jpg", "png", "msg", "eml"])
-            st.markdown("<br>", unsafe_allow_html=True)
 
             if st.form_submit_button("CREAR ORDEN", type="primary", use_container_width=True):
                 if not desc_d:
@@ -1231,9 +1241,10 @@ def _render_crear_directa(df_act, df_users, df_ordenes):
                                 with st.spinner("Subiendo archivo adjunto..."):
                                     url_doc = subir_archivo_generico(archivo_inicial)
                                     if url_doc:
+                                        msg_adjunto = "📧 Correo electrónico adjunto al crear la orden." if email_datos else "📎 Documento inicial adjunto al crear la orden."
                                         db_insert("bitacora", {
                                             "orden_id": nuevo_id_ot, "usuario_text": st.session_state.get('usuario', ''),
-                                            "mensaje": "📎 Documento inicial adjunto al crear la orden.",
+                                            "mensaje": msg_adjunto,
                                             "archivo_url": url_doc, "fecha": datetime.now().isoformat()
                                         })
                                         st.toast("Documento vinculado a la bitácora")
