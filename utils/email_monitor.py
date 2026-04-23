@@ -402,13 +402,15 @@ password = "xxxx xxxx xxxx xxxx"
             """)
 
             # ── Cuerpo ──
-            with st.expander("📄 Ver contenido del correo"):
-                st.text_area(
-                    "Contenido", value=correo['cuerpo'][:1000],
-                    height=150, disabled=True,
-                    key=f"correo_body_{idx}",
-                    label_visibility="collapsed"
-                )
+            if correo['cuerpo']:
+                mostrar_cuerpo = st.checkbox("📄 Ver contenido del correo", key=f"ver_cuerpo_{idx}")
+                if mostrar_cuerpo:
+                    st.text_area(
+                        "Contenido", value=correo['cuerpo'][:1000],
+                        height=150, disabled=True,
+                        key=f"correo_body_{idx}",
+                        label_visibility="collapsed"
+                    )
 
             st.markdown("---")
 
