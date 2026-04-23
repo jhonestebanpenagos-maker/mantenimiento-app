@@ -6,7 +6,7 @@ import html as html_module
 from datetime import datetime
 from utils.db import supabase, run_query, render_paginacion
 from utils.helpers import mostrar_notificaciones, agregar_notificacion, registrar_accion_critica, error_amigable
-from utils.uploads import subir_imagen
+from utils.uploads import subir_imagen, mostrar_imagen_cloudinary
 from utils.qr import generar_qr_activo
 from utils.catalogos import AREAS_DATA, CATEGORIAS_ACTIVOS
 from pdf_utils import generar_hoja_vida_pdf
@@ -177,9 +177,7 @@ def _render_busqueda_rapida():
                     with cols[i % 4]:
                         foto = a.get('foto_url', '')
                         if foto and isinstance(foto, str) and len(foto) > 10:
-                            try:
-                                st.image(foto, use_container_width=True)
-                            except Exception:
+                            if not mostrar_imagen_cloudinary(foto, use_container_width=True):
                                 st.markdown("🔧", unsafe_allow_html=True)
                         else:
                             st.markdown("<div style='text-align:center;font-size:2rem;padding:15px;background:#1F2937;border-radius:6px;'>🔧</div>", unsafe_allow_html=True)
@@ -268,9 +266,7 @@ def _render_jerarquia(df_act):
                             col_foto, col_info = st.columns([1, 4])
                             with col_foto:
                                 if foto and isinstance(foto, str) and len(foto) > 10:
-                                    try:
-                                        st.image(foto, use_container_width=True)
-                                    except Exception:
+                                    if not mostrar_imagen_cloudinary(foto, use_container_width=True):
                                         st.caption("📷")
                                 else:
                                     st.markdown("<div style='text-align:center;font-size:2rem;padding:20px;'>🔧</div>", unsafe_allow_html=True)
@@ -332,9 +328,7 @@ def _render_ficha_activo(activo):
     with col_foto:
         url_foto = activo.get('foto_url')
         if url_foto and isinstance(url_foto, str) and len(url_foto) > 10:
-            try:
-                st.image(url_foto, use_container_width=True, caption="Fotografía")
-            except Exception:
+            if not mostrar_imagen_cloudinary(url_foto, use_container_width=True, caption="Fotografía"):
                 st.info("📷 Foto no disponible")
         else:
             st.markdown("<div style='text-align:center;font-size:4rem;padding:40px;background:#1F2937;border-radius:10px;'>🔧</div>", unsafe_allow_html=True)
@@ -505,7 +499,7 @@ def _render_nuevo(df_act):
     st.markdown("##### 📸 Fotografía (Obligatorio)")
 
     if draft.get('foto_url'):
-        st.image(draft['foto_url'], width=120, caption="Foto guardada (Draft)")
+        mostrar_imagen_cloudinary(draft['foto_url'], width=120, caption="Foto guardada (Draft)")
         st.caption("Sube una nueva imagen para reemplazarla, o deja la actual.")
 
     foto_archivo = st.file_uploader(
@@ -593,20 +587,23 @@ def _render_activo_creado():
         st.markdown("#### 🖼️ Foto")
         foto_nube = info.get('foto_url')
         foto_local = info.get('foto_bytes')
-        # Prioridad 1: URL de Cloudinary (ya subida, siempre funciona)
+        # Prioridad 1: URL de Cloudinary (con fallback a bytes)
         if foto_nube and isinstance(foto_nube, str) and len(foto_nube) > 10:
-            try:
-                st.image(foto_nube, use_container_width=True, caption="Fotografía")
-            except Exception as e:
-                st.warning("No se pudo cargar la imagen desde la nube.")
-                print(f"Error cargando imagen nube: {e}")
-        # Prioridad 2: Bytes locales como fallback
-        elif foto_local is not None and len(foto_local) > 0:
+            if not mostrar_imagen_cloudinary(foto_nube, use_container_width=True, caption="Fotografía"):
+                # Fallback a bytes locales
+                if foto_local and len(foto_local) > 0:
+                    try:
+                        st.image(io.BytesIO(foto_local), use_container_width=True, caption="Previsualización")
+                    except Exception:
+                        st.warning("No se pudo cargar la imagen.")
+                else:
+                    st.warning("No se pudo cargar la imagen.")
+        # Prioridad 2: Solo bytes locales
+        elif foto_local and len(foto_local) > 0:
             try:
                 st.image(io.BytesIO(foto_local), use_container_width=True, caption="Previsualización")
-            except Exception as e:
+            except Exception:
                 st.warning("No se pudo cargar la vista previa local.")
-                print(f"Error cargando preview local: {e}")
         else:
             st.info("ℹ️ Sin imagen disponible.")
     with c_datos:
@@ -692,12 +689,9 @@ def _render_edit(df_act):
                 st.image(nueva_foto_temp, use_container_width=True, caption="Nueva imagen (Sin guardar)")
             else:
                 url_db = dat.get('foto_url')
-                if pd.notna(url_db) and isinstance(url_db, str) and len(url_db.strip()) > 10:
-                    try:
-                        st.image(url_db, use_container_width=True, caption="Imagen actual")
-                    except Exception as e:
-                        st.error("Error al cargar la imagen desde la nube.")
-                        print(f"Error cargando imagen activo: {e}")
+                if url_db and isinstance(url_db, str) and len(url_db.strip()) > 10:
+                    if not mostrar_imagen_cloudinary(url_db, use_container_width=True, caption="Imagen actual"):
+                        st.warning("⚠️ No se pudo cargar la imagen.")
                 else:
                     st.info("Sin imagen asignada.")
         with col_f2:

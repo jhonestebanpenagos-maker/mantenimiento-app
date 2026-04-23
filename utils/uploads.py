@@ -1,8 +1,32 @@
 import streamlit as st
 import os
 import time
+import requests
 import cloudinary.uploader
 from utils.helpers import error_amigable
+
+
+# ==============================================================================
+# 🖼️ MOSTRAR IMAGEN DESDE CLOUDINARY
+# ==============================================================================
+def mostrar_imagen_cloudinary(url, **kwargs):
+    """Muestra una imagen de Cloudinary de forma robusta.
+    Intenta st.image(url) directo, y si falla descarga los bytes."""
+    if not url or not isinstance(url, str) or len(url.strip()) < 10:
+        return False
+    try:
+        st.image(url, **kwargs)
+        return True
+    except Exception:
+        pass
+    try:
+        resp = requests.get(url, timeout=10)
+        if resp.status_code == 200 and len(resp.content) > 100:
+            st.image(resp.content, **kwargs)
+            return True
+    except Exception:
+        pass
+    return False
 
 
 # ==============================================================================
