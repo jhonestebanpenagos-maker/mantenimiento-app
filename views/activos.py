@@ -704,7 +704,11 @@ def _render_edit(df_act):
                 url_db = dat.get('foto_url')
                 if url_db and isinstance(url_db, str) and len(url_db.strip()) > 10:
                     if not mostrar_imagen_cloudinary(url_db, use_container_width=True, caption="Imagen actual"):
-                        st.warning("⚠️ No se pudo cargar la imagen.")
+                        # Mostrar la URL para diagnóstico y un fallback visual
+                        st.warning("⚠️ No se pudo cargar la imagen desde Cloudinary.")
+                        with st.expander("🔍 Diagnóstico"):
+                            st.code(url_db, language="text")
+                            st.caption("Posibles causas: URL expirada, restricción de acceso, o problema de red.")
                 else:
                     st.info("Sin imagen asignada.")
         with col_f2:
