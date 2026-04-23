@@ -346,25 +346,26 @@ def _render_crear_para_activo(df_act, df_users, df_ordenes):
 
     st.markdown("---")
 
+    # ── Paso 1: Info del activo + Tipo + Criticidad ──
+    st.info(f"📍 **Activo:** {nombre_activo} (ID: {activo_id})")
+
+    c1, c2 = st.columns(2)
+    tipo_d = c1.selectbox("Tipo", ["Correctivo", "Preventivo", "Predictivo", "Mejora"], key=f"crear_pa_tipo_{activo_id}")
+    crit_d = c2.select_slider("Criticidad", ["Baja", "Media", "Alta", "Crítica"], key=f"crear_pa_crit_{activo_id}")
+
+    # ── Paso 2: Archivo/Correo (con callback para parseo en vivo) ──
+    archivo_inicial, email_datos = _render_archivo_unificado(f"crear_para_activo_{activo_id}")
+
     # ── Inicializar descripción desde correo parseado ──
     desc_key = f'desc_para_activo_{activo_id}'
     email_desc = st.session_state.pop('_email_desc_default', '')
-    if email_desc and not st.session_state.get(desc_key):
+    if email_desc:
         st.session_state[desc_key] = email_desc
 
     nom_sugerido = render_sugerencia_tecnico(df_ordenes, df_users)
 
-    # ── Archivo/correo (fuera del form para parseo en vivo) ──
-    archivo_inicial, email_datos = _render_archivo_unificado(f"crear_para_activo_{activo_id}")
-
-    # ── Formulario principal ──
+    # ── Paso 3: Descripción + Técnico + Submit (en form) ──
     with st.form("ot_para_activo"):
-        st.info(f"📍 **Activo:** {nombre_activo} (ID: {activo_id})")
-
-        c1, c2 = st.columns(2)
-        tipo_d = c1.selectbox("Tipo", ["Correctivo", "Preventivo", "Predictivo", "Mejora"])
-        crit_d = c2.select_slider("Criticidad", ["Baja", "Media", "Alta", "Crítica"])
-
         desc_d = st.text_area("Descripción del problema o tarea", key=desc_key)
 
         tech_opts_d = {u['nombre']: u['id'] for _, u in df_users.iterrows()} if not df_users.empty else {}
@@ -394,13 +395,15 @@ def _render_crear_para_activo(df_act, df_users, df_ordenes):
                             with st.spinner("Subiendo archivo adjunto..."):
                                 url_doc = subir_archivo_generico(archivo_inicial)
                                 if url_doc:
-                                    msg_adj = "📧 Correo electrónico adjunto." if email_datos else "📎 Documento adjunto."
+                                    msg = "📧 Correo adjunto." if email_datos else "📎 Documento adjunto."
                                     db_insert("bitacora", {
-                                        "orden_id": nuevo_id, "usuario_text": st.session_state.get('usuario', ''),
-                                        "mensaje": msg_adj, "archivo_url": url_doc,
+                                        "orden_id": nuevo_id,
+                                        "usuario_text": st.session_state.get('usuario', ''),
+                                        "mensaje": msg, "archivo_url": url_doc,
                                         "fecha": datetime.now().isoformat()
                                     })
-                        st.session_state.pop(desc_key, None)
+                        for k in [desc_key, f'_parsed_email_crear_para_activo_{activo_id}']:
+                            st.session_state.pop(k, None)
                         time.sleep(1)
                         navegar_a("Ordenes de Trabajo", jump_target="orden", jump_id=nuevo_id)
                 except Exception as e:
@@ -1151,56 +1154,58 @@ def _render_bitacora(id_orden_selec):
 
 
 # ==============================================================================
-# 📧 COMPONENTE UNIFICADO: ARCHIVO / CORREO
+# 📧 COMPONENTE UNIFICADO: ARCHIVO / CORREO (CON CALLBACK)
 # ==============================================================================
+def _parse_email_callback(context_key: str):
+    """Callback que se ejecuta al subir un archivo. Detecta si es correo y lo parsea."""
+    archivo = st.session_state.get(f'_archivo_unif_{context_key}')
+    if archivo is None:
+        st.session_state.pop(f'_parsed_email_{context_key}', None)
+        return
+
+    nombre = archivo.name.lower()
+    cache_key = f'_parsed_email_{context_key}'
+
+    if nombre.endswith(('.msg', '.eml')):
+        datos = parse_email_file(archivo)
+        if datos:
+            st.session_state[cache_key] = datos
+            st.session_state['_email_desc_default'] = construir_descripcion_email(datos)
+        else:
+            st.session_state.pop(cache_key, None)
+    else:
+        st.session_state.pop(cache_key, None)
+
+
 def _render_archivo_unificado(context_key: str):
     """
     Un solo uploader que detecta si es correo (.msg/.eml) o archivo normal.
-    - Si es correo: parsea y rellena la descripción automáticamente
-    - Si es archivo normal: lo guarda para subir como adjunto después
+    Usa on_change para parsear emails inmediatamente al subir.
     """
-    archivo = st.file_uploader(
+    st.file_uploader(
         "📎 Adjunto (PDF, Excel, Foto, Correo .msg/.eml)",
         type=["pdf", "docx", "xlsx", "jpg", "png", "msg", "eml"],
         key=f"_archivo_unif_{context_key}",
+        on_change=_parse_email_callback,
+        args=(context_key,),
     )
 
+    archivo = st.session_state.get(f'_archivo_unif_{context_key}')
     if archivo is None:
-        # Limpiar estado previo si el usuario quitó el archivo
-        st.session_state.pop(f'_parsed_email_{context_key}', None)
-        st.session_state.pop('_email_desc_default', None)
         return None, None
 
     nombre = archivo.name.lower()
     cache_key = f'_parsed_email_{context_key}'
-    nombre_key = f'_parsed_name_{context_key}'
 
-    # ── Es un correo ──
+    # ── Es un correo parseado ──
     if nombre.endswith(('.msg', '.eml')):
-        # Parsear solo una vez por archivo
-        if st.session_state.get(nombre_key) != archivo.name:
-            with st.spinner("📧 Parseando correo..."):
-                datos = parse_email_file(archivo)
-                if datos:
-                    st.session_state[cache_key] = datos
-                    st.session_state[nombre_key] = archivo.name
-                    st.session_state['_email_desc_default'] = construir_descripcion_email(datos)
-                    st.toast("📧 Correo parseado — descripción rellenada")
-                else:
-                    st.warning("⚠️ No se pudo parsear el correo")
-                    st.session_state[cache_key] = None
-                    st.session_state[nombre_key] = archivo.name
-
         datos = st.session_state.get(cache_key)
         if datos:
             render_email_preview(datos)
-        return archivo, datos  # Devolver el archivo para subirlo como adjunto también
+        return archivo, datos
 
     # ── Es un archivo normal ──
     else:
-        st.session_state.pop(cache_key, None)
-        st.session_state.pop(nombre_key, None)
-        st.session_state.pop('_email_desc_default', None)
         st.caption(f"📄 {archivo.name} — listo para adjuntar")
         return archivo, None
 
@@ -1214,21 +1219,22 @@ def _render_crear_directa(df_act, df_users, df_ordenes):
         act_dict = dict(zip(df_act['nombre'], df_act['id']))
         nom_sugerido = render_sugerencia_tecnico(df_ordenes, df_users)
 
-        # ── Inicializar descripción desde correo parseado ──
-        email_desc = st.session_state.pop('_email_desc_default', '')
-        if email_desc and not st.session_state.get('desc_crear_directa'):
-            st.session_state['desc_crear_directa'] = email_desc
+        # ── Paso 1: Activo + Tipo + Criticidad ──
+        sel_act_dir = st.selectbox("Activo", sorted(act_dict.keys()), key="crear_dir_activo")
+        c1, c2 = st.columns(2)
+        tipo_d = c1.selectbox("Tipo", ["Correctivo", "Preventivo", "Predictivo", "Mejora"], key="crear_dir_tipo")
+        crit_d = c2.select_slider("Criticidad", ["Baja", "Media", "Alta", "Crítica"], key="crear_dir_crit")
 
-        # ── Archivo/correo (fuera del form para parseo en vivo) ──
+        # ── Paso 2: Archivo/Correo (con callback para parseo en vivo) ──
         archivo_inicial, email_datos = _render_archivo_unificado("crear_directa")
 
-        # ── Formulario ──
-        with st.form("ot_directa"):
-            sel_act_dir = st.selectbox("Activo", sorted(act_dict.keys()))
-            c1, c2 = st.columns(2)
-            tipo_d = c1.selectbox("Tipo", ["Correctivo", "Preventivo", "Predictivo", "Mejora"])
-            crit_d = c2.select_slider("Criticidad", ["Baja", "Media", "Alta", "Crítica"])
+        # ── Inicializar descripción desde correo parseado ──
+        email_desc = st.session_state.pop('_email_desc_default', '')
+        if email_desc:
+            st.session_state['desc_crear_directa'] = email_desc
 
+        # ── Paso 3: Descripción + Técnico + Submit (en form) ──
+        with st.form("ot_directa"):
             desc_d = st.text_area("Descripción", key="desc_crear_directa")
 
             tech_opts_d = {u['nombre']: u['id'] for i, u in df_users.iterrows()}
@@ -1257,17 +1263,17 @@ def _render_crear_directa(df_act, df_users, df_ordenes):
                                 with st.spinner("Subiendo archivo adjunto..."):
                                     url_doc = subir_archivo_generico(archivo_inicial)
                                     if url_doc:
-                                        msg_adjunto = "📧 Correo electrónico adjunto al crear la orden." if email_datos else "📎 Documento inicial adjunto al crear la orden."
+                                        msg = "📧 Correo adjunto." if email_datos else "📎 Documento adjunto."
                                         db_insert("bitacora", {
-                                            "orden_id": nuevo_id_ot, "usuario_text": st.session_state.get('usuario', ''),
-                                            "mensaje": msg_adjunto,
-                                            "archivo_url": url_doc, "fecha": datetime.now().isoformat()
+                                            "orden_id": nuevo_id_ot,
+                                            "usuario_text": st.session_state.get('usuario', ''),
+                                            "mensaje": msg, "archivo_url": url_doc,
+                                            "fecha": datetime.now().isoformat()
                                         })
                                         st.toast("Documento vinculado a la bitácora")
-                                    else:
-                                        st.error("La orden se creó, pero falló la subida del archivo.")
-                            # Limpiar session state
-                            st.session_state.pop('desc_crear_directa', None)
+                            # Limpiar
+                            for k in ['desc_crear_directa', '_parsed_email_crear_directa']:
+                                st.session_state.pop(k, None)
                             time.sleep(1.5)
                             st.rerun()
                         else:
