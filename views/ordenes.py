@@ -9,6 +9,7 @@ from datetime import datetime
 from utils.db import supabase, run_query, run_query_paginated, render_paginacion, db_insert, db_update, db_delete, invalidate_cache
 from utils.helpers import mostrar_notificaciones, agregar_notificacion, registrar_accion_critica, error_amigable, navegar_a
 from utils.nav_button import render_back_button
+from utils.email_parser import parse_email_file, construir_descripcion_email, render_email_preview
 from utils.uploads import subir_archivo_generico
 from utils.notifications import notificar_telegram
 from utils.charts import sugerir_tecnico, render_sugerencia_tecnico
@@ -345,7 +346,13 @@ def _render_crear_para_activo(df_act, df_users, df_ordenes):
 
     st.markdown("---")
 
+    # ── Parseo automático de correo ──
+    _render_email_uploader(f"crear_para_activo_{activo_id}")
+
     nom_sugerido = render_sugerencia_tecnico(df_ordenes, df_users)
+
+    # Descripción pre-rellenada si se parseó un correo
+    desc_default = st.session_state.pop('_email_desc_default', '')
 
     with st.form("ot_para_activo", clear_on_submit=True):
         st.info(f"📍 **Activo:** {nombre_activo} (ID: {activo_id})")
@@ -353,7 +360,7 @@ def _render_crear_para_activo(df_act, df_users, df_ordenes):
         c1, c2 = st.columns(2)
         tipo_d = c1.selectbox("Tipo", ["Correctivo", "Preventivo", "Predictivo", "Mejora"])
         crit_d = c2.select_slider("Criticidad", ["Baja", "Media", "Alta", "Crítica"])
-        desc_d = st.text_area("Descripción del problema o tarea")
+        desc_d = st.text_area("Descripción del problema o tarea", value=desc_default)
 
         tech_opts_d = {u['nombre']: u['id'] for _, u in df_users.iterrows()} if not df_users.empty else {}
         idx_sug = 0
@@ -1127,20 +1134,71 @@ def _render_bitacora(id_orden_selec):
 
 
 # ==============================================================================
+# 📧 PARSEO AUTOMÁTICO DE CORREO
+# ==============================================================================
+def _render_email_uploader(context_key: str):
+    """
+    Componente reutilizable: subir correo .msg/.eml y parsearlo automáticamente.
+    Guarda la descripción generada en session_state['_email_desc_default'].
+    """
+    st.markdown("##### 📧 Cargar correo electrónico (opcional)")
+    st.caption("Arrastra un archivo .msg o .eml para extraer datos automáticamente")
+
+    email_file = st.file_uploader(
+        "Correo electrónico",
+        type=["msg", "eml"],
+        key=f"_email_upload_{context_key}",
+        label_visibility="collapsed",
+    )
+
+    if email_file is not None:
+        # Parsear solo si no lo hemos procesado ya
+        cache_key = f'_email_parsed_{context_key}'
+        nombre_key = f'_email_parsed_name_{context_key}'
+
+        if st.session_state.get(nombre_key) != email_file.name:
+            with st.spinner("📧 Parseando correo..."):
+                datos = parse_email_file(email_file)
+                if datos:
+                    st.session_state[cache_key] = datos
+                    st.session_state[nombre_key] = email_file.name
+                    st.session_state['_email_desc_default'] = construir_descripcion_email(datos)
+                    st.toast("✅ Correo parseado — descripción rellenada automáticamente")
+                else:
+                    st.warning("⚠️ No se pudo parsear el archivo. Asegúrate de que sea un .msg o .eml válido.")
+                    st.session_state[cache_key] = None
+                    st.session_state[nombre_key] = email_file.name
+
+        # Mostrar preview si se parseó correctamente
+        datos = st.session_state.get(cache_key)
+        if datos:
+            render_email_preview(datos)
+
+    st.markdown("---")
+
+
+# ==============================================================================
 # ➕ CREAR DIRECTA
 # ==============================================================================
 def _render_crear_directa(df_act, df_users, df_ordenes):
     st.info("Creación rápida: Los campos se limpiarán automáticamente al guardar.")
+
+    # ── Parseo automático de correo (fuera del form) ──
+    _render_email_uploader("crear_directa")
+
     if not df_act.empty:
         act_dict = dict(zip(df_act['nombre'], df_act['id']))
         nom_sugerido = render_sugerencia_tecnico(df_ordenes, df_users)
+
+        # Descripción pre-rellenada si se parseó un correo
+        desc_default = st.session_state.pop('_email_desc_default', '')
 
         with st.form("ot_directa", clear_on_submit=True):
             sel_act_dir = st.selectbox("Activo", sorted(act_dict.keys()))
             c1, c2 = st.columns(2)
             tipo_d = c1.selectbox("Tipo", ["Correctivo", "Preventivo", "Predictivo", "Mejora"])
             crit_d = c2.select_slider("Criticidad", ["Baja", "Media", "Alta", "Crítica"])
-            desc_d = st.text_area("Descripción")
+            desc_d = st.text_area("Descripción", value=desc_default)
 
             tech_opts_d = {u['nombre']: u['id'] for i, u in df_users.iterrows()}
             idx_sug = 0
@@ -1152,7 +1210,7 @@ def _render_crear_directa(df_act, df_users, df_ordenes):
             st.markdown("---")
             st.markdown("##### 📎 Adjuntos Iniciales")
             archivo_inicial = st.file_uploader("Soporte (PDF, Excel, Foto, Correo)",
-                                                type=["pdf", "docx", "xlsx", "jpg", "png", "msg"])
+                                                type=["pdf", "docx", "xlsx", "jpg", "png", "msg", "eml"])
             st.markdown("<br>", unsafe_allow_html=True)
 
             if st.form_submit_button("CREAR ORDEN", type="primary", use_container_width=True):
