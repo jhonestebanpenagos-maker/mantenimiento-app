@@ -53,6 +53,10 @@ div[data-testid="stAlert"] { color: #F3F4F6 !important; }
 div[data-testid="stAlert"] p { color: #F3F4F6 !important; }
 .stAlert > div { color: #F3F4F6 !important; }
 
+/* Toast notifications — visibles en tema oscuro */
+div[data-testid="stToast"] { background-color: #1F2937 !important; border: 1px solid #374151 !important; color: #F3F4F6 !important; }
+div[data-testid="stToast"] p { color: #F3F4F6 !important; }
+
 /* Caption y texto secundario — blanco suave en vez de gris oscuro */
 .stCaption, [data-testid="stCaption"] { color: #D1D5DB !important; }
 

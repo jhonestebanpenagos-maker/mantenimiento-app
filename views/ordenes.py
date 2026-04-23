@@ -390,7 +390,7 @@ def _render_crear_para_activo(df_act, df_users, df_ordenes):
                     })
                     if res.data:
                         nuevo_id = res.data[0]['id']
-                        st.toast(f"✅ Orden #{nuevo_id} creada para {nombre_activo}.")
+                        st.success(f"✅ Orden #{nuevo_id} creada para {nombre_activo}.")
                         if archivo_inicial:
                             with st.spinner("Subiendo archivo adjunto..."):
                                 url_doc = subir_archivo_generico(archivo_inicial)
@@ -402,7 +402,8 @@ def _render_crear_para_activo(df_act, df_users, df_ordenes):
                                         "mensaje": msg, "archivo_url": url_doc,
                                         "fecha": datetime.now().isoformat()
                                     })
-                        for k in [desc_key, f'_parsed_email_crear_para_activo_{activo_id}']:
+                        for k in [desc_key, f'_parsed_email_crear_para_activo_{activo_id}',
+                                  f'_archivo_unif_crear_para_activo_{activo_id}']:
                             st.session_state.pop(k, None)
                         time.sleep(1)
                         navegar_a("Ordenes de Trabajo", jump_target="orden", jump_id=nuevo_id)
@@ -1258,7 +1259,7 @@ def _render_crear_directa(df_act, df_users, df_ordenes):
                         })
                         if res_orden.data:
                             nuevo_id_ot = res_orden.data[0]['id']
-                            st.toast(f"✅ Orden #{nuevo_id_ot} creada correctamente.")
+                            st.success(f"✅ Orden #{nuevo_id_ot} creada correctamente.")
                             if archivo_inicial:
                                 with st.spinner("Subiendo archivo adjunto..."):
                                     url_doc = subir_archivo_generico(archivo_inicial)
@@ -1270,11 +1271,11 @@ def _render_crear_directa(df_act, df_users, df_ordenes):
                                             "mensaje": msg, "archivo_url": url_doc,
                                             "fecha": datetime.now().isoformat()
                                         })
-                                        st.toast("Documento vinculado a la bitácora")
-                            # Limpiar
-                            for k in ['desc_crear_directa', '_parsed_email_crear_directa']:
+                            # Limpiar campos y recargar
+                            for k in ['desc_crear_directa', '_parsed_email_crear_directa',
+                                      '_archivo_unif_crear_directa']:
                                 st.session_state.pop(k, None)
-                            time.sleep(1.5)
+                            time.sleep(1)
                             st.rerun()
                         else:
                             st.error("No se pudo obtener el ID de la nueva orden.")
