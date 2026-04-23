@@ -14,18 +14,46 @@ def mostrar_imagen_cloudinary(url, **kwargs):
     Intenta st.image(url) directo, y si falla descarga los bytes."""
     if not url or not isinstance(url, str) or len(url.strip()) < 10:
         return False
+
+    url = url.strip()
+
+    # Intento 1: st.image directo con URL
     try:
         st.image(url, **kwargs)
         return True
-    except Exception:
-        pass
+    except Exception as e1:
+        print(f"[Cloudinary] st.image(url) falló: {e1}")
+
+    # Intento 2: descargar bytes con requests
     try:
-        resp = requests.get(url, timeout=10)
+        headers = {"User-Agent": "Mozilla/5.0 ORION-App/1.0"}
+        resp = requests.get(url, headers=headers, timeout=15, allow_redirects=True)
+        print(f"[Cloudinary] requests status={resp.status_code}, len={len(resp.content)}")
         if resp.status_code == 200 and len(resp.content) > 100:
             st.image(resp.content, **kwargs)
             return True
-    except Exception:
-        pass
+        else:
+            print(f"[Cloudinary] respuesta inválida: status={resp.status_code}")
+    except Exception as e2:
+        print(f"[Cloudinary] requests falló: {e2}")
+
+    # Intento 3: URL sin transformaciones (si las tiene)
+    if "/upload/" in url:
+        try:
+            # Quitar transformaciones: /upload/w_1000,q_auto/... → /upload/...
+            parts = url.split("/upload/", 1)
+            if len(parts) == 2 and "/" in parts[1]:
+                # Verificar si hay transformaciones antes del path
+                after_upload = parts[1]
+                # Las transformaciones están antes del version o del path
+                simple_url = f"{parts[0]}/upload/{after_upload}"
+                resp2 = requests.get(simple_url, headers=headers, timeout=10)
+                if resp2.status_code == 200 and len(resp2.content) > 100:
+                    st.image(resp2.content, **kwargs)
+                    return True
+        except Exception as e3:
+            print(f"[Cloudinary] intento 3 falló: {e3}")
+
     return False
 
 
@@ -41,13 +69,11 @@ def subir_imagen(archivo, carpeta="orion_evidencias"):
                 file_to_upload,
                 folder=carpeta,
                 resource_type="image",
-                transformation=[
-                    {'width': 1000, 'crop': "limit"},
-                    {'quality': "auto"},
-                    {'fetch_format': "auto"}
-                ]
+                access_mode="public"
             )
-            return respuesta.get("secure_url")
+            url = respuesta.get("secure_url") or respuesta.get("url")
+            print(f"[Cloudinary] Upload OK: {url}")
+            return url
         except Exception as e:
             error_amigable(e, "subir imagen")
             return None
