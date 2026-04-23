@@ -6,10 +6,12 @@ from utils.helpers import (
     check_open_orders, hashear_password, registrar_accion_critica,
     validar_politica_password, PASSWORD_MIN_LENGTH
 )
+from utils.nav_button import render_back_button
 
 
 def render():
     st.title("USUARIOS")
+    render_back_button()
     mostrar_notificaciones()
 
     tab_crear, tab_gestionar = st.tabs(["CREAR USUARIO", "GESTIONAR USUARIOS"])

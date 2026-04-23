@@ -8,6 +8,7 @@ import calendar as cal_lib
 from datetime import datetime
 from utils.db import supabase, run_query, run_query_paginated, render_paginacion, db_insert, db_update, db_delete, invalidate_cache
 from utils.helpers import mostrar_notificaciones, agregar_notificacion, registrar_accion_critica, error_amigable, navegar_a
+from utils.nav_button import render_back_button
 from utils.uploads import subir_archivo_generico
 from utils.notifications import notificar_telegram
 from utils.charts import sugerir_tecnico, render_sugerencia_tecnico
@@ -19,6 +20,7 @@ from pdf_utils import generar_pdf_orden
 
 def render():
     st.title("GESTIÓN DE MANTENIMIENTO")
+    render_back_button()
     mostrar_notificaciones()
 
     df_act = run_query("activos")
@@ -114,11 +116,7 @@ def _render_interceptor(df_act, df_users, df_ordenes):
     </div>
     """, unsafe_allow_html=True)
 
-    if st.button("⬅️ VOLVER", use_container_width=True):
-        from utils.helpers import volver_atras
-        if not volver_atras():
-            destino = st.session_state.get('nav_origin', 'Tablero de Mando')
-            navegar_a(destino)
+    render_back_button()
 
     st.markdown("---")
 
@@ -253,9 +251,7 @@ def _render_ordenes_por_activo(df_act, df_users, df_ordenes):
     if df_ordenes.empty:
         st.info("Este activo no tiene órdenes registradas.")
         if st.button("➕ Crear primera orden", type="primary"):
-            st.session_state.jump_target = "crear_para_activo"
-            st.session_state.jump_id = int(activo_id)
-            st.rerun()
+            navegar_a("Ordenes de Trabajo", jump_target="crear_para_activo", jump_id=int(activo_id))
         return
 
     df_filtrado = df_ordenes[df_ordenes['activo_id'] == int(activo_id)].copy()
@@ -263,9 +259,7 @@ def _render_ordenes_por_activo(df_act, df_users, df_ordenes):
     if df_filtrado.empty:
         st.info("Este activo no tiene órdenes registradas.")
         if st.button("➕ Crear primera orden", type="primary"):
-            st.session_state.jump_target = "crear_para_activo"
-            st.session_state.jump_id = int(activo_id)
-            st.rerun()
+            navegar_a("Ordenes de Trabajo", jump_target="crear_para_activo", jump_id=int(activo_id))
         return
 
     total = len(df_filtrado)
@@ -307,15 +301,11 @@ def _render_ordenes_por_activo(df_act, df_users, df_ordenes):
         with col_btn:
             st.markdown("<br>", unsafe_allow_html=True)
             if st.button("⚙️ Gestionar", key=f"opa_{orden['id']}", type="secondary", use_container_width=True):
-                st.session_state.jump_target = "orden"
-                st.session_state.jump_id = orden['id']
-                st.rerun()
+                navegar_a("Ordenes de Trabajo", jump_target="orden", jump_id=orden['id'])
 
     st.markdown("---")
     if st.button("➕ Nueva orden para este activo", type="primary", use_container_width=True):
-        st.session_state.jump_target = "crear_para_activo"
-        st.session_state.jump_id = int(activo_id)
-        st.rerun()
+        navegar_a("Ordenes de Trabajo", jump_target="crear_para_activo", jump_id=int(activo_id))
 
 
 # ==============================================================================

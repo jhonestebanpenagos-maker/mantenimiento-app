@@ -2,10 +2,12 @@ import streamlit as st
 import pandas as pd
 from utils.db import supabase
 from utils.helpers import navegar_a
+from utils.nav_button import render_back_button
 
 
 def render():
     st.title("🔍 BÚSQUEDA GLOBAL")
+    render_back_button()
     st.caption("Busca en activos, órdenes de trabajo y repuestos con un solo término.")
 
     query = st.text_input(

@@ -6,6 +6,7 @@ import pandas as pd
 from datetime import datetime
 from utils.db import run_query
 from utils.helpers import mostrar_notificaciones, navegar_a
+from utils.nav_button import render_back_button
 from utils.notifications import verificar_sla_y_alertar
 from utils.charts import (
     mostrar_metricas_inteligentes, graficar_tendencia_semanal,
@@ -51,6 +52,7 @@ def generar_excel_cached(df_len, df_ordenes, df_activos, df_usuarios):
 # ==============================================================================
 def render():
     st.title("📊 TABLERO DE MANDO")
+    render_back_button()
     mostrar_notificaciones()
 
     # ── Carga de datos ──

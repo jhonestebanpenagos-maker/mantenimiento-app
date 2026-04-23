@@ -10,6 +10,7 @@ from utils.db import supabase, run_query, render_paginacion
 from utils.helpers import mostrar_notificaciones, agregar_notificacion, registrar_accion_critica, error_amigable
 from utils.uploads import subir_imagen, mostrar_imagen_cloudinary
 from utils.helpers import navegar_a
+from utils.nav_button import render_back_button
 from utils.qr import generar_qr_activo
 from utils.catalogos import AREAS_DATA, CATEGORIAS_ACTIVOS
 from pdf_utils import generar_hoja_vida_pdf
@@ -21,6 +22,7 @@ CATEGORIAS_LIST = CATEGORIAS_ACTIVOS
 
 def render():
     st.title("📦 ACTIVOS")
+    render_back_button()
     mostrar_notificaciones()
 
     df_act = pd.DataFrame(run_query("activos"))
@@ -239,9 +241,7 @@ def _render_busqueda_rapida():
                         st.caption(f"**{a['nombre']}**")
                         st.caption(f"📍 {a.get('area', 'N/A')}")
                         if st.button("Ver ficha", key=f"search_act_{a['id']}", use_container_width=True):
-                            st.session_state.jump_target = "activo"
-                            st.session_state.jump_id = a['id']
-                            st.rerun()
+                            navegar_a("Inventario Activos", jump_target="activo", jump_id=a['id'])
                 st.markdown("---")
             else:
                 st.warning(f"🔍 Sin resultados para \"{query}\"")

@@ -5,6 +5,7 @@ import time
 from datetime import datetime
 from utils.db import supabase, run_query
 from utils.helpers import mostrar_notificaciones, agregar_notificacion, error_amigable
+from utils.nav_button import render_back_button
 from utils.uploads import subir_imagen
 from utils.notifications import notificar_telegram
 from utils.catalogos import CATEGORIAS_REPUESTOS
@@ -15,6 +16,7 @@ CATEGORIAS_REP = CATEGORIAS_REPUESTOS
 
 def render():
     st.title("🔩 GESTIÓN DE REPUESTOS")
+    render_back_button()
     mostrar_notificaciones()
 
     df_rep = run_query("repuestos")
