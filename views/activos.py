@@ -510,7 +510,11 @@ def _render_nuevo(df_act):
 
     if foto_archivo is not None:
         st.session_state.draft_data['foto_bytes'] = foto_archivo.getvalue()
-        st.image(foto_archivo, width=200, caption="✅ Imagen lista para guardar")
+        try:
+            foto_archivo.seek(0)
+            st.image(foto_archivo, width=200, caption="✅ Imagen lista para guardar")
+        except Exception:
+            st.image(foto_archivo.getvalue(), width=200, caption="✅ Imagen lista para guardar")
         st.success("Foto cargada correctamente.")
     elif draft.get('foto_bytes') is not None:
         st.image(draft['foto_bytes'], width=200, caption="Foto del draft")
@@ -686,7 +690,15 @@ def _render_edit(df_act):
         with col_f1:
             st.markdown("#### 🖼️ Visualización")
             if nueva_foto_temp:
-                st.image(nueva_foto_temp, use_container_width=True, caption="Nueva imagen (Sin guardar)")
+                try:
+                    nueva_foto_temp.seek(0)
+                    st.image(nueva_foto_temp, use_container_width=True, caption="Nueva imagen (Sin guardar)")
+                except Exception:
+                    try:
+                        nueva_foto_temp.seek(0)
+                        st.image(nueva_foto_temp.read(), use_container_width=True, caption="Nueva imagen (Sin guardar)")
+                    except Exception:
+                        st.warning("⚠️ No se pudo previsualizar, pero la foto se guardará correctamente.")
             else:
                 url_db = dat.get('foto_url')
                 if url_db and isinstance(url_db, str) and len(url_db.strip()) > 10:
