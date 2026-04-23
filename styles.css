@@ -32,10 +32,33 @@ header {visibility: hidden;}
 /* =========================================
    2. ESTILOS GENERALES Y COLORES
    ========================================= */
-.stApp { background-color: var(--bg-dark-clean); color: var(--text-white); }
+.stApp { background-color: var(--bg-dark-clean); color: #F3F4F6; }
+
+/* Forzar texto general a blanco/near-white */
+p, span, li, label, div[data-testid="stMarkdownContainer"] p,
+div[data-testid="stMarkdownContainer"] span,
+div[data-testid="stMarkdownContainer"] li,
+div[data-testid="stCaption"] {
+    color: #F3F4F6 !important;
+}
+
+/* Subheaders y textos de sección */
+h4, h5, h6 { color: #F3F4F6 !important; -webkit-text-fill-color: #F3F4F6 !important; }
+st-markdown h4, st-markdown h5, st-markdown h6 {
+    color: #F3F4F6 !important; -webkit-text-fill-color: #F3F4F6 !important;
+}
+
+/* Info boxes, warnings, success — texto legible */
+div[data-testid="stAlert"] { color: #F3F4F6 !important; }
+div[data-testid="stAlert"] p { color: #F3F4F6 !important; }
+.stAlert > div { color: #F3F4F6 !important; }
+
+/* Caption y texto secundario — blanco suave en vez de gris oscuro */
+.stCaption, [data-testid="stCaption"] { color: #D1D5DB !important; }
 
 /* BARRA LATERAL */
-[data-testid="stSidebar"] { background-color: var(--bg-sidebar); border-right: 1px solid #30363d; }
+[data-testid="stSidebar"] { background-color: var(--bg-sidebar); border-right: 1px solid #30363d; color: #F3F4F6 !important; }
+[data-testid="stSidebar"] p, [data-testid="stSidebar"] span, [data-testid="stSidebar"] label { color: #F3F4F6 !important; }
 [data-testid="stSidebarNav"] span { color: #E5E7EB !important; font-weight: 500; }
 [data-testid="stSidebarNav"] a[aria-current="page"] { background-color: rgba(245, 158, 11, 0.1); border-left: 3px solid var(--pro-orange); }
 
@@ -130,9 +153,9 @@ div[data-testid="stHorizontalBlock"] div[data-testid="stVerticalBlock"] div.stBu
 
 /* MÉTRICAS Y PESTAÑAS */
 [data-testid="stMetric"] { background: rgba(30, 41, 59, 0.5); border-left: 4px solid var(--pro-green); border-radius: 8px; padding: 15px; }
-[data-testid="stMetricLabel"] { color: #9CA3AF !important; }
-[data-testid="stMetricValue"] { color: #F3F4F6 !important; }
-.stTabs [data-baseweb="tab"] { color: #9CA3AF; font-weight: 600; }
+[data-testid="stMetricLabel"] { color: #D1D5DB !important; }
+[data-testid="stMetricValue"] { color: #FFFFFF !important; }
+.stTabs [data-baseweb="tab"] { color: #D1D5DB; font-weight: 600; }
 .stTabs [aria-selected="true"] { color: var(--pro-orange) !important; background-color: transparent !important; border-bottom-color: var(--pro-orange) !important; }
 div[data-testid="stVerticalBlock"] > div:empty { height: 0 !important; margin: 0 !important; }
 [data-testid="stSidebarNav"] { padding-top: 10px !important; }
