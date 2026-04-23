@@ -64,35 +64,21 @@ def render():
     if 'ordenes_tab' in st.session_state:
         del st.session_state['ordenes_tab']
 
-    # ── Barra de navegación tipo pills ──
-    pills_html = '<div class="orion-nav">'
-    for key, icon, label in TABS_CONFIG:
-        active = " active" if key == tab_activa else ""
-        pills_html += (
-            f'<div class="orion-pill{active}">'
-            f'<span class="orion-pill-icon">{icon}</span>'
-            f'<span class="orion-pill-label">{label}</span>'
-            f'</div>'
-        )
-    pills_html += '</div>'
-    st.markdown(pills_html, unsafe_allow_html=True)
-
-    # ── Botones de navegación (una columna por tab) ──
+    # ── Barra de navegación (solo botones Streamlit, sin HTML duplicado) ──
     nav_cols = st.columns(len(TABS_CONFIG))
     for i, (key, icon, label) in enumerate(TABS_CONFIG):
         with nav_cols[i]:
-            btn_label = f"{icon} {label}"
-            is_primary = key == tab_activa
+            is_active = key == tab_activa
             if st.button(
-                btn_label,
+                f"{icon} {label}",
                 key=f"_nav_{key}",
                 use_container_width=True,
-                type="primary" if is_primary else "secondary",
+                type="primary" if is_active else "secondary",
             ):
                 st.session_state['_ordenes_tab_activa'] = key
                 st.rerun()
 
-    st.markdown("<div style='margin-top:12px;'></div>", unsafe_allow_html=True)
+    st.markdown("<div style='margin-top:8px;'></div>", unsafe_allow_html=True)
 
     # ── Renderizar contenido según tab activo ──
     if tab_activa == 'mis_gestiones':

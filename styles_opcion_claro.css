@@ -177,89 +177,57 @@ div.stButton > button:first-child:hover {
 
 /* =========================================
    6. NAVEGACIÓN PILLS (Órdenes)
+   Estiliza los botones Streamlit como pills compactas.
    ========================================= */
-.orion-nav {
-    display: flex;
-    gap: 6px;
-    padding: 8px 10px;
-    background: #FFFFFF;
-    border-radius: 14px;
-    border: 1px solid rgba(0, 0, 0, 0.08);
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
-    margin-bottom: 6px;
-    overflow-x: auto;
-    -webkit-overflow-scrolling: touch;
-    scrollbar-width: none;
-}
-.orion-nav::-webkit-scrollbar { display: none; }
-.orion-pill {
-    display: flex;
-    align-items: center;
-    gap: 5px;
-    padding: 7px 13px;
-    border-radius: 10px;
-    font-size: 0.78rem;
-    font-weight: 600;
-    color: #6B7280;
-    background: transparent;
-    border: 1px solid transparent;
-    white-space: nowrap;
-    transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
-    cursor: default;
-    user-select: none;
-}
-.orion-pill:hover {
-    color: #374151;
-    background: rgba(0, 0, 0, 0.04);
-}
-.orion-pill.active {
-    color: #1E40AF;
-    background: rgba(37, 99, 235, 0.08);
-    border-color: rgba(37, 99, 235, 0.3);
-    box-shadow: 0 0 10px rgba(37, 99, 235, 0.1);
-}
-.orion-pill-icon { font-size: 0.95rem; }
-.orion-pill.active .orion-pill-icon { filter: drop-shadow(0 0 2px rgba(37, 99, 235, 0.4)); }
 
-/* Botones de navegación — evitar estilo "peligro" rojo */
+/* Contenedor: la fila de botones de navegación */
+div[data-testid="stHorizontalBlock"] div[data-testid="stVerticalBlock"] div.stButton > button {
+    border-radius: 10px !important;
+    font-size: 0.78rem !important;
+    font-weight: 600 !important;
+    padding: 8px 4px !important;
+    min-height: 42px !important;
+    transition: all 0.2s ease !important;
+    white-space: nowrap !important;
+}
+
+/* Botón inactivo */
 div[data-testid="stHorizontalBlock"] div[data-testid="stVerticalBlock"] div.stButton > button[kind="secondary"] {
     background: #F3F4F6 !important;
-    border: 1px solid rgba(0, 0, 0, 0.08) !important;
+    border: 1px solid rgba(0, 0, 0, 0.06) !important;
     color: #6B7280 !important;
-    font-weight: 600 !important;
-    border-radius: 8px !important;
-    font-size: 0.78rem !important;
-    padding: 6px 4px !important;
-    transition: all 0.2s ease !important;
 }
 div[data-testid="stHorizontalBlock"] div[data-testid="stVerticalBlock"] div.stButton > button[kind="secondary"] p {
     color: #6B7280 !important;
-    font-weight: 600 !important;
 }
 div[data-testid="stHorizontalBlock"] div[data-testid="stVerticalBlock"] div.stButton > button[kind="secondary"]:hover {
     background: rgba(37, 99, 235, 0.08) !important;
-    border-color: rgba(37, 99, 235, 0.3) !important;
+    border-color: rgba(37, 99, 235, 0.25) !important;
     color: #2563EB !important;
+    transform: translateY(-1px) !important;
 }
 div[data-testid="stHorizontalBlock"] div[data-testid="stVerticalBlock"] div.stButton > button[kind="secondary"]:hover p {
     color: #2563EB !important;
 }
+
+/* Botón activo */
 div[data-testid="stHorizontalBlock"] div[data-testid="stVerticalBlock"] div.stButton > button[kind="primary"] {
     background: #2563EB !important;
     border: none !important;
     color: #fff !important;
     font-weight: 700 !important;
-    border-radius: 8px !important;
-    box-shadow: 0 2px 6px rgba(37, 99, 235, 0.25) !important;
+    box-shadow: 0 2px 8px rgba(37, 99, 235, 0.25) !important;
 }
 
 /* Responsive: solo iconos en móvil */
 @media (max-width: 768px) {
-    .orion-nav { gap: 4px; padding: 6px 6px; }
-    .orion-pill { padding: 5px 8px; font-size: 0.7rem; border-radius: 8px; }
-    .orion-pill-icon { font-size: 0.85rem; }
-    .orion-pill-label { display: none; }
-    .orion-pill.active .orion-pill-label { display: inline; }
+    div[data-testid="stHorizontalBlock"] div[data-testid="stVerticalBlock"] div.stButton > button {
+        font-size: 1.1rem !important;
+        padding: 8px 2px !important;
+    }
+    div[data-testid="stHorizontalBlock"] div[data-testid="stVerticalBlock"] div.stButton > button p {
+        font-size: 1.1rem !important;
+    }
 }
 
 /* =========================================
