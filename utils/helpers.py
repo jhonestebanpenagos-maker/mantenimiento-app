@@ -312,7 +312,7 @@ def _es_sha256(hash_str: str) -> bool:
 # 📋 AUDITORÍA
 # ==============================================================================
 def registrar_auditoria(accion: str, usuario: str = "SISTEMA", detalle: str = ""):
-    """Registra una acción en el log de auditoría (archivo + print)."""
+    """Registra una acción en el log de auditoría (archivo + print + Supabase)."""
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     log_entry = f"[{timestamp}] [{accion}] Usuario: {usuario} | {detalle}"
 
@@ -325,7 +325,21 @@ def registrar_auditoria(accion: str, usuario: str = "SISTEMA", detalle: str = ""
         with open(_AUDIT_LOG_PATH, "a", encoding="utf-8") as f:
             f.write(log_entry + "\n")
     except Exception:
-        pass  # Si falla el archivo, al menos queda en print
+        pass
+
+    # Backup a Supabase (solo acciones críticas para no saturar)
+    if accion.startswith("CRITICA") or accion == "LOGIN" or accion == "MIGRACION":
+        try:
+            from utils.db import supabase
+            if supabase:
+                supabase.table("audit_log").insert({
+                    "accion": accion,
+                    "usuario": usuario,
+                    "detalle": detalle,
+                    "timestamp": datetime.now().isoformat()
+                }).execute()
+        except Exception:
+            pass  # No fallar si la tabla audit_log no existe aún
 
 
 def registrar_login(usuario: str, exito: bool, motivo: str = ""):

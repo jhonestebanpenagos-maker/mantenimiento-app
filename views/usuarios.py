@@ -142,8 +142,10 @@ def _render_gestionar():
                 """, unsafe_allow_html=True)
             else:
                 st.warning(f"⚠️ Esta acción eliminará permanentemente al usuario **{selected_user['nombre']}**")
+                confirm_del_user = st.text_input("Escriba ELIMINAR para confirmar", key=f"confirm_del_user_{user_id}", placeholder="ELIMINAR")
                 if st.button("🗑️ ELIMINAR USUARIO PERMANENTEMENTE", type="secondary",
-                             use_container_width=True, key=f"delete_btn_{user_id}"):
+                             use_container_width=True, key=f"delete_btn_{user_id}",
+                             disabled=(confirm_del_user.strip().upper() != "ELIMINAR")):
                     try:
                         supabase.table("usuarios").delete().eq("id", user_id).execute()
                         st.cache_data.clear()

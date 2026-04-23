@@ -16,13 +16,21 @@ def render():
         key="global_search_input"
     )
 
-    if not query or len(query.strip()) < 2:
+    if not query or len(query.strip()) < 1:
         # Mostrar últimos accesos si existen
         _render_ultimos_accesos()
-        st.info("✍️ Escribe al menos 2 caracteres para buscar.")
+        st.info("✍️ Escribe al menos 1 carácter para buscar.")
         return
 
     query = query.strip()
+
+    # Autocompletado: mostrar sugerencias rápidas mientras escribes
+    if len(query) >= 1:
+        _render_sugerencias(query)
+
+    if len(query) < 2:
+        return
+
     st.markdown(f"### Resultados para: *\"{query}\"*")
     st.markdown("---")
 
@@ -90,6 +98,37 @@ def _navegar_a_item(item):
         navegar_a("Ordenes de Trabajo", jump_target="orden", jump_id=item_id)
     elif tipo == 'repuesto':
         navegar_a("Repuestos", jump_target="repuesto", jump_id=item_id)
+
+
+def _render_sugerencias(query):
+    """Muestra sugerencias rápidas mientras el usuario escribe (1+ caracteres)."""
+    try:
+        # Buscar solo nombres de activos y IDs de órdenes (rápido, sin joins)
+        res_act = supabase.table("activos").select("id, nombre").ilike("nombre", f"%{query}%").limit(5).execute()
+        res_ord = supabase.table("ordenes").select("id, descripcion").ilike("descripcion", f"%{query}%").limit(5).execute()
+
+        sugerencias = []
+        if res_act.data:
+            for a in res_act.data:
+                sugerencias.append(("📦", f"Activo: {a['nombre']}", a['id'], "activo"))
+        if res_ord.data:
+            for o in res_ord.data:
+                desc_corta = (o.get('descripcion', '') or '')[:50]
+                sugerencias.append(("🛠️", f"OT #{o['id']}: {desc_corta}", o['id'], "orden"))
+
+        if sugerencias:
+            st.markdown("#### 💡 Sugerencias rápidas")
+            cols = st.columns(min(len(sugerencias), 3))
+            for i, (icono, texto, item_id, tipo) in enumerate(sugerencias[:6]):
+                with cols[i % 3]:
+                    if st.button(f"{icono} {texto[:35]}", key=f"sug_{tipo}_{item_id}", use_container_width=True):
+                        if tipo == "activo":
+                            navegar_a("Inventario Activos", jump_target="activo", jump_id=item_id)
+                        elif tipo == "orden":
+                            navegar_a("Ordenes de Trabajo", jump_target="orden", jump_id=item_id)
+            st.markdown("---")
+    except Exception:
+        pass  # Sugerencias son opcionales, no mostrar error
 
 
 def _buscar_activos(query):

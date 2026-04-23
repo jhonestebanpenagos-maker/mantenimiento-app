@@ -68,6 +68,21 @@ def cargar_historial_qr(activo_id: str):
 query_params = st.query_params
 if "id_activo_qr" in query_params:
     id_qr = query_params["id_activo_qr"]
+
+    # Rate limiting: máximo 20 accesos QR por sesión
+    qr_count = st.session_state.get('_qr_access_count', 0)
+    if qr_count >= 20:
+        st.error("⛔ Límite de accesos QR alcanzado. Recarga la página para continuar.")
+        st.stop()
+    st.session_state['_qr_access_count'] = qr_count + 1
+
+    # Validar que el ID sea un número válido
+    try:
+        int(id_qr)
+    except (ValueError, TypeError):
+        st.error("❌ ID de activo no válido.")
+        st.stop()
+
     activo = cargar_activo_qr(id_qr)
 
     if activo:

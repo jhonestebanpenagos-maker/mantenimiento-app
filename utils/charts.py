@@ -3,6 +3,7 @@
 # ==============================================================================
 import streamlit as st
 import pandas as pd
+import time
 import plotly.express as px
 import plotly.graph_objects as go
 from datetime import datetime
@@ -15,7 +16,13 @@ def _df_to_records(df):
 
 
 def _df_hash(df):
-    return len(df) if hasattr(df, '__len__') else 0
+    """Genera un hash real del DataFrame para invalidar caché correctamente."""
+    try:
+        if hasattr(df, 'to_csv'):
+            return hash(df.to_csv(index=False))
+        return hash(str(df))
+    except Exception:
+        return hash(str(time.time()))
 
 
 @st.cache_data(ttl=300, show_spinner=False)
@@ -145,7 +152,6 @@ def _calcular_tops(ordenes_hash, df_ordenes_data):
     return top_antiguas_list, top_criticas_list
 
 
-@st.cache_data(ttl=300, show_spinner=False)
 @st.cache_data(ttl=300, show_spinner=False)
 def _calcular_tendencia_semanal(ordenes_hash, df_ordenes_data):
     """Calcula OTs creadas vs cerradas por semana (ultimas 12 semanas)."""
@@ -358,6 +364,7 @@ def graficar_tendencia_semanal(df_ordenes):
 
 
 def mostrar_tops_ordenes(df_ordenes):
+    from utils.helpers import navegar_a
     top_antiguas, top_criticas = _calcular_tops(_df_hash(df_ordenes), _df_to_records(df_ordenes))
     if not top_antiguas and not top_criticas:
         st.toast("¡Increíble! No hay órdenes pendientes.")
@@ -383,10 +390,7 @@ def mostrar_tops_ordenes(df_ordenes):
                 )
             with col_btn:
                 if st.button("⚙️", key="top_old_" + str(item['id']), help="Gestionar"):
-                    st.session_state.current_page = "Ordenes de Trabajo"
-                    st.session_state.jump_target = "orden"
-                    st.session_state.jump_id = item['id']
-                    st.rerun()
+                    navegar_a("Ordenes de Trabajo", jump_target="orden", jump_id=item['id'])
     with c2:
         st.markdown("### 🔥 Top Críticas Pendientes")
         if not top_criticas:
@@ -409,10 +413,7 @@ def mostrar_tops_ordenes(df_ordenes):
                     )
                 with col_btn:
                     if st.button("⚙️", key="top_crit_" + str(item['id']), help="Gestionar"):
-                        st.session_state.current_page = "Ordenes de Trabajo"
-                        st.session_state.jump_target = "orden"
-                        st.session_state.jump_id = item['id']
-                        st.rerun()
+                        navegar_a("Ordenes de Trabajo", jump_target="orden", jump_id=item['id'])
 
 
 def mostrar_kpis_industriales(df_ordenes, df_act, df_planes=None):
@@ -622,6 +623,7 @@ def mostrar_kpis_industriales(df_ordenes, df_act, df_planes=None):
 
 
 def semaforo_tecnicos(df_ordenes, df_users):
+    from utils.helpers import navegar_a
     datos = _calcular_semaforo(_df_hash(df_ordenes), _df_to_records(df_ordenes), _df_to_records(df_users))
     if not datos:
         return
@@ -645,10 +647,8 @@ def semaforo_tecnicos(df_ordenes, df_users):
                 unsafe_allow_html=True
             )
             if st.button("Ver órdenes", key="sem_tec_" + tec['id'], use_container_width=True):
-                st.session_state.current_page = "Ordenes de Trabajo"
-                st.session_state.jump_target = "ordenes_por_activo"
-                st.session_state.jump_id = None
-                st.rerun()
+                st.session_state['_filtro_tecnico'] = tec['id']
+                navegar_a("Ordenes de Trabajo")
 
 
 def sugerir_tecnico(df_ordenes, df_users):
@@ -692,6 +692,7 @@ def render_sugerencia_tecnico(df_ordenes, df_users):
 
 
 def mostrar_metricas_inteligentes(df_ordenes, df_users, df_solicitudes):
+    from utils.helpers import navegar_a
     n_solicitudes = 0
     if not df_solicitudes.empty:
         n_solicitudes = len(df_solicitudes[df_solicitudes['estado'].astype(str).str.strip() == 'Pendiente'])
@@ -718,32 +719,27 @@ def mostrar_metricas_inteligentes(df_ordenes, df_users, df_solicitudes):
         color_sol = "normal" if n_solicitudes == 0 else "inverse"
         st.metric("📬 Solicitudes Pendientes", n_solicitudes, "en Buzón", delta_color=color_sol)
         if st.button("Ver solicitudes", key="nav_solicitudes", use_container_width=True):
-            st.session_state.current_page = "Ordenes de Trabajo"
-            st.session_state.ordenes_tab = "kanban"
-            st.session_state.kanban_filtro_solicitudes = True
-            st.rerun()
+            st.session_state['ordenes_tab'] = "kanban"
+            st.session_state['kanban_filtro_solicitudes'] = True
+            navegar_a("Ordenes de Trabajo")
     with c2:
         delta_text = str(devueltas_calidad) + " Devueltas" if devueltas_calidad > 0 else None
         st.metric("🔨 OT en Ejecución", pendientes, delta_text, delta_color="inverse")
         if st.button("Ver OT abiertas", key="nav_abiertas", use_container_width=True):
             st.session_state['_filtro_estado_ots'] = "Abierta"
-            st.session_state.current_page = "Ordenes de Trabajo"
-            st.rerun()
+            navegar_a("Ordenes de Trabajo")
     with c3:
         st.metric("🧐 OT por Validar", por_validar, "Esperando Aprobación")
         if st.button("Ver por validar", key="nav_validar", use_container_width=True):
             st.session_state['_filtro_estado_ots'] = "Por Validar"
-            st.session_state.current_page = "Ordenes de Trabajo"
-            st.rerun()
+            navegar_a("Ordenes de Trabajo")
     with c4:
         st.metric("✅ OT Finalizadas", concluidas, str(round(porcentaje_concluidas)) + "% del total")
         if st.button("Ver finalizadas", key="nav_concluidas", use_container_width=True):
             st.session_state['_filtro_estado_ots'] = "Concluida"
-            st.session_state.current_page = "Ordenes de Trabajo"
-            st.rerun()
+            navegar_a("Ordenes de Trabajo")
     with c5:
         st.metric("📋 Total OTs Registradas", total)
         if st.button("Ver todas", key="nav_todas", use_container_width=True):
             st.session_state['_filtro_estado_ots'] = "Todas"
-            st.session_state.current_page = "Ordenes de Trabajo"
-            st.rerun()
+            navegar_a("Ordenes de Trabajo")

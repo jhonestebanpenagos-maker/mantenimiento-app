@@ -18,3 +18,4 @@ Thumbs.db
 # --- Archivos de desarrollo ---
 preview_paletas.html
 .tema_actual
+views/ordenes_old.py.bak

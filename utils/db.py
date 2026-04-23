@@ -31,7 +31,7 @@ supabase = init_supabase()
 # 📦 CACHÉ DE LECTURA
 # ==============================================================================
 @st.cache_data(ttl=300, show_spinner=False)
-def _run_query_cached(table_name, filters_tuple, order_by):
+def _run_query_cached(table_name, filters_tuple, order_by, limit):
     """Consulta genérica cacheada. TTL largo porque se invalida al escribir."""
     try:
         query = supabase.table(table_name).select("*")
@@ -39,17 +39,21 @@ def _run_query_cached(table_name, filters_tuple, order_by):
             for key, value in filters_tuple:
                 if value is not None:
                     query = query.eq(key, value)
-        res = query.order(order_by).execute()
+        query = query.order(order_by)
+        if limit:
+            query = query.limit(limit)
+        res = query.execute()
         return res.data if res.data else []
     except Exception as e:
         print(f"Error en consulta {table_name}: {e}")
         return []
 
 
-def run_query(table_name, filters=None, order_by="id"):
-    """Lee datos con caché. Se actualiza inmediatamente tras writes."""
+def run_query(table_name, filters=None, order_by="id", limit=5000):
+    """Lee datos con caché. Se actualiza inmediatamente tras writes.
+    Límite por defecto: 5000 registros. Usar run_query_paginated() para más."""
     filters_tuple = tuple(filters.items()) if filters else None
-    return pd.DataFrame(_run_query_cached(table_name, filters_tuple, order_by))
+    return pd.DataFrame(_run_query_cached(table_name, filters_tuple, order_by, limit))
 
 
 # ==============================================================================

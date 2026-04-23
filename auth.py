@@ -155,7 +155,6 @@ def show_login():
                         st.session_state['login_bloqueado'] = None
 
                 with st.spinner("Conectando y validando credenciales..."):
-                    time.sleep(1)
                     try:
                         # Buscar usuario SOLO por documento (no por hash)
                         response = supabase.table("usuarios").select("*") \

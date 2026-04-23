@@ -112,12 +112,22 @@ def render():
     with g1:
         st.caption("Estado de OTs")
         graficar_estado_barras(df)
+        n_abiertas_g = len(df[df['estado'] == 'Abierta']) if not df.empty else 0
+        if st.button(f"🔨 Ver {n_abiertas_g} Abiertas", key="dash_dist_ab", use_container_width=True):
+            st.session_state['_filtro_estado_ots'] = "Abierta"
+            navegar_a("Ordenes de Trabajo")
     with g2:
         st.caption("Por Criticidad")
         graficar_criticidad(df)
+        n_criticas = len(df[df['criticidad'].isin(['Alta', 'Crítica'])]) if not df.empty else 0
+        if st.button(f"🔴 Ver {n_criticas} Críticas", key="dash_dist_cr", use_container_width=True):
+            navegar_a("Ordenes de Trabajo")
     with g3:
         st.caption("Por Tipo")
         graficar_torta_tipo(df)
+        n_prev = len(df[df['tipo_mantenimiento'] == 'Preventivo']) if not df.empty else 0
+        if st.button(f"🛡️ Ver {n_prev} Preventivos", key="dash_dist_pr", use_container_width=True):
+            navegar_a("Ordenes de Trabajo")
 
     # ════════════════════════════════════════════════════════════════════════
     # 4️⃣ KPIs INDUSTRIALES
@@ -137,3 +147,15 @@ def render():
     # ════════════════════════════════════════════════════════════════════════
     _seccion("Atención Requerida", "🚨")
     mostrar_tops_ordenes(df)
+
+    st.markdown("---")
+    col_nav1, col_nav2, col_nav3 = st.columns(3)
+    with col_nav1:
+        if st.button("🎛️ Gestión Global de OTs", use_container_width=True, key="dash_nav_gestion"):
+            navegar_a("Ordenes de Trabajo")
+    with col_nav2:
+        if st.button("📦 Inventario de Activos", use_container_width=True, key="dash_nav_activos"):
+            navegar_a("Inventario Activos")
+    with col_nav3:
+        if st.button("🔩 Repuestos", use_container_width=True, key="dash_nav_repuestos"):
+            navegar_a("Repuestos")

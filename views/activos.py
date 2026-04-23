@@ -834,7 +834,7 @@ def _guardar_edicion_activo(dat, edit_nom, edit_area, edit_sub, edit_det, edit_c
                 "categoria": edit_cat, "foto_url": final_edit_url, "detalles": final_specs_json
             }, "id", dat['id'])
             agregar_notificacion("success", f"Activo '{edit_nom}' actualizado correctamente")
-            time.sleep(1.5)
+            time.sleep(0.3)
             st.rerun()
     except Exception as e:
         error_amigable(e, "actualizar activo")
@@ -897,8 +897,10 @@ def _render_zona_peligro_activo(dat, id_suffix):
                 st.toast("✅ Equipo limpio (Sin historial).")
 
             st.markdown("---")
+            confirm_del_act = st.text_input("Escriba ELIMINAR para confirmar", key=f"confirm_del_act_{id_suffix}", placeholder="ELIMINAR")
             if st.button("🗑️ CONFIRMAR ELIMINACIÓN", type="secondary",
-                         use_container_width=True, key=f"fin_del_{id_suffix}"):
+                         use_container_width=True, key=f"fin_del_{id_suffix}",
+                         disabled=(confirm_del_act.strip().upper() != "ELIMINAR")):
                 try:
                     if ids_historial:
                         supabase.table("ordenes").delete().in_("id", ids_historial).execute()
@@ -907,7 +909,7 @@ def _render_zona_peligro_activo(dat, id_suffix):
                     registrar_accion_critica("ELIMINAR_ACTIVO", st.session_state.get('usuario', '?'),
                                              f"Activo: {dat['nombre']} (ID: {dat['id']}) — {len(ids_historial)} OTs eliminadas")
                     agregar_notificacion("delete", "Activo eliminado correctamente.")
-                    time.sleep(1.5)
+                    time.sleep(0.3)
                     st.rerun()
                 except Exception as e:
                     error_amigable(e, "eliminar activo")

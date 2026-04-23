@@ -80,14 +80,20 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data.clear()
 
     if args:
-        activo_id = args[0]
+        raw_id = args[0]
+        try:
+            activo_id = int(raw_id)
+        except (ValueError, TypeError):
+            await update.message.reply_text("⚠️ ID de activo no válido. Escanea el QR nuevamente.")
+            return
+
         try:
             res = supabase.table("activos").select("nombre").eq("id", activo_id).execute()
             nombre = res.data[0]['nombre'] if res.data else "Equipo Escaneado"
         except Exception as e:
             print(f"Error buscando activo QR: {e}")
             nombre = "Equipo"
-        
+
         context.user_data['origen'] = 'qr'
         context.user_data['activo_id'] = activo_id
         await update.message.reply_text(f"✅ Equipo: *{nombre}*.\n📸 Envíame una **FOTO**.", parse_mode='Markdown')

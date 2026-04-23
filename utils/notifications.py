@@ -8,11 +8,11 @@ from datetime import datetime
 # 🔔 FUNCIÓN TELEGRAM
 # ==============================================================================
 def notificar_telegram(chat_id, mensaje, foto_url=None):
-    token_raw = st.secrets["telegram"]["bot_token"]
-    token = token_raw.split("/bot")[-1].split("/")[0] if "/bot" in token_raw else token_raw
     if not chat_id:
         return
     try:
+        token_raw = st.secrets["telegram"]["bot_token"]
+        token = token_raw.split("/bot")[-1].split("/")[0] if "/bot" in token_raw else token_raw
         base_url = f"https://api.telegram.org/bot{token}"
         payload = {"chat_id": chat_id, "parse_mode": "Markdown"}
         if foto_url:
@@ -23,8 +23,10 @@ def notificar_telegram(chat_id, mensaje, foto_url=None):
             payload["text"] = mensaje
             url_envio = f"{base_url}/sendMessage"
         requests.post(url_envio, data=payload)
+    except KeyError:
+        print("Error Telegram: credenciales no configuradas en secrets.toml")
     except Exception as e:
-        print(f"Error Telegram: {e}")
+        print(f"Error Telegram: {type(e).__name__}")
 
 
 # ==============================================================================
