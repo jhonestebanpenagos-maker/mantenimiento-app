@@ -20,7 +20,6 @@ from pdf_utils import generar_pdf_orden
 
 def render():
     st.title("GESTIÓN DE MANTENIMIENTO")
-    render_back_button()
     mostrar_notificaciones()
 
     df_act = run_query("activos")
@@ -44,6 +43,9 @@ def render():
         elif jump == "crear_para_activo":
             _render_crear_para_activo(df_act, df_users, df_ordenes)
             return
+
+    # ── Botón volver (solo en vista normal de tabs) ──
+    render_back_button()
 
     # ── Tabs con navegación estilo pills ──
     TABS_CONFIG = [
