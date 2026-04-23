@@ -506,33 +506,12 @@ def _render_nuevo(df_act):
 
     if draft.get('foto_url'):
         st.image(draft['foto_url'], width=120, caption="Foto guardada (Draft)")
-        st.caption("Arrastra una nueva imagen para reemplazarla, o deja la actual.")
-
-    st.markdown("""
-    <div style="
-        border: 2px dashed rgba(245,158,11,0.4);
-        border-radius: 12px;
-        padding: 24px 16px;
-        text-align: center;
-        background: rgba(245,158,11,0.04);
-        margin-bottom: 4px;
-        transition: all 0.2s;
-    ">
-        <div style="font-size: 2rem; margin-bottom: 6px;">🖼️</div>
-        <div style="color: #F59E0B; font-weight: 700; font-size: 0.95rem;">
-            Arrastra y suelta la imagen aquí
-        </div>
-        <div style="color: #9CA3AF; font-size: 0.8rem; margin-top: 4px;">
-            o haz clic para seleccionar · JPG, PNG · Máx. 200MB
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
+        st.caption("Sube una nueva imagen para reemplazarla, o deja la actual.")
 
     foto_archivo = st.file_uploader(
-        "Subir imagen",
+        "Arrastra y suelta la imagen aquí, o haz clic para seleccionar",
         type=["jpg", "png", "jpeg"],
         key="new_asset_photo",
-        label_visibility="collapsed"
     )
 
     if foto_archivo is not None:

@@ -230,6 +230,19 @@ div[data-testid="stHorizontalBlock"] div[data-testid="stVerticalBlock"] div.stBu
     }
 }
 
+/* File uploader con estilo drop zone */
+[data-testid="stFileUploader"] section {
+    border: 2px dashed rgba(37, 99, 235, 0.3) !important;
+    border-radius: 12px !important;
+    background: rgba(37, 99, 235, 0.03) !important;
+    padding: 12px !important;
+    transition: all 0.2s ease !important;
+}
+[data-testid="stFileUploader"] section:hover {
+    border-color: rgba(37, 99, 235, 0.5) !important;
+    background: rgba(37, 99, 235, 0.06) !important;
+}
+
 /* =========================================
    7. PESTAÑAS STREAMLIT
    ========================================= */

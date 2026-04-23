@@ -115,6 +115,19 @@ div[data-testid="stHorizontalBlock"] div[data-testid="stVerticalBlock"] div.stBu
     }
 }
 
+/* File uploader con estilo drop zone */
+[data-testid="stFileUploader"] section {
+    border: 2px dashed rgba(245, 158, 11, 0.35) !important;
+    border-radius: 12px !important;
+    background: rgba(245, 158, 11, 0.04) !important;
+    padding: 12px !important;
+    transition: all 0.2s ease !important;
+}
+[data-testid="stFileUploader"] section:hover {
+    border-color: rgba(245, 158, 11, 0.6) !important;
+    background: rgba(245, 158, 11, 0.08) !important;
+}
+
 /* MÉTRICAS Y PESTAÑAS */
 [data-testid="stMetric"] { background: rgba(30, 41, 59, 0.5); border-left: 4px solid var(--pro-green); border-radius: 8px; padding: 15px; }
 [data-testid="stMetricLabel"] { color: #9CA3AF !important; }
