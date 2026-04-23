@@ -141,6 +141,33 @@ h1, h2, h3 {
     font-weight: 500 !important;
 }
 
+/* DROPDOWN / SELECTBOX — menú desplegable legible */
+ul[data-baseweb="listbox"] {
+    background-color: #FFFFFF !important;
+    border: 1px solid var(--border) !important;
+    border-radius: 8px !important;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12) !important;
+}
+ul[data-baseweb="listbox"] li,
+ul[data-baseweb="listbox"] div[role="option"] {
+    background-color: transparent !important;
+    color: var(--text-primary) !important;
+    padding: 8px 12px !important;
+}
+ul[data-baseweb="listbox"] li:hover,
+ul[data-baseweb="listbox"] div[role="option"]:hover,
+ul[data-baseweb="listbox"] li[aria-selected="true"],
+ul[data-baseweb="listbox"] div[role="option"][aria-selected="true"] {
+    background-color: var(--accent-soft) !important;
+    color: var(--accent) !important;
+}
+div[data-baseweb="popover"] {
+    background-color: #FFFFFF !important;
+}
+div[data-baseweb="popover"] div[data-baseweb="listbox"] {
+    background-color: #FFFFFF !important;
+}
+
 /* BOTÓN PRINCIPAL */
 div.stButton > button:first-child {
     background: var(--accent) !important;

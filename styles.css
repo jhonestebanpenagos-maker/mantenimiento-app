@@ -71,6 +71,34 @@ section[data-testid="stMain"] button[kind="secondary"] * { color: #000000 !impor
 section[data-testid="stMain"] button[kind="secondary"] p { color: #000000 !important; }
 section[data-testid="stMain"] button[kind="secondary"]:hover { background-color: #f87171 !important; transform: scale(1.02); border-color: #b91c1c !important; }
 
+/* DROPDOWN / SELECTBOX — menú desplegable legible */
+ul[data-baseweb="listbox"] {
+    background-color: #161b22 !important;
+    border: 1px solid #30363d !important;
+    border-radius: 8px !important;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4) !important;
+}
+ul[data-baseweb="listbox"] li,
+ul[data-baseweb="listbox"] div[role="option"] {
+    background-color: transparent !important;
+    color: #F3F4F6 !important;
+    padding: 8px 12px !important;
+}
+ul[data-baseweb="listbox"] li:hover,
+ul[data-baseweb="listbox"] div[role="option"]:hover,
+ul[data-baseweb="listbox"] li[aria-selected="true"],
+ul[data-baseweb="listbox"] div[role="option"][aria-selected="true"] {
+    background-color: rgba(245, 158, 11, 0.15) !important;
+    color: #F59E0B !important;
+}
+/* Popover contenedor del dropdown */
+div[data-baseweb="popover"] {
+    background-color: #161b22 !important;
+}
+div[data-baseweb="popover"] div[data-baseweb="listbox"] {
+    background-color: #161b22 !important;
+}
+
 /* TEXTOS Y TARJETAS */
 h1, h2, h3 { background: linear-gradient(90deg, var(--pro-orange), var(--pro-green)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; font-weight: 800 !important; text-transform: uppercase; }
 .card-style { background: var(--bg-card); backdrop-filter: blur(12px); border-radius: 12px; padding: 25px; border: 1px solid rgba(255, 255, 255, 0.08); box-shadow: 0 4px 6px rgba(0, 0, 0, 0.2); margin-bottom: 20px; }
