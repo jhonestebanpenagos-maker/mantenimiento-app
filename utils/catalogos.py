@@ -16,8 +16,9 @@ AREAS_DATA = {
     ],
     "Administración": ["Administración", "Auditorio", "Casino", "Portería Vehicular", "Servicios Generales"],
     "Ventas": ["Bodega Carrera 8va", "Bodega Publicidad", "Dispensadores", "Ventas"],
-    "Logística": ["Almacen Materia Prima", "Almacén Producto Terminado", "Lavadero de Vehiculos",
-                   "Punto de Canje", "Taller de Reparación de Estibas", "Taller Vehicular"]
+    "Logística": ["Almacen Materia Prima", "Almacén Producto Terminado", "Cuarto de Baterias",
+                   "Lavadero de Vehiculos", "Punto de Canje", "Taller de Reparación de Estibas",
+                   "Taller Vehicular"]
 }
 
 # ==============================================================================
