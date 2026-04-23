@@ -67,11 +67,13 @@ def render_crear_directa(df_act, df_users, df_ordenes):
                                             "mensaje": msg, "archivo_url": url_doc,
                                             "fecha": datetime.now().isoformat()
                                         })
-                            # Limpiar campos y recargar
+                            # Limpiar TODOS los campos del formulario
                             for k in ['desc_crear_directa', '_parsed_email_crear_directa',
-                                      '_archivo_unif_crear_directa']:
+                                      '_archivo_unif_crear_directa',
+                                      'crear_dir_activo', 'crear_dir_tipo', 'crear_dir_crit']:
                                 st.session_state.pop(k, None)
-                            time.sleep(1)
+                            agregar_notificacion('success', f'Orden #{nuevo_id_ot} creada. Puedes crear otra.')
+                            time.sleep(0.3)
                             st.rerun()
                         else:
                             st.error("No se pudo obtener el ID de la nueva orden.")
@@ -175,9 +177,11 @@ def render_crear_para_activo(df_act, df_users, df_ordenes):
                                         "fecha": datetime.now().isoformat()
                                     })
                         for k in [desc_key, f'_parsed_email_crear_para_activo_{activo_id}',
-                                  f'_archivo_unif_crear_para_activo_{activo_id}']:
+                                  f'_archivo_unif_crear_para_activo_{activo_id}',
+                                  f'crear_pa_tipo_{activo_id}', f'crear_pa_crit_{activo_id}']:
                             st.session_state.pop(k, None)
-                        time.sleep(1)
+                        agregar_notificacion('success', f'Orden #{nuevo_id} creada para {nombre_activo}.')
+                        time.sleep(0.3)
                         navegar_a("Ordenes de Trabajo", jump_target="orden", jump_id=nuevo_id)
                 except Exception as e:
                     error_amigable(e, "crear orden")
