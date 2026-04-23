@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 from utils.db import supabase
+from utils.helpers import navegar_a
 
 
 def render():
@@ -82,18 +83,11 @@ def _navegar_a_item(item):
     item_id = item['id']
 
     if tipo == 'activo':
-        st.session_state.current_page = "Inventario Activos"
-        st.session_state.jump_target = "activo"
-        st.session_state.jump_id = item_id
+        navegar_a("Inventario Activos", jump_target="activo", jump_id=item_id)
     elif tipo == 'orden':
-        st.session_state.current_page = "Ordenes de Trabajo"
-        st.session_state.jump_target = "orden"
-        st.session_state.jump_id = item_id
+        navegar_a("Ordenes de Trabajo", jump_target="orden", jump_id=item_id)
     elif tipo == 'repuesto':
-        st.session_state.current_page = "Repuestos"
-        st.session_state.jump_target = "repuesto"
-        st.session_state.jump_id = item_id
-    st.rerun()
+        navegar_a("Repuestos", jump_target="repuesto", jump_id=item_id)
 
 
 def _buscar_activos(query):
@@ -121,16 +115,10 @@ def _buscar_activos(query):
                     st.caption(f"🔧 {a.get('categoria', 'N/A')}")
                     if st.button("📋 Ver ficha completa", key=f"search_act_{a['id']}", type="primary"):
                         _registrar_acceso('activo', a['id'], a['nombre'])
-                        st.session_state.current_page = "Inventario Activos"
-                        st.session_state.jump_target = "activo"
-                        st.session_state.jump_id = a['id']
-                        st.rerun()
+                        navegar_a("Inventario Activos", jump_target="activo", jump_id=a['id'])
                     if st.button("🛠️ Ver sus órdenes", key=f"search_act_ord_{a['id']}", type="secondary"):
                         _registrar_acceso('activo', a['id'], a['nombre'])
-                        st.session_state.current_page = "Ordenes de Trabajo"
-                        st.session_state.jump_target = "ordenes_por_activo"
-                        st.session_state.jump_id = a['id']
-                        st.rerun()
+                        navegar_a("Ordenes de Trabajo", jump_target="ordenes_por_activo", jump_id=a['id'])
         else:
             st.caption("Sin resultados")
     except Exception as e:
@@ -164,10 +152,7 @@ def _buscar_ordenes(query):
                     st.caption(f"Fecha: {o.get('fecha_creacion', '')[:10]}")
                     if st.button("⚙️ Gestionar", key=f"search_ot_{o['id']}", type="primary"):
                         _registrar_acceso('orden', o['id'], f"OT #{o['id']}")
-                        st.session_state.current_page = "Ordenes de Trabajo"
-                        st.session_state.jump_target = "orden"
-                        st.session_state.jump_id = o['id']
-                        st.rerun()
+                        navegar_a("Ordenes de Trabajo", jump_target="orden", jump_id=o['id'])
         else:
             st.caption("Sin resultados")
     except Exception as e:
@@ -201,10 +186,7 @@ def _buscar_repuestos(query):
                     st.caption(f"Stock: {stock} / mín: {minimo}")
                     if st.button("📦 Ver en inventario", key=f"search_rep_{r['id']}", type="primary"):
                         _registrar_acceso('repuesto', r['id'], r['nombre'])
-                        st.session_state.current_page = "Repuestos"
-                        st.session_state.jump_target = "repuesto"
-                        st.session_state.jump_id = r['id']
-                        st.rerun()
+                        navegar_a("Repuestos", jump_target="repuesto", jump_id=r['id'])
         else:
             st.caption("Sin resultados")
     except Exception as e:

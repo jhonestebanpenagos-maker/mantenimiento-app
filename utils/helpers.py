@@ -35,6 +35,59 @@ def mostrar_notificaciones():
 
 
 # ==============================================================================
+# 🧭 SISTEMA DE NAVEGACIÓN CON HISTORIAL
+# ==============================================================================
+def navegar_a(page, jump_target=None, jump_id=None):
+    """Navega a una página guardando el historial para poder volver."""
+    if 'nav_history' not in st.session_state:
+        st.session_state.nav_history = []
+
+    # Guardar estado actual antes de navegar
+    current = st.session_state.get('current_page', 'Tablero de Mando')
+    current_jump = st.session_state.get('jump_target')
+    current_jump_id = st.session_state.get('jump_id')
+
+    # No duplicar si ya estamos ahí
+    if current == page and jump_target == current_jump and jump_id == current_jump_id:
+        return
+
+    st.session_state.nav_history.append({
+        'page': current,
+        'jump_target': current_jump,
+        'jump_id': current_jump_id,
+    })
+
+    # Máximo 10 niveles de historial
+    if len(st.session_state.nav_history) > 10:
+        st.session_state.nav_history = st.session_state.nav_history[-10:]
+
+    # Navegar
+    st.session_state.current_page = page
+    st.session_state.jump_target = jump_target
+    st.session_state.jump_id = jump_id
+    st.rerun()
+
+
+def volver_atras():
+    """Vuelve a la página anterior del historial. Retorna True si pudo volver."""
+    history = st.session_state.get('nav_history', [])
+    if not history:
+        return False
+
+    prev = history.pop()
+    st.session_state.current_page = prev['page']
+    st.session_state.jump_target = prev['jump_target']
+    st.session_state.jump_id = prev['jump_id']
+    st.rerun()
+    return True
+
+
+def tiene_historial():
+    """Retorna True si hay historial de navegación para volver."""
+    return len(st.session_state.get('nav_history', [])) > 0
+
+
+# ==============================================================================
 # 🔄 CONVERSIÓN DE TIPOS
 # ==============================================================================
 def convertir_tipos_python(data_dict):

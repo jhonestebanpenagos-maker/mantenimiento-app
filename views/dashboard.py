@@ -5,7 +5,7 @@ import streamlit as st
 import pandas as pd
 from datetime import datetime
 from utils.db import run_query
-from utils.helpers import mostrar_notificaciones
+from utils.helpers import mostrar_notificaciones, navegar_a
 from utils.notifications import verificar_sla_y_alertar
 from utils.charts import (
     mostrar_metricas_inteligentes, graficar_tendencia_semanal,
@@ -78,14 +78,14 @@ def render():
     with c1:
         n_abiertas = len(df[df['estado'] == 'Abierta'])
         if st.button(f"🔨 OT Abiertas ({n_abiertas})", use_container_width=True, key="dash_qa1"):
-            st.session_state.current_page = "Ordenes de Trabajo"; st.rerun()
+            navegar_a("Ordenes de Trabajo")
     with c2:
         n_solic = len(df_solicitudes[df_solicitudes['estado'] == 'Pendiente']) if not df_solicitudes.empty else 0
         if st.button(f"📬 Buzón ({n_solic})", use_container_width=True, key="dash_qa2"):
-            st.session_state.current_page = "Ordenes de Trabajo"; st.rerun()
+            navegar_a("Ordenes de Trabajo")
     with c3:
         if st.button("➕ Nueva Orden", use_container_width=True, key="dash_qa3", type="primary"):
-            st.session_state.current_page = "Ordenes de Trabajo"; st.rerun()
+            navegar_a("Ordenes de Trabajo")
     with c4:
         try:
             buf = generar_excel_cached(len(df), df, df_act_sla, df_users)

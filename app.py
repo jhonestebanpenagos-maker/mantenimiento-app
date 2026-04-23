@@ -18,6 +18,7 @@ from config import init_cloudinary, cargar_css, render_selector_tema
 from auth import check_login, logout, SESSION_MAX_HOURS
 from utils.db import supabase
 from utils.notifications import notificar_telegram
+from utils.helpers import volver_atras, tiene_historial, navegar_a
 
 # ── Imports de vistas (una sola vez al cargar el módulo) ──
 from views.busqueda import render as render_busqueda
@@ -172,6 +173,11 @@ with st.sidebar:
     if st.button("🔓 Salir", use_container_width=True, type="secondary"):
         logout()
 
+    # ── Botón de volver ──
+    if tiene_historial():
+        if st.button("⬅️ Volver", use_container_width=True, type="secondary", key="btn_volver_sidebar"):
+            volver_atras()
+
     st.divider()
 
     # ── Menú de navegación ──
@@ -205,18 +211,11 @@ with st.sidebar:
                 tipo_icon = {"activo": "🔧", "orden": "🛠️", "repuesto": "🔩"}.get(item['tipo'], "📋")
                 if st.button(f"{tipo_icon} {item['nombre'][:25]}", key=f"sb_last_{item['tipo']}_{item['id']}", use_container_width=True):
                     if item['tipo'] == 'activo':
-                        st.session_state.current_page = "Inventario Activos"
-                        st.session_state.jump_target = "activo"
-                        st.session_state.jump_id = item['id']
+                        navegar_a("Inventario Activos", jump_target="activo", jump_id=item['id'])
                     elif item['tipo'] == 'orden':
-                        st.session_state.current_page = "Ordenes de Trabajo"
-                        st.session_state.jump_target = "orden"
-                        st.session_state.jump_id = item['id']
+                        navegar_a("Ordenes de Trabajo", jump_target="orden", jump_id=item['id'])
                     elif item['tipo'] == 'repuesto':
-                        st.session_state.current_page = "Repuestos"
-                        st.session_state.jump_target = "repuesto"
-                        st.session_state.jump_id = item['id']
-                    st.rerun()
+                        navegar_a("Repuestos", jump_target="repuesto", jump_id=item['id'])
 
     render_selector_tema()
 

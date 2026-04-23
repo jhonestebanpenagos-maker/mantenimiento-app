@@ -7,7 +7,7 @@ import time
 import calendar as cal_lib
 from datetime import datetime
 from utils.db import supabase, run_query, run_query_paginated, render_paginacion, db_insert, db_update, db_delete, invalidate_cache
-from utils.helpers import mostrar_notificaciones, agregar_notificacion, registrar_accion_critica, error_amigable
+from utils.helpers import mostrar_notificaciones, agregar_notificacion, registrar_accion_critica, error_amigable, navegar_a
 from utils.uploads import subir_archivo_generico
 from utils.notifications import notificar_telegram
 from utils.charts import sugerir_tecnico, render_sugerencia_tecnico
@@ -115,12 +115,10 @@ def _render_interceptor(df_act, df_users, df_ordenes):
     """, unsafe_allow_html=True)
 
     if st.button("⬅️ VOLVER", use_container_width=True):
-        destino = st.session_state.get('nav_origin', 'Tablero de Mando')
-        st.session_state.current_page = destino
-        st.session_state.jump_target = None
-        st.session_state.jump_id = None
-        st.session_state.nav_origin = None
-        st.rerun()
+        from utils.helpers import volver_atras
+        if not volver_atras():
+            destino = st.session_state.get('nav_origin', 'Tablero de Mando')
+            navegar_a(destino)
 
     st.markdown("---")
 
@@ -229,8 +227,7 @@ def _render_ordenes_por_activo(df_act, df_users, df_ordenes):
     if not activo_id:
         st.error("No se especificó un activo.")
         if st.button("⬅️ Volver al inicio"):
-            st.session_state.current_page = "Tablero de Mando"
-            st.rerun()
+            navegar_a("Tablero de Mando")
         return
 
     try:
@@ -249,10 +246,7 @@ def _render_ordenes_por_activo(df_act, df_users, df_ordenes):
     st.caption(f"📦 Inventario > {nombre_activo} > Órdenes de Trabajo")
 
     if st.button("⬅️ Volver a la ficha del activo", use_container_width=True):
-        st.session_state.current_page = "Inventario Activos"
-        st.session_state.jump_target = "activo"
-        st.session_state.jump_id = int(activo_id)
-        st.rerun()
+        navegar_a("Inventario Activos", jump_target="activo", jump_id=int(activo_id))
 
     st.markdown("---")
 
@@ -336,8 +330,7 @@ def _render_crear_para_activo(df_act, df_users, df_ordenes):
     if not activo_id:
         st.error("No se especificó un activo.")
         if st.button("⬅️ Volver al inicio"):
-            st.session_state.current_page = "Tablero de Mando"
-            st.rerun()
+            navegar_a("Tablero de Mando")
         return
 
     try:
@@ -356,10 +349,7 @@ def _render_crear_para_activo(df_act, df_users, df_ordenes):
     st.caption(f"📦 Inventario > {nombre_activo} > Crear Orden")
 
     if st.button("⬅️ Volver a la ficha del activo", use_container_width=True):
-        st.session_state.current_page = "Inventario Activos"
-        st.session_state.jump_target = "activo"
-        st.session_state.jump_id = int(activo_id)
-        st.rerun()
+        navegar_a("Inventario Activos", jump_target="activo", jump_id=int(activo_id))
 
     st.markdown("---")
 
@@ -396,10 +386,7 @@ def _render_crear_para_activo(df_act, df_users, df_ordenes):
                         nuevo_id = res.data[0]['id']
                         st.toast(f"✅ Orden #{nuevo_id} creada para {nombre_activo}.")
                         time.sleep(1)
-                        st.session_state.current_page = "Ordenes de Trabajo"
-                        st.session_state.jump_target = "orden"
-                        st.session_state.jump_id = nuevo_id
-                        st.rerun()
+                        navegar_a("Ordenes de Trabajo", jump_target="orden", jump_id=nuevo_id)
                 except Exception as e:
                     error_amigable(e, "crear orden")
 
@@ -569,10 +556,7 @@ def _render_kanban(df_act, df_users, df_ordenes, df_solicitudes=None):
 
             oid = row['id']
             if st.button(f"⚙️ Gestionar #{oid}", key=f"{key_prefix}_kanban_{oid}", use_container_width=True, type="secondary"):
-                st.session_state.current_page = "Ordenes de Trabajo"
-                st.session_state.jump_target = "orden"
-                st.session_state.jump_id = oid
-                st.rerun()
+                navegar_a("Ordenes de Trabajo", jump_target="orden", jump_id=oid)
 
         if len(df_col) > max_default:
             if not mostrar_todas:

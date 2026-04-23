@@ -9,6 +9,7 @@ from PIL import Image
 from utils.db import supabase, run_query, render_paginacion
 from utils.helpers import mostrar_notificaciones, agregar_notificacion, registrar_accion_critica, error_amigable
 from utils.uploads import subir_imagen, mostrar_imagen_cloudinary
+from utils.helpers import navegar_a
 from utils.qr import generar_qr_activo
 from utils.catalogos import AREAS_DATA, CATEGORIAS_ACTIVOS
 from pdf_utils import generar_hoja_vida_pdf
@@ -346,14 +347,9 @@ def _render_jerarquia(df_act):
                                             st.markdown(f"**{k}:** {v}")
 
                                 if st.button(f"📋 Ver ficha", key=f"jer_act_{oid}", type="primary", use_container_width=True):
-                                    st.session_state.jump_target = "activo"
-                                    st.session_state.jump_id = oid
-                                    st.rerun()
+                                    navegar_a("Inventario Activos", jump_target="activo", jump_id=oid)
                                 if st.button(f"🛠️ Ver OTs", key=f"jer_ot_{oid}", type="secondary", use_container_width=True):
-                                    st.session_state.current_page = "Ordenes de Trabajo"
-                                    st.session_state.jump_target = "ordenes_por_activo"
-                                    st.session_state.jump_id = oid
-                                    st.rerun()
+                                    navegar_a("Ordenes de Trabajo", jump_target="ordenes_por_activo", jump_id=oid)
 
     # ── Activos sin área asignada ──
     activos_sin_area = df_act[~df_act['area'].isin(AREAS_DATA.keys())]
@@ -463,24 +459,15 @@ def _render_ficha_activo(activo):
                     """, unsafe_allow_html=True)
                 with col_btn:
                     if st.button("⚙️ Gestionar", key=f"ficha_ot_{orden['id']}", type="secondary", use_container_width=True):
-                        st.session_state.current_page = "Ordenes de Trabajo"
-                        st.session_state.jump_target = "orden"
-                        st.session_state.jump_id = orden['id']
-                        st.rerun()
+                        navegar_a("Ordenes de Trabajo", jump_target="orden", jump_id=orden['id'])
 
             # Link para ver todas
             if st.button("📋 Ver todas las órdenes de este activo", key="ver_todas_ot_ficha"):
-                st.session_state.current_page = "Ordenes de Trabajo"
-                st.session_state.jump_target = "ordenes_por_activo"
-                st.session_state.jump_id = int(activo['id'])
-                st.rerun()
+                navegar_a("Ordenes de Trabajo", jump_target="ordenes_por_activo", jump_id=int(activo['id']))
         else:
             st.info("Este activo no tiene órdenes de trabajo registradas.")
             if st.button("➕ Crear orden para este activo", type="primary"):
-                st.session_state.current_page = "Ordenes de Trabajo"
-                st.session_state.jump_target = "crear_para_activo"
-                st.session_state.jump_id = int(activo['id'])
-                st.rerun()
+                navegar_a("Ordenes de Trabajo", jump_target="crear_para_activo", jump_id=int(activo['id']))
     except Exception as e:
         st.error("No se pudieron cargar las órdenes.")
         print(f"Error cargando OTs del activo: {e}")
@@ -488,11 +475,7 @@ def _render_ficha_activo(activo):
     # ── Botón para editar ──
     st.markdown("---")
     if st.button("✏️ Editar este activo", use_container_width=True):
-        st.session_state.current_page = "Inventario Activos"
-        # Clear jump so it falls through to normal tabs
-        st.session_state.jump_target = None
-        st.session_state.jump_id = None
-        st.rerun()
+        navegar_a("Inventario Activos")
 
 
 # ==============================================================================
