@@ -513,11 +513,15 @@ def _render_nuevo(df_act):
         st.session_state.draft_data['foto_bytes'] = foto_archivo.getvalue()
         try:
             foto_archivo.seek(0)
-
-            img = Image.open(foto_archivo)
+            img_bytes = foto_archivo.getvalue()
+            img = Image.open(io.BytesIO(img_bytes))
             st.image(img, width=200, caption="✅ Imagen lista para guardar")
         except Exception:
-            st.image(foto_archivo.getvalue(), width=200, caption="✅ Imagen lista para guardar")
+            try:
+                foto_archivo.seek(0)
+                st.image(foto_archivo.getvalue(), width=200, caption="✅ Imagen lista para guardar")
+            except Exception:
+                st.warning("⚠️ No se pudo previsualizar, pero la foto se guardará correctamente.")
         st.success("Foto cargada correctamente.")
     elif draft.get('foto_bytes') is not None:
         st.image(draft['foto_bytes'], width=200, caption="Foto del draft")
@@ -695,11 +699,16 @@ def _render_edit(df_act):
             if nueva_foto_temp:
                 try:
                     nueva_foto_temp.seek(0)
-        
-                    img = Image.open(nueva_foto_temp)
+                    img_bytes = nueva_foto_temp.getvalue()
+                    img = Image.open(io.BytesIO(img_bytes))
                     st.image(img, use_container_width=True, caption="Nueva imagen (Sin guardar)")
                 except Exception:
-                    st.warning("⚠️ No se pudo previsualizar, pero la foto se guardará correctamente.")
+                    # Fallback: mostrar bytes directamente sin PIL
+                    try:
+                        nueva_foto_temp.seek(0)
+                        st.image(nueva_foto_temp.getvalue(), use_container_width=True, caption="Nueva imagen (Sin guardar)")
+                    except Exception:
+                        st.warning("⚠️ No se pudo previsualizar, pero la foto se guardará correctamente.")
             else:
                 url_db = dat.get('foto_url')
                 if url_db and isinstance(url_db, str) and len(url_db.strip()) > 10:
