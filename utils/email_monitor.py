@@ -25,49 +25,69 @@ def conectar_exchange():
     """
     Conecta al buzón de Exchange usando credenciales de st.secrets.
     Retorna el Account o None si falla.
+    Intenta autodiscover primero, luego servidor manual como fallback.
     """
     Account, Credentials, Configuration, DELEGATE, *_ = _get_exchangelib()
     if Account is None:
         st.error("❌ `exchangelib` no está instalado. Ejecuta: pip install exchangelib")
         return None
 
-    try:
-        cfg = st.secrets.get("exchange", {})
-        email = cfg.get("email", "")
-        username = cfg.get("username", "")
-        password = cfg.get("password", "")
-        server = cfg.get("server", "")
-        autodiscover = cfg.get("autodiscover", True)
+    cfg = st.secrets.get("exchange", {})
+    email = cfg.get("email", "")
+    username = cfg.get("username", "")
+    password = cfg.get("password", "")
+    server = cfg.get("server", "")
+    autodiscover = cfg.get("autodiscover", True)
 
-        if not email or not password:
-            st.warning("⚠️ Credenciales de Exchange no configuradas en secrets.toml")
-            return None
+    if not email or not password:
+        st.warning("⚠️ Credenciales de Exchange no configuradas en secrets.toml")
+        return None
 
-        creds = Credentials(username=username or email, password=password)
+    creds = Credentials(username=username or email, password=password)
 
-        if autodiscover:
-            account = Account(
-                primary_smtp_address=email,
-                credentials=creds,
-                autodiscover=True,
-                access_type=DELEGATE
-            )
-        else:
-            if not server:
-                st.warning("⚠️ 'server' requerido si autodiscover=false")
+    # ── Estrategia 1: Autodiscover (si está habilitado) ──
+    if autodiscover:
+        try:
+            with st.spinner("🔍 Intentando autodiscover..."):
+                account = Account(
+                    primary_smtp_address=email,
+                    credentials=creds,
+                    autodiscover=True,
+                    access_type=DELEGATE
+                )
+            st.toast("✅ Conexión exitosa (autodiscover)")
+            return account
+        except Exception as e:
+            error_detalle = str(e)
+            st.warning(f"⚠️ Autodiscover falló: `{type(e).__name__}`: {error_detalle[:200]}")
+            # Si hay servidor manual configurado, intentar como fallback
+            if server:
+                st.info("🔄 Intentando con servidor manual como respaldo...")
+            else:
+                st.error("❌ Autodiscover falló y no hay `server` configurado en secrets.toml.")
+                st.code(f"Error: {error_detalle[:500]}", language="text")
                 return None
+
+    # ── Estrategia 2: Servidor manual ──
+    if not server:
+        st.warning("⚠️ No hay servidor configurado. Agrega `server` en secrets.toml bajo [exchange]")
+        return None
+
+    try:
+        with st.spinner(f"🔗 Conectando a {server}..."):
             config = Configuration(server=server, credentials=creds)
             account = Account(
                 primary_smtp_address=email,
                 config=config,
                 access_type=DELEGATE
             )
-
+        st.toast("✅ Conexión exitosa (servidor manual)")
         return account
-
     except Exception as e:
-        st.error(f"❌ Error conectando a Exchange: {type(e).__name__}")
-        print(f"[EmailMonitor] Error Exchange: {e}")
+        error_detalle = str(e)
+        st.error(f"❌ Error conectando a Exchange: `{type(e).__name__}`")
+        st.code(error_detalle[:500], language="text")
+        print(f"[EmailMonitor] Error Exchange ({server}): {error_detalle}")
         return None
 
 
@@ -141,9 +161,125 @@ def descargar_correos_nuevos(max_correos=20, dias_atras=3):
         return resultados
 
     except Exception as e:
-        st.error(f"❌ Error descargando correos: {type(e).__name__}")
-        print(f"[EmailMonitor] Error descargando: {e}")
+        error_detalle = str(e)
+        st.error(f"❌ Error descargando correos: `{type(e).__name__}`")
+        st.code(error_detalle[:500], language="text")
+        print(f"[EmailMonitor] Error descargando: {error_detalle}")
         return []
+
+
+def _diagnosticar_exchange():
+    """Diagnóstico paso a paso de la conexión Exchange."""
+    st.markdown("#### 🩺 Diagnóstico de Conexión Exchange")
+
+    cfg = st.secrets.get("exchange", {})
+    email = cfg.get("email", "")
+    username = cfg.get("username", "")
+    server = cfg.get("server", "")
+    autodiscover = cfg.get("autodiscover", True)
+
+    # Paso 1: Verificar secrets
+    st.markdown("**1️⃣ Verificando configuración...**")
+    if not email:
+        st.error("❌ `email` no configurado en [exchange]")
+        return
+    if not cfg.get("password"):
+        st.error("❌ `password` no configurado en [exchange]")
+        return
+    st.success(f"✅ Email: `{email}` | Usuario: `{username or email}` | Server: `{server or '(autodiscover)'}` | Autodiscover: `{autodiscover}`")
+
+    # Paso 2: Verificar exchangelib
+    st.markdown("**2️⃣ Verificando exchangelib...**")
+    Account, Credentials, Configuration, DELEGATE, *_ = _get_exchangelib()
+    if Account is None:
+        st.error("❌ `exchangelib` no está instalado")
+        return
+    try:
+        import exchangelib
+        version = getattr(exchangelib, '__version__', 'desconocida')
+        st.success(f"✅ exchangelib v{version}")
+    except:
+        st.success("✅ exchangelib instalado")
+
+    creds = Credentials(username=username or email, password=cfg.get("password", ""))
+
+    # Paso 3: Probar autodiscover
+    if autodiscover:
+        st.markdown("**3️⃣ Probando autodiscover...**")
+        try:
+            account = Account(
+                primary_smtp_address=email,
+                credentials=creds,
+                autodiscover=True,
+                access_type=DELEGATE
+            )
+            st.success(f"✅ Autodiscover exitoso. Servidor encontrado: `{account.protocol.server if hasattr(account, 'protocol') else 'ok'}`")
+            _test_listar_correos(account)
+            return
+        except Exception as e:
+            st.error(f"❌ Autodiscover falló: `{type(e).__name__}`")
+            st.code(str(e)[:500], language="text")
+
+    # Paso 4: Probar servidor manual
+    if server:
+        st.markdown(f"**{'3' if not autodiscover else '4'}️⃣ Probando servidor manual: `{server}`...**")
+        try:
+            config = Configuration(server=server, credentials=creds)
+            account = Account(
+                primary_smtp_address=email,
+                config=config,
+                access_type=DELEGATE
+            )
+            st.success(f"✅ Conexión manual exitosa a `{server}`")
+            _test_listar_correos(account)
+            return
+        except Exception as e:
+            st.error(f"❌ Conexión manual falló: `{type(e).__name__}`")
+            st.code(str(e)[:500], language="text")
+    else:
+        st.warning("⚠️ No hay `server` configurado y autodiscover falló. Agrega el servidor en secrets.toml.")
+
+    # Sugerencias
+    st.markdown("---")
+    st.markdown("**💡 Sugerencias para Postobón:**")
+    st.code("""
+[exchange]
+email = "jpenagos@postobon.com.co"
+username = "jpenagos"
+password = "TU_CONTRASEÑA"
+server = "mail.postobon.com.co"
+autodiscover = false
+""", language="toml")
+    st.caption("Si `mail.postobon.com.co` no funciona, prueba con `owa.postobon.com.co` o `exchange.postobon.com.co`")
+
+
+def _test_listar_correos(account):
+    """Prueba listar correos de la bandeja."""
+    st.markdown("**📬 Probando leer bandeja de entrada...**")
+    try:
+        from exchangelib import Q
+        ahora = datetime.now()
+        desde = ahora - timedelta(days=3)
+        bandeja = account.inbox
+        total = bandeja.total_count
+        st.info(f"📊 Bandeja total: {total} correos")
+
+        correos = bandeja.filter(
+            datetime_received__gte=desde
+        ).order_by('-datetime_received')[:5]
+
+        lista = list(correos)
+        if lista:
+            st.success(f"✅ Se encontraron {len(lista)} correos recientes (mostrando primeros 5):")
+            for c in lista:
+                remitente = str(c.sender.email_address if c.sender else '?')
+                asunto = str(c.subject or '(sin asunto)')[:60]
+                fecha = str(c.datetime_received)[:16] if c.datetime_received else '?'
+                st.markdown(f"- 📧 `{fecha}` **{asunto}** — _{remitente}_")
+        else:
+            st.warning("⚠️ No se encontraron correos en los últimos 3 días (la bandeja puede estar vacía o los permisos son limitados)")
+    except Exception as e:
+        st.error(f"❌ Error leyendo bandeja: `{type(e).__name__}`: {str(e)[:300]}")
 
 
 def render_buzon_correo():
@@ -169,13 +305,18 @@ autodiscover = false
         return
 
     # ── Botón para descargar correos ──
-    col_btn, col_info = st.columns([1, 3])
+    col_btn, col_diag, col_info = st.columns([1, 1, 2])
     with col_btn:
         if st.button("🔄 Revisar Correo", type="primary", use_container_width=True):
             with st.spinner("Conectando a Exchange y descargando correos..."):
                 correos = descargar_correos_nuevos(max_correos=20, dias_atras=3)
                 st.session_state['_correos_pendientes'] = correos
                 st.rerun()
+
+    with col_diag:
+        if st.button("🩺 Diagnosticar", use_container_width=True):
+            with st.spinner("Probando conexión..."):
+                _diagnosticar_exchange()
 
     with col_info:
         st.caption("Descarga los correos de los últimos 3 días. Solo se muestran los no procesados.")
