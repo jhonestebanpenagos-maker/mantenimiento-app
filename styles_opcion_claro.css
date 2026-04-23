@@ -141,31 +141,75 @@ h1, h2, h3 {
     font-weight: 500 !important;
 }
 
-/* DROPDOWN / SELECTBOX — menú desplegable legible */
-ul[data-baseweb="listbox"] {
+/* DROPDOWN / SELECTBOX — menú desplegable legible (agresivo) */
+div[data-baseweb="popover"],
+div[data-baseweb="popover"] *,
+div[data-baseweb="layer"],
+div[data-baseweb="layer"] * {
     background-color: #FFFFFF !important;
+    color: var(--text-primary) !important;
+}
+div[data-baseweb="popover"] {
     border: 1px solid var(--border) !important;
     border-radius: 8px !important;
     box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12) !important;
 }
-ul[data-baseweb="listbox"] li,
-ul[data-baseweb="listbox"] div[role="option"] {
+ul[data-baseweb="listbox"],
+ul[data-baseweb="menu"],
+div[data-baseweb="listbox"],
+div[data-baseweb="menu"] {
+    background-color: #FFFFFF !important;
+    color: var(--text-primary) !important;
+    border: none !important;
+}
+[data-baseweb="listbox"] li,
+[data-baseweb="listbox"] div[role="option"],
+[data-baseweb="menu"] li,
+[data-baseweb="menu"] div[role="option"],
+[data-baseweb="listbox"] [role="option"],
+[data-baseweb="menu"] [role="option"],
+li[data-baseweb="option"],
+div[data-baseweb="option"] {
     background-color: transparent !important;
     color: var(--text-primary) !important;
     padding: 8px 12px !important;
 }
-ul[data-baseweb="listbox"] li:hover,
-ul[data-baseweb="listbox"] div[role="option"]:hover,
-ul[data-baseweb="listbox"] li[aria-selected="true"],
-ul[data-baseweb="listbox"] div[role="option"][aria-selected="true"] {
+[data-baseweb="listbox"] li:hover,
+[data-baseweb="listbox"] [role="option"]:hover,
+[data-baseweb="menu"] li:hover,
+[data-baseweb="menu"] [role="option"]:hover,
+[data-baseweb="listbox"] li[aria-selected="true"],
+[data-baseweb="listbox"] [role="option"][aria-selected="true"],
+[data-baseweb="menu"] li[aria-selected="true"],
+[data-baseweb="menu"] [role="option"][aria-selected="true"],
+li[data-baseweb="option"]:hover,
+div[data-baseweb="option"]:hover {
     background-color: var(--accent-soft) !important;
     color: var(--accent) !important;
 }
-div[data-baseweb="popover"] {
-    background-color: #FFFFFF !important;
+[data-baseweb="listbox"] li *,
+[data-baseweb="listbox"] [role="option"] *,
+[data-baseweb="menu"] li *,
+[data-baseweb="menu"] [role="option"] * {
+    color: var(--text-primary) !important;
 }
-div[data-baseweb="popover"] div[data-baseweb="listbox"] {
-    background-color: #FFFFFF !important;
+[data-baseweb="listbox"] li:hover *,
+[data-baseweb="listbox"] [role="option"]:hover *,
+[data-baseweb="menu"] li:hover *,
+[data-baseweb="menu"] [role="option"]:hover * {
+    color: var(--accent) !important;
+}
+[data-baseweb="listbox"] mark,
+[data-baseweb="menu"] mark {
+    background-color: rgba(37, 99, 235, 0.2) !important;
+    color: var(--accent) !important;
+}
+div[data-baseweb="popover"] input,
+div[data-baseweb="popover"] [data-baseweb="input"],
+div[data-baseweb="layer"] input {
+    background-color: var(--bg-input) !important;
+    color: var(--text-primary) !important;
+    border-color: var(--border) !important;
 }
 
 /* BOTÓN PRINCIPAL */

@@ -71,32 +71,89 @@ section[data-testid="stMain"] button[kind="secondary"] * { color: #000000 !impor
 section[data-testid="stMain"] button[kind="secondary"] p { color: #000000 !important; }
 section[data-testid="stMain"] button[kind="secondary"]:hover { background-color: #f87171 !important; transform: scale(1.02); border-color: #b91c1c !important; }
 
-/* DROPDOWN / SELECTBOX — menú desplegable legible */
-ul[data-baseweb="listbox"] {
+/* DROPDOWN / SELECTBOX — menú desplegable legible (agresivo) */
+/* Contenedor del popover (portal de BaseWeb) */
+div[data-baseweb="popover"],
+div[data-baseweb="popover"] *,
+div[data-baseweb="layer"],
+div[data-baseweb="layer"] * {
     background-color: #161b22 !important;
+    color: #F3F4F6 !important;
+}
+div[data-baseweb="popover"] {
     border: 1px solid #30363d !important;
     border-radius: 8px !important;
-    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4) !important;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5) !important;
 }
-ul[data-baseweb="listbox"] li,
-ul[data-baseweb="listbox"] div[role="option"] {
+
+/* Listbox y menu (ambos posibles en Streamlit 1.38) */
+ul[data-baseweb="listbox"],
+ul[data-baseweb="menu"],
+div[data-baseweb="listbox"],
+div[data-baseweb="menu"] {
+    background-color: #161b22 !important;
+    color: #F3F4F6 !important;
+    border: none !important;
+}
+
+/* Opciones del dropdown — cubre li, div, y cualquier role=option */
+[data-baseweb="listbox"] li,
+[data-baseweb="listbox"] div[role="option"],
+[data-baseweb="menu"] li,
+[data-baseweb="menu"] div[role="option"],
+[data-baseweb="listbox"] [role="option"],
+[data-baseweb="menu"] [role="option"],
+li[data-baseweb="option"],
+div[data-baseweb="option"] {
     background-color: transparent !important;
     color: #F3F4F6 !important;
     padding: 8px 12px !important;
+    font-size: 0.9rem !important;
 }
-ul[data-baseweb="listbox"] li:hover,
-ul[data-baseweb="listbox"] div[role="option"]:hover,
-ul[data-baseweb="listbox"] li[aria-selected="true"],
-ul[data-baseweb="listbox"] div[role="option"][aria-selected="true"] {
+
+/* Hover y selección activa */
+[data-baseweb="listbox"] li:hover,
+[data-baseweb="listbox"] [role="option"]:hover,
+[data-baseweb="menu"] li:hover,
+[data-baseweb="menu"] [role="option"]:hover,
+[data-baseweb="listbox"] li[aria-selected="true"],
+[data-baseweb="listbox"] [role="option"][aria-selected="true"],
+[data-baseweb="menu"] li[aria-selected="true"],
+[data-baseweb="menu"] [role="option"][aria-selected="true"],
+li[data-baseweb="option"]:hover,
+div[data-baseweb="option"]:hover {
     background-color: rgba(245, 158, 11, 0.15) !important;
     color: #F59E0B !important;
 }
-/* Popover contenedor del dropdown */
-div[data-baseweb="popover"] {
-    background-color: #161b22 !important;
+
+/* Texto dentro de las opciones */
+[data-baseweb="listbox"] li *,
+[data-baseweb="listbox"] [role="option"] *,
+[data-baseweb="menu"] li *,
+[data-baseweb="menu"] [role="option"] * {
+    color: #F3F4F6 !important;
 }
-div[data-baseweb="popover"] div[data-baseweb="listbox"] {
-    background-color: #161b22 !important;
+[data-baseweb="listbox"] li:hover *,
+[data-baseweb="listbox"] [role="option"]:hover *,
+[data-baseweb="menu"] li:hover *,
+[data-baseweb="menu"] [role="option"]:hover * {
+    color: #F59E0B !important;
+}
+
+/* Highlight/search match dentro de opciones */
+[data-baseweb="listbox"] mark,
+[data-baseweb="menu"] mark {
+    background-color: rgba(245, 158, 11, 0.3) !important;
+    color: #F59E0B !important;
+}
+
+/* Filtro/buscador dentro del dropdown */
+div[data-baseweb="popover"] input,
+div[data-baseweb="popover"] [data-baseweb="input"],
+div[data-baseweb="layer"] input {
+    background-color: #0d1117 !important;
+    color: #F3F4F6 !important;
+    border-color: #30363d !important;
 }
 
 /* TEXTOS Y TARJETAS */
