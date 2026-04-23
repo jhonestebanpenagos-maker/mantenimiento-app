@@ -1,161 +1,221 @@
 # ==============================================================================
-# utils/email_monitor.py — Monitoreo de bandeja Exchange / IMAP
-# Descarga correos nuevos y los presenta en el buzón de ORIÓN para aprobación
+# utils/email_monitor.py — Monitoreo de correo vía Gmail IMAP
+# Descarga correos reenviados desde Postobón y los presenta en el buzón de ORIÓN
 # ==============================================================================
 import streamlit as st
-import pandas as pd
+import imaplib
+import email
+from email.header import decode_header
+from email.utils import parsedate_to_datetime
 import re
-import json
 from datetime import datetime, timedelta
 
 
-def _get_exchangelib():
-    """Import lazy de exchangelib para no fallar si no está instalado."""
-    try:
-        from exchangelib import (
-            Account, Credentials, Configuration, DELEGATE,
-            Message, HTMLBody, FileAttachment
-        )
-        return Account, Credentials, Configuration, DELEGATE, Message, HTMLBody, FileAttachment
-    except ImportError:
-        return None, None, None, None, None, None, None
+# ==============================================================================
+# 🔧 CONFIGURACIÓN
+# ==============================================================================
+IMAP_SERVER = "imap.gmail.com"
+IMAP_PORT = 993
 
 
-def conectar_exchange():
-    """
-    Conecta al buzón de Exchange usando credenciales de st.secrets.
-    Retorna el Account o None si falla.
-    Intenta autodiscover primero, luego servidor manual como fallback.
-    """
-    Account, Credentials, Configuration, DELEGATE, *_ = _get_exchangelib()
-    if Account is None:
-        st.error("❌ `exchangelib` no está instalado. Ejecuta: pip install exchangelib")
-        return None
-
-    cfg = st.secrets.get("exchange", {})
-    email = cfg.get("email", "")
-    username = cfg.get("username", "")
+def _obtener_credenciales():
+    """Obtiene credenciales de Gmail desde st.secrets."""
+    cfg = st.secrets.get("gmail", {})
+    correo = cfg.get("correo", "")
     password = cfg.get("password", "")
-    server = cfg.get("server", "")
-    autodiscover = cfg.get("autodiscover", True)
+    return correo, password
 
-    if not email or not password:
-        st.warning("⚠️ Credenciales de Exchange no configuradas en secrets.toml")
-        return None
 
-    creds = Credentials(username=username or email, password=password)
+def _conectar_imap():
+    """
+    Conecta a Gmail vía IMAP con SSL.
+    Retorna el objeto IMAP4_SSL o None si falla.
+    """
+    correo, password = _obtener_credenciales()
 
-    # ── Estrategia 1: Autodiscover (si está habilitado) ──
-    if autodiscover:
-        try:
-            with st.spinner("🔍 Intentando autodiscover..."):
-                account = Account(
-                    primary_smtp_address=email,
-                    credentials=creds,
-                    autodiscover=True,
-                    access_type=DELEGATE
-                )
-            st.toast("✅ Conexión exitosa (autodiscover)")
-            return account
-        except Exception as e:
-            error_detalle = str(e)
-            st.warning(f"⚠️ Autodiscover falló: `{type(e).__name__}`: {error_detalle[:200]}")
-            # Si hay servidor manual configurado, intentar como fallback
-            if server:
-                st.info("🔄 Intentando con servidor manual como respaldo...")
-            else:
-                st.error("❌ Autodiscover falló y no hay `server` configurado en secrets.toml.")
-                st.code(f"Error: {error_detalle[:500]}", language="text")
-                return None
-
-    # ── Estrategia 2: Servidor manual ──
-    if not server:
-        st.warning("⚠️ No hay servidor configurado. Agrega `server` en secrets.toml bajo [exchange]")
+    if not correo or not password:
+        st.warning("⚠️ Credenciales de Gmail no configuradas en secrets.toml [gmail]")
         return None
 
     try:
-        with st.spinner(f"🔗 Conectando a {server}..."):
-            config = Configuration(server=server, credentials=creds)
-            account = Account(
-                primary_smtp_address=email,
-                config=config,
-                access_type=DELEGATE
-            )
-        st.toast("✅ Conexión exitosa (servidor manual)")
-        return account
+        mail = imaplib.IMAP4_SSL(IMAP_SERVER, IMAP_PORT)
+        mail.login(correo, password)
+        return mail
+    except imaplib.IMAP4.error as e:
+        st.error(f"❌ Error de autenticación IMAP: {str(e)[:300]}")
+        st.info("💡 Verifica que la contraseña de aplicación sea correcta y que IMAP esté habilitado en Gmail.")
+        return None
     except Exception as e:
-        error_detalle = str(e)
-        st.error(f"❌ Error conectando a Exchange: `{type(e).__name__}`")
-        st.code(error_detalle[:500], language="text")
-        print(f"[EmailMonitor] Error Exchange ({server}): {error_detalle}")
+        st.error(f"❌ Error conectando a Gmail: `{type(e).__name__}`: {str(e)[:300]}")
         return None
 
 
-def _parsear_cuerpo(item):
-    """Extrae texto plano del cuerpo del correo."""
-    if item.text_body:
-        return item.text_body.strip()
-    if item.body:
-        # Limpiar HTML básico
-        texto = item.body
-        texto = re.sub(r'<style[^>]*>.*?</style>', '', texto, flags=re.DOTALL)
-        texto = re.sub(r'<script[^>]*>.*?</script>', '', texto, flags=re.DOTALL)
-        texto = re.sub(r'<[^>]+>', ' ', texto)
-        texto = re.sub(r'\s+', ' ', texto).strip()
-        return texto[:2000]
+def _decodificar_header(header_val):
+    """Decodifica un header de correo (asunto, remitente, etc.)."""
+    if not header_val:
+        return ""
+    partes = decode_header(header_val)
+    resultado = []
+    for parte, charset in partes:
+        if isinstance(parte, bytes):
+            resultado.append(parte.decode(charset or 'utf-8', errors='replace'))
+        else:
+            resultado.append(str(parte))
+    return ' '.join(resultado)
+
+
+def _extraer_texto_plano(msg):
+    """Extrae el cuerpo en texto plano de un mensaje MIME."""
+    if msg.is_multipart():
+        for parte in msg.walk():
+            ctype = parte.get_content_type()
+            disposition = str(parte.get("Content-Disposition", ""))
+            if ctype == "text/plain" and "attachment" not in disposition:
+                payload = parte.get_payload(decode=True)
+                if payload:
+                    charset = parte.get_content_charset() or 'utf-8'
+                    return payload.decode(charset, errors='replace')
+        # Si no hay text/plain, intentar con text/html y limpiar
+        for parte in msg.walk():
+            ctype = parte.get_content_type()
+            disposition = str(parte.get("Content-Disposition", ""))
+            if ctype == "text/html" and "attachment" not in disposition:
+                payload = parte.get_payload(decode=True)
+                if payload:
+                    charset = parte.get_content_charset() or 'utf-8'
+                    html = payload.decode(charset, errors='replace')
+                    return _html_a_texto(html)
+    else:
+        payload = msg.get_payload(decode=True)
+        if payload:
+            charset = msg.get_content_charset() or 'utf-8'
+            texto = payload.decode(charset, errors='replace')
+            if msg.get_content_type() == "text/html":
+                return _html_a_texto(texto)
+            return texto
     return ""
 
 
-def _extraer_adjuntos(item):
+def _html_a_texto(html):
+    """Convierte HTML básico a texto plano."""
+    texto = re.sub(r'<style[^>]*>.*?</style>', '', html, flags=re.DOTALL)
+    texto = re.sub(r'<script[^>]*>.*?</script>', '', html, flags=re.DOTALL)
+    texto = re.sub(r'<br\s*/?>', '\n', texto, flags=re.IGNORECASE)
+    texto = re.sub(r'</?p[^>]*>', '\n', texto, flags=re.IGNORECASE)
+    texto = re.sub(r'<[^>]+>', ' ', texto)
+    texto = texto.replace('&nbsp;', ' ').replace('&amp;', '&')
+    texto = texto.replace('&lt;', '<').replace('&gt;', '>')
+    texto = re.sub(r'[ \t]+', ' ', texto)
+    texto = re.sub(r'\n\s*\n+', '\n\n', texto)
+    return texto.strip()
+
+
+def _extraer_adjuntos(msg):
     """Extrae info de adjuntos del correo."""
     adjuntos = []
-    if item.attachments:
-        for att in item.attachments:
-            if hasattr(att, 'name'):
-                adjuntos.append({
-                    'nombre': att.name,
-                    'tipo': att.content_type or 'desconocido',
-                    'tamano': att.size if hasattr(att, 'size') else 0
-                })
+    if msg.is_multipart():
+        for parte in msg.walk():
+            disposition = str(parte.get("Content-Disposition", ""))
+            if "attachment" in disposition:
+                nombre = parte.get_filename()
+                if nombre:
+                    nombre = _decodificar_header(nombre)
+                    datos = parte.get_payload(decode=True)
+                    adjuntos.append({
+                        'nombre': nombre,
+                        'tipo': parte.get_content_type() or 'desconocido',
+                        'tamano': len(datos) if datos else 0
+                    })
     return adjuntos
 
 
+def _parsear_fecha(date_str):
+    """Parsea fecha del correo a ISO format."""
+    if not date_str:
+        return ""
+    try:
+        dt = parsedate_to_datetime(date_str)
+        return dt.isoformat()
+    except Exception:
+        return str(date_str)[:25]
+
+
+# ==============================================================================
+# 📬 DESCARGA DE CORREOS
+# ==============================================================================
 def descargar_correos_nuevos(max_correos=20, dias_atras=3):
     """
-    Descarga correos nuevos de los últimos N días.
+    Descarga correos nuevos de Gmail vía IMAP.
     Retorna lista de dicts con la info de cada correo.
     """
-    account = conectar_exchange()
-    if not account:
+    mail = _conectar_imap()
+    if not mail:
         return []
 
     try:
-        from exchangelib import Q
-        ahora = datetime.now()
-        desde = ahora - timedelta(days=dias_atras)
+        # Seleccionar Bandeja de Entrada
+        mail.select("INBOX")
 
-        # Buscar en Bandeja de Entrada, no leídos primero, ordenados por fecha
-        bandeja = account.inbox
-        correos = bandeja.filter(
-            datetime_received__gte=desde
-        ).order_by('-datetime_received')[:max_correos]
+        # Calcular fecha desde hace N días
+        desde = datetime.now() - timedelta(days=dias_atras)
+        fecha_desde = desde.strftime("%d-%b-%Y")  # Formato IMAP: 01-Jan-2026
+
+        # Buscar correos desde esa fecha
+        status, mensajes = mail.search(None, f'(SINCE "{fecha_desde}")')
+        if status != "OK":
+            st.error("❌ Error buscando correos en la bandeja")
+            return []
+
+        ids = mensajes[0].split()
+        if not ids:
+            return []
+
+        # Tomar los últimos N (más recientes primero)
+        ids = ids[-max_correos:]
+        ids.reverse()  # Más recientes primero
 
         resultados = []
-        for item in correos:
-            cuerpo = _parsear_cuerpo(item)
-            adjuntos = _extraer_adjuntos(item)
+        for msg_id in ids:
+            status, datos = mail.fetch(msg_id, "(RFC822)")
+            if status != "OK":
+                continue
+
+            msg = email.message_from_bytes(datos[0][1])
+
+            # Extraer datos
+            asunto = _decodificar_header(msg.get("Subject", ""))
+            remitente_raw = _decodificar_header(msg.get("From", ""))
+            fecha_raw = msg.get("Date", "")
+            message_id = msg.get("Message-ID", str(msg_id.decode()))
+
+            # Parsear remitente: "Nombre <correo>" → nombre + correo
+            remitente = remitente_raw
+            remitente_nombre = ""
+            match = re.match(r'^"?([^"<]*)"?\s*<([^>]+)>', remitente_raw)
+            if match:
+                remitente_nombre = match.group(1).strip()
+                remitente = match.group(2).strip()
+            elif "@" in remitente_raw:
+                remitente = remitente_raw.strip()
+
+            cuerpo = _extraer_texto_plano(msg)
+            adjuntos = _extraer_adjuntos(msg)
+
+            # Determinar si está leído
+            status_flags, datos_flags = mail.fetch(msg_id, "(FLAGS)")
+            leido = b'\\Seen' in (datos_flags[0] if datos_flags[0] else b'')
 
             resultados.append({
-                'message_id': item.message_id or str(item.id),
-                'remitente': str(item.sender.email_address if item.sender else ''),
-                'remitente_nombre': str(item.sender.name if item.sender else ''),
-                'asunto': item.subject or '(Sin asunto)',
-                'fecha': item.datetime_received.isoformat() if item.datetime_received else '',
-                'cuerpo': cuerpo,
+                'message_id': message_id,
+                'remitente': remitente,
+                'remitente_nombre': remitente_nombre,
+                'asunto': asunto or '(Sin asunto)',
+                'fecha': _parsear_fecha(fecha_raw),
+                'cuerpo': cuerpo[:2000],
                 'cuerpo_corto': cuerpo[:200],
                 'adjuntos': adjuntos,
                 'tiene_adjuntos': len(adjuntos) > 0,
-                'leido': item.is_read if hasattr(item, 'is_read') else True,
+                'leido': leido,
             })
 
         return resultados
@@ -164,151 +224,138 @@ def descargar_correos_nuevos(max_correos=20, dias_atras=3):
         error_detalle = str(e)
         st.error(f"❌ Error descargando correos: `{type(e).__name__}`")
         st.code(error_detalle[:500], language="text")
-        print(f"[EmailMonitor] Error descargando: {error_detalle}")
         return []
+    finally:
+        try:
+            mail.logout()
+        except Exception:
+            pass
 
 
-def _diagnosticar_exchange():
-    """Diagnóstico paso a paso de la conexión Exchange."""
-    st.markdown("#### 🩺 Diagnóstico de Conexión Exchange")
+# ==============================================================================
+# 🩺 DIAGNÓSTICO
+# ==============================================================================
+def _diagnosticar_gmail():
+    """Diagnóstico paso a paso de la conexión Gmail IMAP."""
+    st.markdown("#### 🩺 Diagnóstico de Conexión Gmail")
 
-    cfg = st.secrets.get("exchange", {})
-    email = cfg.get("email", "")
-    username = cfg.get("username", "")
-    server = cfg.get("server", "")
-    autodiscover = cfg.get("autodiscover", True)
+    correo, password = _obtener_credenciales()
 
     # Paso 1: Verificar secrets
     st.markdown("**1️⃣ Verificando configuración...**")
-    if not email:
-        st.error("❌ `email` no configurado en [exchange]")
+    if not correo:
+        st.error("❌ `correo` no configurado en [gmail] de secrets.toml")
         return
-    if not cfg.get("password"):
-        st.error("❌ `password` no configurado en [exchange]")
+    if not password:
+        st.error("❌ `password` no configurado en [gmail] de secrets.toml")
         return
-    st.success(f"✅ Email: `{email}` | Usuario: `{username or email}` | Server: `{server or '(autodiscover)'}` | Autodiscover: `{autodiscover}`")
+    # No mostrar la contraseña
+    st.success(f"✅ Correo: `{correo}` | Password: `{'✅ configurada' if password else '❌ vacía'}`")
 
-    # Paso 2: Verificar exchangelib
-    st.markdown("**2️⃣ Verificando exchangelib...**")
-    Account, Credentials, Configuration, DELEGATE, *_ = _get_exchangelib()
-    if Account is None:
-        st.error("❌ `exchangelib` no está instalado")
-        return
+    # Paso 2: Conectar IMAP
+    st.markdown("**2️⃣ Conectando a Gmail IMAP...**")
     try:
-        import exchangelib
-        version = getattr(exchangelib, '__version__', 'desconocida')
-        st.success(f"✅ exchangelib v{version}")
-    except:
-        st.success("✅ exchangelib instalado")
+        mail = imaplib.IMAP4_SSL(IMAP_SERVER, IMAP_PORT)
+        st.success("✅ Conexión SSL establecida con imap.gmail.com")
+    except Exception as e:
+        st.error(f"❌ No se pudo conectar: `{type(e).__name__}`: {str(e)[:300]}")
+        return
 
-    creds = Credentials(username=username or email, password=cfg.get("password", ""))
-
-    # Paso 3: Probar autodiscover
-    if autodiscover:
-        st.markdown("**3️⃣ Probando autodiscover...**")
-        try:
-            account = Account(
-                primary_smtp_address=email,
-                credentials=creds,
-                autodiscover=True,
-                access_type=DELEGATE
-            )
-            st.success(f"✅ Autodiscover exitoso. Servidor encontrado: `{account.protocol.server if hasattr(account, 'protocol') else 'ok'}`")
-            _test_listar_correos(account)
-            return
-        except Exception as e:
-            st.error(f"❌ Autodiscover falló: `{type(e).__name__}`")
-            st.code(str(e)[:500], language="text")
-
-    # Paso 4: Probar servidor manual
-    if server:
-        st.markdown(f"**{'3' if not autodiscover else '4'}️⃣ Probando servidor manual: `{server}`...**")
-        try:
-            config = Configuration(server=server, credentials=creds)
-            account = Account(
-                primary_smtp_address=email,
-                config=config,
-                access_type=DELEGATE
-            )
-            st.success(f"✅ Conexión manual exitosa a `{server}`")
-            _test_listar_correos(account)
-            return
-        except Exception as e:
-            st.error(f"❌ Conexión manual falló: `{type(e).__name__}`")
-            st.code(str(e)[:500], language="text")
-    else:
-        st.warning("⚠️ No hay `server` configurado y autodiscover falló. Agrega el servidor en secrets.toml.")
-
-    # Sugerencias
-    st.markdown("---")
-    st.markdown("**💡 Sugerencias para Postobón:**")
-    st.code("""
-[exchange]
-email = "jpenagos@postobon.com.co"
-username = "jpenagos"
-password = "TU_CONTRASEÑA"
-server = "mail.postobon.com.co"
-autodiscover = false
-""", language="toml")
-    st.caption("Si `mail.postobon.com.co` no funciona, prueba con `owa.postobon.com.co` o `exchange.postobon.com.co`")
-
-
-def _test_listar_correos(account):
-    """Prueba listar correos de la bandeja."""
-    st.markdown("**📬 Probando leer bandeja de entrada...**")
+    # Paso 3: Login
+    st.markdown("**3️⃣ Autenticando...**")
     try:
-        from exchangelib import Q
-        ahora = datetime.now()
-        desde = ahora - timedelta(days=3)
-        bandeja = account.inbox
-        total = bandeja.total_count
-        st.info(f"📊 Bandeja total: {total} correos")
+        mail.login(correo, password)
+        st.success("✅ Login exitoso")
+    except imaplib.IMAP4.error as e:
+        st.error(f"❌ Autenticación falló: {str(e)[:300]}")
+        st.info("💡 Posibles causas:\n- Contraseña de aplicación incorrecta\n- IMAP no habilitado en Gmail\n- Verificación en 2 pasos no activa")
+        return
+    except Exception as e:
+        st.error(f"❌ Error: `{type(e).__name__}`: {str(e)[:300]}")
+        return
 
-        correos = bandeja.filter(
-            datetime_received__gte=desde
-        ).order_by('-datetime_received')[:5]
+    # Paso 4: Listar carpetas
+    st.markdown("**4️⃣ Listando carpetas...**")
+    try:
+        status, carpetas = mail.list()
+        if status == "OK":
+            st.success(f"✅ {len(carpetas)} carpetas encontradas")
+            for c in carpetas[:10]:
+                st.caption(f"  📁 {c.decode() if isinstance(c, bytes) else c}")
+    except Exception as e:
+        st.warning(f"⚠️ No se pudieron listar carpetas: {e}")
 
-        lista = list(correos)
-        if lista:
-            st.success(f"✅ Se encontraron {len(lista)} correos recientes (mostrando primeros 5):")
-            for c in lista:
-                remitente = str(c.sender.email_address if c.sender else '?')
-                asunto = str(c.subject or '(sin asunto)')[:60]
-                fecha = str(c.datetime_received)[:16] if c.datetime_received else '?'
-                st.markdown(f"- 📧 `{fecha}` **{asunto}** — _{remitente}_")
+    # Paso 5: Contar correos en INBOX
+    st.markdown("**5️⃣ Leyendo bandeja de entrada...**")
+    try:
+        mail.select("INBOX")
+        desde = datetime.now() - timedelta(days=3)
+        fecha_desde = desde.strftime("%d-%b-%Y")
+        status, mensajes = mail.search(None, f'(SINCE "{fecha_desde}")')
+        if status == "OK":
+            ids = mensajes[0].split()
+            st.success(f"✅ {len(ids)} correos encontrados en los últimos 3 días")
+
+            if ids:
+                # Mostrar los últimos 5
+                st.markdown("**📬 Últimos correos:**")
+                for msg_id in ids[-5:]:
+                    status, datos = mail.fetch(msg_id, "(BODY[HEADER.FIELDS (FROM SUBJECT DATE)])")
+                    if status == "OK":
+                        header = datos[0][1].decode(errors='replace')
+                        lines = header.strip().split('\n')
+                        info = ' | '.join(l.strip() for l in lines[:3])
+                        st.caption(f"  📧 {info[:120]}")
         else:
-            st.warning("⚠️ No se encontraron correos en los últimos 3 días (la bandeja puede estar vacía o los permisos son limitados)")
+            st.warning("⚠️ No se pudo buscar en la bandeja")
     except Exception as e:
         st.error(f"❌ Error leyendo bandeja: `{type(e).__name__}`: {str(e)[:300]}")
 
+    # Cerrar
+    try:
+        mail.logout()
+    except Exception:
+        pass
 
+    # Config esperada
+    st.markdown("---")
+    st.markdown("**📋 Configuración en secrets.toml:**")
+    st.code("""
+[gmail]
+correo = "orion.mantenimientoapp@gmail.com"
+password = "xxxx xxxx xxxx xxxx"
+""", language="toml")
+    st.caption("La password es la de aplicación de 16 caracteres (no tu contraseña de Gmail)")
+
+
+# ==============================================================================
+# 🎨 RENDERIZADO DEL BUZÓN
+# ==============================================================================
 def render_buzon_correo():
     """
     Renderiza el buzón de correo en la UI de Streamlit.
     Muestra correos pendientes y permite aprobar/rechazar para crear OT.
     """
-    st.markdown("### 📧 Buzón de Correo — Exchange")
-    st.caption("Revisa los correos entrantes y decide cuáles se convierten en Órdenes de Trabajo.")
+    st.markdown("### 📧 Buzón de Correo")
+    st.caption("Revisa los correos reenviados desde Postobón y decide cuáles se convierten en Órdenes de Trabajo.")
 
     # ── Configuración en secrets ──
-    cfg = st.secrets.get("exchange", {})
-    if not cfg.get("email"):
-        st.info("ℹ️ Para activar el monitoreo de correo, agrega la configuración de Exchange en `secrets.toml`:")
+    cfg = st.secrets.get("gmail", {})
+    if not cfg.get("correo"):
+        st.info("ℹ️ Para activar el monitoreo de correo, agrega la configuración en `secrets.toml`:")
         st.code("""
-[exchange]
-email = "jpenagos@p......com.co"
-username = "TU_USUARIO"
-password = "TU_CONTRASEÑA"
-server = "mail.p......com.co"
-autodiscover = false
+[gmail]
+correo = "orion.mantenimientoapp@gmail.com"
+password = "xxxx xxxx xxxx xxxx"
 """, language="toml")
+        st.caption("Necesitas una **contraseña de aplicación** de Gmail (no tu contraseña normal)")
         return
 
-    # ── Botón para descargar correos ──
+    # ── Botones ──
     col_btn, col_diag, col_info = st.columns([1, 1, 2])
     with col_btn:
         if st.button("🔄 Revisar Correo", type="primary", use_container_width=True):
-            with st.spinner("Conectando a Exchange y descargando correos..."):
+            with st.spinner("Conectando a Gmail y descargando correos..."):
                 correos = descargar_correos_nuevos(max_correos=20, dias_atras=3)
                 st.session_state['_correos_pendientes'] = correos
                 st.rerun()
@@ -316,7 +363,7 @@ autodiscover = false
     with col_diag:
         if st.button("🩺 Diagnosticar", use_container_width=True):
             with st.spinner("Probando conexión..."):
-                _diagnosticar_exchange()
+                _diagnosticar_gmail()
 
     with col_info:
         st.caption("Descarga los correos de los últimos 3 días. Solo se muestran los no procesados.")
@@ -348,9 +395,9 @@ autodiscover = false
         ):
             # ── Info del correo ──
             st.markdown(f"""
-            **De:** {correo['remitente_nombre']} <{correo['remitente']}>  
-            **Fecha:** {correo['fecha'][:16]}  
-            **Asunto:** {correo['asunto']}  
+            **De:** {correo['remitente_nombre']} <{correo['remitente']}>
+            **Fecha:** {correo['fecha'][:16] if correo['fecha'] else 'N/A'}
+            **Asunto:** {correo['asunto']}
             **Adjuntos:** {', '.join(a['nombre'] for a in correo['adjuntos']) if correo['adjuntos'] else 'Ninguno'}
             """)
 
