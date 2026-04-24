@@ -8,6 +8,8 @@ import email
 from email.header import decode_header
 from email.utils import parsedate_to_datetime
 import re
+import io
+import base64
 from datetime import datetime, timedelta
 
 
@@ -224,6 +226,67 @@ def _parsear_fecha(date_str):
         return dt.isoformat()
     except Exception:
         return str(date_str)[:25]
+
+
+# ==============================================================================
+# 📤 SUBIR ADJUNTOS DEL CORREO A CLOUDINARY
+# ==============================================================================
+class _ArchivoDesdeBytes(io.BytesIO):
+    """Wrapper que emula un UploadedFile de Streamlit para subir a Cloudinary."""
+    def __init__(self, datos_bytes, nombre):
+        super().__init__(datos_bytes)
+        self.name = nombre
+        self._name = nombre
+        self._datos = datos_bytes
+
+    def getvalue(self):
+        return self._datos
+
+    def lower(self):
+        return self.name.lower()
+
+
+def _subir_adjuntos_correo(adjuntos, orden_id):
+    """
+    Sube los adjuntos de un correo a Cloudinary y crea entradas en la bitácora.
+    Retorna lista de URLs subidas exitosamente.
+    """
+    from utils.db import db_insert
+    from utils.uploads import subir_archivo_generico
+
+    urls_subidas = []
+    if not adjuntos:
+        return urls_subidas
+
+    for att in adjuntos:
+        datos_b64 = att.get('datos_b64')
+        nombre = att.get('nombre', 'adjunto_sin_nombre')
+        if not datos_b64:
+            continue
+
+        try:
+            datos_bytes = base64.b64decode(datos_b64)
+            archivo = _ArchivoDesdeBytes(datos_bytes, nombre)
+
+            url = subir_archivo_generico(archivo)
+            if url:
+                urls_subidas.append(url)
+                es_imagen = att.get('tipo', '').startswith('image/')
+                icono = "🖼️" if es_imagen else "📎"
+                db_insert("bitacora", {
+                    "orden_id": orden_id,
+                    "usuario_text": "CORREO (automático)",
+                    "mensaje": f"{icono} Adjunto del correo: {nombre}",
+                    "archivo_url": url,
+                    "fecha": datetime.now().isoformat()
+                })
+                print(f"✅ Adjunto subido: {nombre} → {url}")
+            else:
+                print(f"⚠️ No se pudo subir adjunto: {nombre}")
+        except Exception as e:
+            print(f"❌ Error subiendo adjunto {nombre}: {e}")
+
+    return urls_subidas
 
 
 # ==============================================================================
@@ -657,6 +720,35 @@ password = "xxxx xxxx xxxx xxxx"
                                         "mensaje": f"📧 Creada desde correo de {correo['remitente']}\nAsunto: {correo['asunto']}",
                                         "fecha": datetime.now().isoformat()
                                     })
+
+                                    # ── Subir adjuntos del correo a la orden ──
+                                    adjuntos_correo = correo.get('adjuntos', [])
+                                    if adjuntos_correo:
+                                        with st.spinner(f"Subiendo {len(adjuntos_correo)} adjunto(s) del correo..."):
+                                            urls = _subir_adjuntos_correo(adjuntos_correo, nuevo_id)
+                                            if urls:
+                                                print(f"✅ {len(urls)} adjunto(s) subido(s) a la OT #{nuevo_id}")
+
+                                    # ── Subir imágenes inline del correo ──
+                                    imagenes_inline = correo.get('imagenes_inline', {})
+                                    if imagenes_inline:
+                                        from utils.uploads import subir_archivo_generico as _subir_img
+                                        for cid, img in imagenes_inline.items():
+                                            try:
+                                                img_bytes = base64.b64decode(img['datos_b64'])
+                                                archivo_img = _ArchivoDesdeBytes(img_bytes, f"inline_{cid}.jpg")
+                                                url_img = _subir_img(archivo_img)
+                                                if url_img:
+                                                    db_insert("bitacora", {
+                                                        "orden_id": nuevo_id,
+                                                        "usuario_text": "CORREO (automático)",
+                                                        "mensaje": f"🖼️ Imagen embebida del correo (CID: {cid})",
+                                                        "archivo_url": url_img,
+                                                        "fecha": datetime.now().isoformat()
+                                                    })
+                                            except Exception as e_img:
+                                                print(f"⚠️ Error subiendo inline {cid}: {e_img}")
+
                                     _marcar_procesado(msg_id, orden_id=nuevo_id, accion="orden")
                                     st.session_state.pop(f'_crear_ot_{idx}', None)
                                     # Quitar de la lista local sin perder los demás
