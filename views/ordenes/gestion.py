@@ -116,11 +116,6 @@ def render_gestion_global(df_act, df_users, df_ordenes):
 
 def _render_orden_detalle(id_orden_selec, orden_actual, df_display, idx_tabla, df_users):
     st.divider()
-
-    # DEBUG temporal — visible siempre que se seleccione una orden
-    correo_msg_id = orden_actual.get('correo_message_id') if hasattr(orden_actual, 'get') else None
-    st.warning(f"🔍 **DEBUG:** correo_message_id = `{correo_msg_id}` | Campos: {list(orden_actual.index) if hasattr(orden_actual, 'index') else 'N/A'}")
-
     col_izq, col_der = st.columns([1.5, 1])
 
     with col_izq:
