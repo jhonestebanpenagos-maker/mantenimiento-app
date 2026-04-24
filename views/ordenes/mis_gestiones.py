@@ -83,6 +83,33 @@ def _render_orden_gestion(row, nombre_activo, df_users, usuario):
         </div>
         """, unsafe_allow_html=True)
 
+        # ── Sincronizar adjuntos del correo original ──
+        correo_msg_id = row.get('correo_message_id') if 'correo_message_id' in row.index else None
+        if correo_msg_id:
+            try:
+                bit_check = supabase.table("bitacora").select("id") \
+                    .eq("orden_id", int(row['id'])) \
+                    .not_.is_("archivo_url", "null") \
+                    .neq("archivo_url", "") \
+                    .execute()
+                tiene_adjuntos = len(bit_check.data or []) > 0
+            except Exception:
+                tiene_adjuntos = False
+
+            if not tiene_adjuntos:
+                if st.button("📎 Sincronizar adjuntos del correo", key=f"sync_att_mg_{row['id']}",
+                             use_container_width=True, type="secondary"):
+                    with st.spinner("Conectando a Gmail y descargando adjuntos..."):
+                        from utils.email_monitor import sincronizar_adjuntos_correo
+                        n_ok, n_total = sincronizar_adjuntos_correo(int(row['id']), correo_msg_id)
+                        if n_total == 0:
+                            st.warning("⚠️ No se encontraron adjuntos en el correo original o el correo ya no está disponible.")
+                        elif n_ok > 0:
+                            st.success(f"✅ {n_ok}/{n_total} adjunto(s) sincronizados.")
+                            st.rerun()
+                        else:
+                            st.error("❌ No se pudieron subir los adjuntos.")
+
         if row['estado'] != 'Concluida':
             render_time_tracker(row['id'], usuario)
             render_costos(row['id'], usuario)
