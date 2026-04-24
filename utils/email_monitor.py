@@ -444,7 +444,7 @@ password = "xxxx xxxx xxxx xxxx"
         return
 
     # ── Botones ──
-    col_btn, col_diag, col_info = st.columns([1, 1, 2])
+    col_btn, col_info = st.columns([1, 3])
     with col_btn:
         if st.button("🔄 Revisar Correo", type="primary", use_container_width=True):
             with st.spinner("Conectando a Gmail y descargando correos..."):
@@ -452,24 +452,8 @@ password = "xxxx xxxx xxxx xxxx"
                 st.session_state['_correos_pendientes'] = correos
                 st.rerun()
 
-    with col_diag:
-        if st.button("🩺 Diagnosticar", use_container_width=True):
-            with st.spinner("Probando conexión..."):
-                _diagnosticar_gmail()
-
     with col_info:
         st.caption("Descarga los correos de los últimos 3 días. Solo se muestran los no procesados.")
-
-    # ── Test rápido de la tabla emails_procesados ──
-    if st.button("🧪 Probar tabla emails_procesados"):
-        from utils.db import supabase
-        try:
-            res = supabase.table("emails_procesados").select("*").execute()
-            st.success(f"✅ Tabla accesible. Registros: {len(res.data or [])}")
-            if res.data:
-                st.json(res.data[:5])
-        except Exception as e:
-            st.error(f"❌ Error accediendo a la tabla: {type(e).__name__}: {e}")
 
     # ── Correos pendientes ──
     correos = st.session_state.get('_correos_pendientes', [])
@@ -478,13 +462,9 @@ password = "xxxx xxxx xxxx xxxx"
         st.info("📭 No hay correos descargados. Haz clic en **Revisar Correo** para buscar nuevos mensajes.")
         return
 
-    # Filtrar ya procesados (persistidos en Supabase, no en session state)
+    # Filtrar ya procesados (persistidos en Supabase)
     procesados = _obtener_procesados()
     correos_pendientes = [c for c in correos if c['message_id'] not in procesados]
-
-    # Debug visible
-    if procesados:
-        st.caption(f"🗄️ {len(procesados)} correo(s) registrado(s) como procesados en la base de datos — {len(correos_pendientes)} pendiente(s) de {len(correos)} descargados")
 
     if not correos_pendientes:
         st.success("✅ Todos los correos han sido procesados.")
