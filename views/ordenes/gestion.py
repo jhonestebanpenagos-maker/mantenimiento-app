@@ -351,13 +351,18 @@ def _render_bitacora(id_orden_selec):
                     </div>
                     """, unsafe_allow_html=True)
 
-                    # Visor inline para PDFs adjuntos
-                    if url and url.lower().endswith('.pdf'):
-                        with st.expander(f"👁️ Ver contenido del PDF", expanded=False):
-                            render_pdf_viewer(url, titulo=f"Adjunto de {usuario_log} - {fecha_fmt}")
-
             else:
                 st.info("No hay registros en la bitácora para esta orden.")
+
+            # Visor inline para PDFs (fuera de columnas para evitar conflictos)
+            try:
+                pdf_adjuntos = [b for b in (bitacora_res.data or []) if (b.get('archivo_url') or '').lower().endswith('.pdf')]
+                for pa in pdf_adjuntos:
+                    with st.expander(f"👁️ Ver PDF — {pa.get('usuario_text', '?')} ({pa['fecha'][:10]})", expanded=False):
+                        render_pdf_viewer(pa['archivo_url'], titulo=f"Adjunto de {pa.get('usuario_text', '?')}")
+            except Exception as e_pdf:
+                print(f"Error visor PDF: {e_pdf}")
+
         except Exception as e:
             st.error("⚠️ No se pudo cargar la bitácora de esta orden.")
 

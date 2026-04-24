@@ -154,14 +154,14 @@ def _render_orden_gestion(row, nombre_activo, df_users, usuario):
 
                         # HTML del adjunto con visor para PDFs
                         adjunto_html = ""
-                        pdf_viewer_expander = False
+
                         if url:
                             ul = url.lower()
                             if ul.endswith(('.jpg', '.jpeg', '.png', '.webp')):
                                 adjunto_html = f"""<br><a href="{url}" target="_blank" style="color:#10B981;font-weight:bold;">🖼️ Ver Imagen</a>"""
                             elif ul.endswith('.pdf'):
                                 adjunto_html = f"""<br><a href="{url}" target="_blank" style="color:#EF4444;font-weight:bold;">📄 Ver PDF</a>"""
-                                pdf_viewer_expander = True
+
                             elif ul.endswith(('.xls', '.xlsx')):
                                 adjunto_html = f"""<br><a href="{url}" target="_blank" style="color:#16A34A;font-weight:bold;">📊 Ver Excel</a>"""
                             elif ul.endswith('.msg'):
@@ -179,11 +179,6 @@ def _render_orden_gestion(row, nombre_activo, df_users, usuario):
                         </div>
                         """, unsafe_allow_html=True)
 
-                        # Visor inline para PDFs adjuntos
-                        if pdf_viewer_expander:
-                            with st.expander(f"👁️ Ver contenido del PDF", expanded=False):
-                                render_pdf_viewer(url, titulo=f"Adjunto de {usuario_log}")
-
                     with c_actions:
                         if st.button("✏️", key=f"btn_edit_{b['id']}", help="Editar"):
                             editar_avance_dialog(b['id'], b['mensaje'], b['archivo_url'])
@@ -194,6 +189,16 @@ def _render_orden_gestion(row, nombre_activo, df_users, usuario):
                             st.rerun()
             else:
                 st.caption("No hay avances registrados aún.")
+
+            # Visor inline para PDFs (fuera de columnas para evitar conflictos)
+            try:
+                pdf_adjuntos = [b for b in (bitacora.data or []) if (b.get('archivo_url') or '').lower().endswith('.pdf')]
+                for pa in pdf_adjuntos:
+                    with st.expander(f"👁️ Ver PDF adjunto — {pa.get('usuario_text', '?')} ({pa['fecha'][:10]})", expanded=False):
+                        render_pdf_viewer(pa['archivo_url'], titulo=f"Adjunto de {pa.get('usuario_text', '?')}")
+            except Exception as e_pdf:
+                print(f"Error visor PDF: {e_pdf}")
+
         except Exception as e:
             error_amigable(e, "cargar historial")
 
