@@ -417,125 +417,123 @@ password = "xxxx xxxx xxxx xxxx"
 
     st.markdown(f"#### 📬 {len(correos_pendientes)} correo(s) pendiente(s)")
 
+    # Pre-cargar datos una sola vez
+    from utils.db import run_query, db_insert
+    df_act = run_query("activos")
+    df_users = run_query("usuarios")
+
     for idx, correo in enumerate(correos_pendientes):
-        with st.expander(
-            f"{'📩' if not correo['leido'] else '📧'} {correo['asunto'][:60]} — {correo['remitente_nombre'] or correo['remitente']}",
-            expanded=False
-        ):
-            # ── Info del correo ──
-            st.markdown(f"""
-            **De:** {correo['remitente_nombre']} <{correo['remitente']}>
-            **Fecha:** {correo['fecha'][:16] if correo['fecha'] else 'N/A'}
-            **Asunto:** {correo['asunto']}
-            **Adjuntos:** {', '.join(a['nombre'] for a in correo['adjuntos']) if correo['adjuntos'] else 'Ninguno'}
-            """)
+        msg_id = correo['message_id']
 
-            # ── Cuerpo ──
-            if correo['cuerpo']:
-                mostrar_cuerpo = st.checkbox("📄 Ver contenido del correo", key=f"ver_cuerpo_{idx}")
-                if mostrar_cuerpo:
-                    st.text_area(
-                        "Contenido", value=correo['cuerpo'][:1000],
-                        height=150, disabled=True,
-                        key=f"correo_body_{idx}",
-                        label_visibility="collapsed"
-                    )
+        # ── Tarjeta compacta del correo ──
+        icono = '📩' if not correo['leido'] else '📧'
+        remitente = correo['remitente_nombre'] or correo['remitente']
+        fecha_corta = correo['fecha'][:10] if correo['fecha'] else ''
+        adjuntos_txt = ', '.join(a['nombre'] for a in correo['adjuntos']) if correo['adjuntos'] else ''
 
-            st.markdown("---")
+        st.markdown(f"""
+        <div style="border:1px solid #374151;border-radius:10px;padding:14px 16px;margin-bottom:10px;background:#1F2937;">
+            <div style="display:flex;justify-content:space-between;align-items:center;">
+                <div>
+                    <span style="font-size:1.1rem;">{icono}</span>
+                    <span style="color:#F59E0B;font-weight:600;">{correo['asunto'][:70]}</span>
+                </div>
+                <span style="color:#6B7280;font-size:0.8em;">{fecha_corta}</span>
+            </div>
+            <div style="color:#9CA3AF;font-size:0.85em;margin-top:4px;">
+                👤 {remitente} {f'&nbsp;|&nbsp; 📎 {adjuntos_txt}' if adjuntos_txt else ''}
+            </div>
+            <div style="color:#D1D5DB;font-size:0.85em;margin-top:6px;background:rgba(255,255,255,0.03);padding:6px 10px;border-radius:6px;">
+                {correo['cuerpo_corto'][:150]}{'...' if len(correo['cuerpo_corto']) > 150 else ''}
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
 
-            # ── Formulario de aprobación ──
+        # ── Botones de acción directa ──
+        col_crear, col_descartar, col_espacio = st.columns([2, 2, 4])
+
+        with col_crear:
+            crear_clicked = st.button("✅ Crear Orden", key=f"btn_crear_{idx}", type="primary", use_container_width=True)
+
+        with col_descartar:
+            descartar_clicked = st.button("🗑️ Descartar", key=f"btn_descartar_{idx}", use_container_width=True)
+
+        # ── Acción: Descartar (un click) ──
+        if descartar_clicked:
+            _marcar_procesado(msg_id, accion="descartado")
+            st.toast(f"🗑️ Correo descartado: {correo['asunto'][:40]}")
+            st.rerun()
+
+        # ── Acción: Crear Orden (muestra formulario debajo) ──
+        if crear_clicked:
+            st.session_state[f'_crear_ot_{idx}'] = True
+
+        if st.session_state.get(f'_crear_ot_{idx}', False):
             with st.form(key=f"form_correo_{idx}"):
-                st.markdown("**¿Qué hacer con este correo?**")
+                st.markdown("**📋 Datos para la Orden de Trabajo**")
 
-                accion = st.radio(
-                    "Acción",
-                    ["✅ Crear Orden de Trabajo", "❌ Descartar (No es mantenimiento)"],
-                    key=f"accion_correo_{idx}",
-                    horizontal=True
-                )
+                act_opciones = ["(Seleccionar activo)"]
+                if not df_act.empty:
+                    act_opciones += sorted(df_act['nombre'].tolist())
+                act_opciones.append("➕ Crear nuevo activo después")
 
-                if accion.startswith("✅"):
-                    st.markdown("**Datos para la OT:**")
+                activo_sel = st.selectbox("Activo", act_opciones, key=f"correo_activo_{idx}")
 
-                    # Cargar activos para el dropdown
-                    from utils.db import run_query
-                    df_act = run_query("activos")
-                    df_users = run_query("usuarios")
+                c1, c2 = st.columns(2)
+                tipo = c1.selectbox("Tipo", ["Correctivo", "Preventivo", "Predictivo", "Mejora"], key=f"correo_tipo_{idx}")
+                criticidad = c2.select_slider("Criticidad", ["Baja", "Media", "Alta", "Crítica"], value="Media", key=f"correo_crit_{idx}")
 
-                    act_opciones = ["(Seleccionar activo)"]
-                    if not df_act.empty:
-                        act_opciones += sorted(df_act['nombre'].tolist())
-                    act_opciones.append("➕ Crear nuevo activo después")
+                tech_opts = {}
+                if not df_users.empty:
+                    tech_opts = {u['nombre']: u['id'] for _, u in df_users.iterrows()}
+                tecnico = st.selectbox("Asignar a", list(tech_opts.keys()), key=f"correo_tecnico_{idx}") if tech_opts else None
 
-                    activo_sel = st.selectbox("Activo", act_opciones, key=f"correo_activo_{idx}")
+                desc_default = f"[Correo de {correo['remitente']}]\n\nAsunto: {correo['asunto']}\n\n{correo['cuerpo_corto']}"
+                descripcion = st.text_area("Descripción", value=desc_default, height=100, key=f"correo_desc_{idx}")
 
-                    c1, c2 = st.columns(2)
-                    tipo = c1.selectbox("Tipo", ["Correctivo", "Preventivo", "Predictivo", "Mejora"], key=f"correo_tipo_{idx}")
-                    criticidad = c2.select_slider("Criticidad", ["Baja", "Media", "Alta", "Crítica"], value="Media", key=f"correo_crit_{idx}")
-
-                    # Técnico
-                    tech_opts = {}
-                    if not df_users.empty:
-                        tech_opts = {u['nombre']: u['id'] for _, u in df_users.iterrows()}
-                    tecnico = st.selectbox("Asignar a", list(tech_opts.keys()), key=f"correo_tecnico_{idx}") if tech_opts else None
-
-                    # Descripción (pre-llenada con el cuerpo del correo)
-                    desc_default = f"[Correo de {correo['remitente']}]\n\nAsunto: {correo['asunto']}\n\n{correo['cuerpo_corto']}"
-                    descripcion = st.text_area("Descripción", value=desc_default, height=120, key=f"correo_desc_{idx}")
-
-                submitted = st.form_submit_button(
-                    "✅ PROCESAR" if accion.startswith("✅") else "🗑️ DESCARTAR",
-                    type="primary" if accion.startswith("✅") else "secondary",
-                    use_container_width=True
-                )
+                submitted = st.form_submit_button("✅ CREAR ORDEN", type="primary", use_container_width=True)
 
                 if submitted:
-                    if accion.startswith("✅"):
-                        if activo_sel == "(Seleccionar activo)":
-                            st.error("Selecciona un activo.")
-                        elif not descripcion.strip():
-                            st.error("La descripción es obligatoria.")
-                        elif not tecnico:
-                            st.error("Asigna un técnico.")
-                        else:
-                            try:
-                                from utils.db import db_insert
-                                act_id = int(df_act[df_act['nombre'] == activo_sel].iloc[0]['id']) if activo_sel != "➕ Crear nuevo activo después" else None
-
-                                if act_id:
-                                    res = db_insert("ordenes", {
-                                        "activo_id": act_id,
-                                        "descripcion": descripcion.strip(),
-                                        "criticidad": criticidad,
-                                        "tipo_mantenimiento": tipo,
-                                        "estado": "Abierta",
-                                        "tecnico_asignado": str(tech_opts[tecnico]),
-                                        "fecha_creacion": datetime.now().isoformat(),
-                                        "origen": "correo",
-                                        "correo_message_id": correo['message_id'],
-                                    })
-                                    if res.data:
-                                        nuevo_id = res.data[0]['id']
-                                        # Registrar en bitácora
-                                        db_insert("bitacora", {
-                                            "orden_id": nuevo_id,
-                                            "usuario_text": "CORREO (automático)",
-                                            "mensaje": f"📧 Creada desde correo de {correo['remitente']}\nAsunto: {correo['asunto']}",
-                                            "fecha": datetime.now().isoformat()
-                                        })
-                                        # Marcar como procesado (persistente en Supabase)
-                                        _marcar_procesado(correo['message_id'], orden_id=nuevo_id, accion="orden")
-                                        st.success(f"✅ Orden #{nuevo_id} creada desde correo.")
-                                        st.rerun()
-                                else:
-                                    st.warning("⚠️ Selecciona 'Crear nuevo activo después' y crea el activo primero en el módulo de Inventario.")
-                            except Exception as e:
-                                st.error(f"Error creando orden: {e}")
+                    if activo_sel == "(Seleccionar activo)":
+                        st.error("Selecciona un activo.")
+                    elif not descripcion.strip():
+                        st.error("La descripción es obligatoria.")
+                    elif not tecnico:
+                        st.error("Asigna un técnico.")
                     else:
-                        # Descartar (persistente en Supabase)
-                        _marcar_procesado(correo['message_id'], accion="descartado")
-                        st.toast("🗑️ Correo descartado.")
-                        st.rerun()
+                        try:
+                            act_id = int(df_act[df_act['nombre'] == activo_sel].iloc[0]['id']) if activo_sel != "➕ Crear nuevo activo después" else None
+
+                            if act_id:
+                                res = db_insert("ordenes", {
+                                    "activo_id": act_id,
+                                    "descripcion": descripcion.strip(),
+                                    "criticidad": criticidad,
+                                    "tipo_mantenimiento": tipo,
+                                    "estado": "Abierta",
+                                    "tecnico_asignado": str(tech_opts[tecnico]),
+                                    "fecha_creacion": datetime.now().isoformat(),
+                                    "origen": "correo",
+                                    "correo_message_id": msg_id,
+                                })
+                                if res.data:
+                                    nuevo_id = res.data[0]['id']
+                                    db_insert("bitacora", {
+                                        "orden_id": nuevo_id,
+                                        "usuario_text": "CORREO (automático)",
+                                        "mensaje": f"📧 Creada desde correo de {correo['remitente']}\nAsunto: {correo['asunto']}",
+                                        "fecha": datetime.now().isoformat()
+                                    })
+                                    _marcar_procesado(msg_id, orden_id=nuevo_id, accion="orden")
+                                    st.session_state.pop(f'_crear_ot_{idx}', None)
+                                    st.success(f"✅ Orden #{nuevo_id} creada desde correo.")
+                                    st.rerun()
+                            else:
+                                st.warning("⚠️ Selecciona 'Crear nuevo activo después' y crea el activo primero en el módulo de Inventario.")
+                        except Exception as e:
+                            st.error(f"Error creando orden: {e}")
+
+        st.markdown("---")
 
     # ── Estadísticas ──
     st.markdown("---")
