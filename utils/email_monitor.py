@@ -18,14 +18,17 @@ def _obtener_procesados():
     """Obtiene los message_id de correos ya procesados desde Supabase."""
     from utils.db import supabase
     if not supabase:
+        print("⚠️ _obtener_procesados: supabase es None")
         return set()
     try:
         res = supabase.table("emails_procesados").select("message_id").execute()
         ids = {row["message_id"] for row in (res.data or [])}
-        print(f"📋 Correos procesados en BD: {len(ids)}")
+        print(f"📋 Procesados en BD: {len(ids)} registros")
+        for mid in list(ids)[:5]:
+            print(f"   → {mid[:80]}")
         return ids
     except Exception as e:
-        print(f"⚠️ Error obteniendo procesados: {e}")
+        print(f"⚠️ Error obteniendo procesados: {type(e).__name__}: {e}")
         st.warning(f"⚠️ No se pudo consultar correos procesados: {e}")
         return set()
 
@@ -34,18 +37,22 @@ def _marcar_procesado(message_id: str, orden_id: int = None, accion: str = "orde
     """Marca un correo como procesado en Supabase (persistente)."""
     from utils.db import supabase
     if not supabase:
+        print("⚠️ _marcar_procesado: supabase es None")
+        st.error("❌ No hay conexión a Supabase")
         return
+    datos = {
+        "message_id": message_id,
+        "orden_id": orden_id,
+        "accion": accion,
+        "fecha_procesado": datetime.now().isoformat(),
+    }
+    print(f"💾 Guardando en emails_procesados: {datos}")
     try:
-        supabase.table("emails_procesados").upsert({
-            "message_id": message_id,
-            "orden_id": orden_id,
-            "accion": accion,
-            "fecha_procesado": datetime.now().isoformat(),
-        }).execute()
-        print(f"✅ Correo marcado como procesado: {message_id[:50]}... ({accion})")
+        res = supabase.table("emails_procesados").upsert(datos).execute()
+        print(f"✅ Guardado OK: {res.data}")
     except Exception as e:
-        print(f"⚠️ Error marcando correo procesado: {e}")
-        st.error(f"❌ No se pudo guardar el correo como procesado: {e}")
+        print(f"❌ Error guardando: {type(e).__name__}: {e}")
+        st.error(f"❌ No se pudo guardar como procesado: {type(e).__name__}: {e}")
 
 
 # ==============================================================================
@@ -451,6 +458,17 @@ password = "xxxx xxxx xxxx xxxx"
 
     with col_info:
         st.caption("Descarga los correos de los últimos 3 días. Solo se muestran los no procesados.")
+
+    # ── Test rápido de la tabla emails_procesados ──
+    if st.button("🧪 Probar tabla emails_procesados"):
+        from utils.db import supabase
+        try:
+            res = supabase.table("emails_procesados").select("*").execute()
+            st.success(f"✅ Tabla accesible. Registros: {len(res.data or [])}")
+            if res.data:
+                st.json(res.data[:5])
+        except Exception as e:
+            st.error(f"❌ Error accediendo a la tabla: {type(e).__name__}: {e}")
 
     # ── Correos pendientes ──
     correos = st.session_state.get('_correos_pendientes', [])
