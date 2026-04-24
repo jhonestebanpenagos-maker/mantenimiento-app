@@ -45,33 +45,39 @@ def obtener_firmas(orden_id: int) -> dict:
     try:
         res = supabase.table("bitacora").select("*") \
             .eq("orden_id", int(orden_id)) \
-            .or_("mensaje.ilike.%FIRMA TECNICO%,mensaje.ilike.%FIRMA SUPERVISOR%") \
+            .like("mensaje", "%FIRMA TECNICO%") \
             .order("fecha", desc=True) \
-            .execute()
+            .limit(1).execute()
 
-        if not res.data:
-            return resultado
-
-        for reg in res.data:
+        if res.data:
+            reg = res.data[0]
             msg = reg['mensaje']
-            if resultado["tecnico"] is None and "FIRMA TECNICO" in msg.upper():
-                match = re.search(r'Confirmado por:\s*(.+?)\s*\(Doc:\s*(.+?)\)', msg)
-                resultado["tecnico"] = {
-                    "usuario": match.group(1).strip() if match else reg.get('usuario_text', '?'),
-                    "documento": match.group(2).strip() if match else '?',
-                    "fecha": reg['fecha'],
-                    "bitacora_id": reg['id']
-                }
-            if resultado["supervisor"] is None and "FIRMA SUPERVISOR" in msg.upper():
-                match = re.search(r'Confirmado por:\s*(.+?)\s*\(Doc:\s*(.+?)\)', msg)
-                obs_match = re.search(r'Obs:\s*(.+?)$', msg)
-                resultado["supervisor"] = {
-                    "usuario": match.group(1).strip() if match else reg.get('usuario_text', '?'),
-                    "documento": match.group(2).strip() if match else '?',
-                    "fecha": reg['fecha'],
-                    "observacion": obs_match.group(1).strip() if obs_match else "",
-                    "bitacora_id": reg['id']
-                }
+            match = re.search(r'Confirmado por:\s*(.+?)\s*\(Doc:\s*(.+?)\)', msg)
+            resultado["tecnico"] = {
+                "usuario": match.group(1).strip() if match else reg.get('usuario_text', '?'),
+                "documento": match.group(2).strip() if match else '?',
+                "fecha": reg['fecha'],
+                "bitacora_id": reg['id']
+            }
+
+        res2 = supabase.table("bitacora").select("*") \
+            .eq("orden_id", int(orden_id)) \
+            .like("mensaje", "%FIRMA SUPERVISOR%") \
+            .order("fecha", desc=True) \
+            .limit(1).execute()
+
+        if res2.data:
+            reg = res2.data[0]
+            msg = reg['mensaje']
+            match = re.search(r'Confirmado por:\s*(.+?)\s*\(Doc:\s*(.+?)\)', msg)
+            obs_match = re.search(r'Obs:\s*(.+?)$', msg)
+            resultado["supervisor"] = {
+                "usuario": match.group(1).strip() if match else reg.get('usuario_text', '?'),
+                "documento": match.group(2).strip() if match else '?',
+                "fecha": reg['fecha'],
+                "observacion": obs_match.group(1).strip() if obs_match else "",
+                "bitacora_id": reg['id']
+            }
     except Exception as e:
         print(f"Error obtener_firmas: {e}")
 
@@ -87,17 +93,26 @@ def eliminar_firma(bitacora_id: int) -> bool:
         return False
 
 
+def _es_admin_o_programador(rol: str) -> bool:
+    """Verifica si el rol no requiere supervisión adicional."""
+    return rol in ["Admin", "Programador"]
+
+
 def render_firmas_cierre(orden_id: int, usuario: str, rol: str, estado_orden: str):
     """
     Renderiza el widget de firmas para una orden.
-    - Técnico puede firmar cuando la orden está Abierta
-    - Supervisor puede firmar cuando la orden está Por Validar
+    
+    Flujo según rol:
+    - Admin/Programador: firma como técnico → orden se cierra DIRECTAMENTE (sin firma supervisor)
+    - Técnico: firma como técnico → orden pasa a "Por Validar" → Admin/Programador firma como supervisor
     """
     st.markdown("##### ✍️ Firmas de Cierre")
 
     firmas = obtener_firmas(orden_id)
     firma_tecnico = firmas["tecnico"]
     firma_supervisor = firmas["supervisor"]
+
+    es_admin = _es_admin_o_programador(rol)
 
     # ── Estado visual de las firmas ──
     col_tec, col_sup = st.columns(2)
@@ -124,7 +139,16 @@ def render_firmas_cierre(orden_id: int, usuario: str, rol: str, estado_orden: st
             """, unsafe_allow_html=True)
 
     with col_sup:
-        if firma_supervisor:
+        # Solo mostrar firma de supervisor si NO es admin (admin no necesita supervisor)
+        if es_admin:
+            st.markdown(f"""
+            <div style="background:rgba(107,114,128,0.05);border:1px solid #374151;border-radius:10px;padding:14px;text-align:center;">
+                <div style="font-size:1.5rem;margin-bottom:4px;">➖</div>
+                <div style="color:#6B7280;font-weight:700;font-size:0.85rem;">SUPERVISOR</div>
+                <div style="color:#6B7280;font-size:0.75rem;margin-top:4px;">No requerido para {rol}</div>
+            </div>
+            """, unsafe_allow_html=True)
+        elif firma_supervisor:
             fecha_fmt = firma_supervisor['fecha'][:16].replace('T', ' ')
             st.markdown(f"""
             <div style="background:rgba(59,130,246,0.12);border:1px solid #3B82F6;border-radius:10px;padding:14px;text-align:center;">
@@ -148,12 +172,23 @@ def render_firmas_cierre(orden_id: int, usuario: str, rol: str, estado_orden: st
     # ── Botones de firma según rol y estado ──
     st.markdown("")
 
-    # Firma del técnico (cuando la orden está abierta y es técnico)
+    # Firma del técnico (cuando la orden está abierta)
     if estado_orden == "Abierta" and not firma_tecnico:
         if rol in ["Tecnico", "Admin", "Programador"]:
-            if st.toggle("✍️ Firmar como Técnico (Cerrar trabajo)", key=f"toggle_firma_tec_{orden_id}"):
+            # Texto del botón según rol
+            if es_admin:
+                label_boton = "✍️ FIRMAR Y CERRAR ORDEN (Admin)"
+                ayuda = "Como Admin, tu firma cierra la orden directamente."
+            else:
+                label_boton = "✍️ Firmar como Técnico (Cerrar trabajo)"
+                ayuda = "Tu firma enviará la orden a validación del supervisor."
+
+            if st.toggle(label_boton, key=f"toggle_firma_tec_{orden_id}", help=ayuda):
                 with st.form(f"form_firma_tecnico_{orden_id}", clear_on_submit=True):
-                    st.markdown("**Confirma que el trabajo fue realizado correctamente.**")
+                    if es_admin:
+                        st.markdown("**Confirma que el trabajo fue realizado correctamente. Como Admin, la orden se cerrará directamente.**")
+                    else:
+                        st.markdown("**Confirma que el trabajo fue realizado correctamente.**")
                     doc_confirm = st.text_input(
                         "Tu número de documento",
                         placeholder="Ingresa tu documento para confirmar",
@@ -170,11 +205,30 @@ def render_firmas_cierre(orden_id: int, usuario: str, rol: str, estado_orden: st
                             st.error("Debe ingresar su número de documento para firmar.")
                         else:
                             if registrar_firma(orden_id, usuario, "tecnico", doc_confirm, observacion):
-                                st.toast("✅ Firma de técnico registrada.")
+                                from utils.db import db_update, db_insert
+                                # Admin/Programador: cierra la orden directamente
+                                # Técnico: pasa a "Por Validar"
+                                if es_admin:
+                                    db_update("ordenes", {
+                                        "estado": "Concluida",
+                                        "fecha_cierre": datetime.now().isoformat()
+                                    }, "id", int(orden_id))
+                                    db_insert("bitacora", {
+                                        "orden_id": int(orden_id),
+                                        "usuario_text": usuario,
+                                        "mensaje": f"🏁 Orden CERRADA por Admin ({usuario}). Firma de supervisor no requerida.",
+                                        "fecha": datetime.now().isoformat()
+                                    })
+                                    st.toast("✅ Orden cerrada directamente. Firma de supervisor no requerida.")
+                                else:
+                                    db_update("ordenes", {
+                                        "estado": "Por Validar"
+                                    }, "id", int(orden_id))
+                                    st.toast("✅ Firma registrada. Orden enviada a validación del supervisor.")
                                 st.rerun()
 
-    # Firma del supervisor (cuando está por validar)
-    if estado_orden == "Por Validar" and not firma_supervisor:
+    # Firma del supervisor (cuando está por validar) — solo si NO es admin
+    if not es_admin and estado_orden == "Por Validar" and not firma_supervisor:
         if rol in ["Admin", "Programador"]:
             if st.toggle("✍️ Firmar como Supervisor (Aprobar trabajo)", key=f"toggle_firma_sup_{orden_id}"):
                 with st.form(f"form_firma_supervisor_{orden_id}", clear_on_submit=True):
@@ -195,10 +249,25 @@ def render_firmas_cierre(orden_id: int, usuario: str, rol: str, estado_orden: st
                             st.error("Debe ingresar su número de documento para firmar.")
                         else:
                             if registrar_firma(orden_id, usuario, "supervisor", doc_confirm_sup, obs_sup):
+                                from utils.db import db_update, db_insert
+                                db_update("ordenes", {
+                                    "estado": "Concluida",
+                                    "fecha_cierre": datetime.now().isoformat()
+                                }, "id", int(orden_id))
+                                db_insert("bitacora", {
+                                    "orden_id": int(orden_id),
+                                    "usuario_text": usuario,
+                                    "mensaje": "🏁 Orden APROBADA por supervisor.",
+                                    "fecha": datetime.now().isoformat()
+                                })
                                 st.toast("✅ Firma de supervisor registrada. Orden aprobada.")
                                 st.rerun()
 
     # ── Progreso de firmas ──
     st.markdown("---")
-    n_firmas = (1 if firma_tecnico else 0) + (1 if firma_supervisor else 0)
-    st.progress(n_firmas / 2, text=f"Firmas: {n_firmas}/2 completadas")
+    if es_admin:
+        n_firmas = 1 if firma_tecnico else 0
+        st.progress(n_firmas, text=f"Firma: {n_firmas}/1 completada (Admin no requiere supervisor)")
+    else:
+        n_firmas = (1 if firma_tecnico else 0) + (1 if firma_supervisor else 0)
+        st.progress(n_firmas / 2, text=f"Firmas: {n_firmas}/2 completadas")
