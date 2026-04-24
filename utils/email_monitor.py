@@ -128,6 +128,26 @@ def _extraer_texto_plano(msg):
     return ""
 
 
+def _extraer_html_raw(msg):
+    """Extrae el HTML original del correo (si existe) para renderizarlo en iframe."""
+    if msg.is_multipart():
+        for parte in msg.walk():
+            ctype = parte.get_content_type()
+            disposition = str(parte.get("Content-Disposition", ""))
+            if ctype == "text/html" and "attachment" not in disposition:
+                payload = parte.get_payload(decode=True)
+                if payload:
+                    charset = parte.get_content_charset() or 'utf-8'
+                    return payload.decode(charset, errors='replace')
+    else:
+        if msg.get_content_type() == "text/html":
+            payload = msg.get_payload(decode=True)
+            if payload:
+                charset = msg.get_content_charset() or 'utf-8'
+                return payload.decode(charset, errors='replace')
+    return ""
+
+
 def _html_a_texto(html):
     """Convierte HTML básico a texto plano."""
     texto = re.sub(r'<style[^>]*>.*?</style>', '', html, flags=re.DOTALL)
@@ -143,7 +163,8 @@ def _html_a_texto(html):
 
 
 def _extraer_adjuntos(msg):
-    """Extrae info de adjuntos del correo."""
+    """Extrae adjuntos del correo incluyendo datos reales para descarga."""
+    import base64
     adjuntos = []
     if msg.is_multipart():
         for parte in msg.walk():
@@ -156,9 +177,29 @@ def _extraer_adjuntos(msg):
                     adjuntos.append({
                         'nombre': nombre,
                         'tipo': parte.get_content_type() or 'desconocido',
-                        'tamano': len(datos) if datos else 0
+                        'tamano': len(datos) if datos else 0,
+                        'datos_b64': base64.b64encode(datos).decode('ascii') if datos else None,
                     })
     return adjuntos
+
+
+def _extraer_imagenes_inline(msg):
+    """Extrae imágenes embebidas (inline) del correo por Content-ID."""
+    import base64
+    imagenes = {}
+    if msg.is_multipart():
+        for parte in msg.walk():
+            cid = parte.get("Content-ID")
+            ctype = parte.get_content_type() or ""
+            if cid and ctype.startswith("image/"):
+                cid_limpio = cid.strip("<>")
+                datos = parte.get_payload(decode=True)
+                if datos:
+                    imagenes[cid_limpio] = {
+                        'tipo': ctype,
+                        'datos_b64': base64.b64encode(datos).decode('ascii'),
+                    }
+    return imagenes
 
 
 def _parsear_fecha(date_str):
@@ -231,7 +272,9 @@ def descargar_correos_nuevos(max_correos=20, dias_atras=3):
                 remitente = remitente_raw.strip()
 
             cuerpo = _extraer_texto_plano(msg)
+            html_raw = _extraer_html_raw(msg)
             adjuntos = _extraer_adjuntos(msg)
+            imagenes_inline = _extraer_imagenes_inline(msg)
 
             # Determinar si está leído
             status_flags, datos_flags = mail.fetch(msg_id, "(FLAGS)")
@@ -243,10 +286,14 @@ def descargar_correos_nuevos(max_correos=20, dias_atras=3):
                 'remitente_nombre': remitente_nombre,
                 'asunto': asunto or '(Sin asunto)',
                 'fecha': _parsear_fecha(fecha_raw),
-                'cuerpo': cuerpo[:2000],
+                'cuerpo': cuerpo[:5000],
                 'cuerpo_corto': cuerpo[:200],
+                'html_raw': html_raw,
                 'adjuntos': adjuntos,
+                'imagenes_inline': imagenes_inline,
                 'tiene_adjuntos': len(adjuntos) > 0,
+                'tiene_html': bool(html_raw),
+                'tiene_imagenes': len(imagenes_inline) > 0,
                 'leido': leido,
             })
 
@@ -430,6 +477,7 @@ password = "xxxx xxxx xxxx xxxx"
         remitente = correo['remitente_nombre'] or correo['remitente']
         fecha_corta = correo['fecha'][:10] if correo['fecha'] else ''
         adjuntos_txt = ', '.join(a['nombre'] for a in correo['adjuntos']) if correo['adjuntos'] else ''
+        n_adjuntos = len(correos_pendientes[idx].get('adjuntos', []))
 
         st.markdown(f"""
         <div style="border:1px solid #374151;border-radius:10px;padding:14px 16px;margin-bottom:10px;background:#1F2937;">
@@ -441,13 +489,81 @@ password = "xxxx xxxx xxxx xxxx"
                 <span style="color:#6B7280;font-size:0.8em;">{fecha_corta}</span>
             </div>
             <div style="color:#9CA3AF;font-size:0.85em;margin-top:4px;">
-                👤 {remitente} {f'&nbsp;|&nbsp; 📎 {adjuntos_txt}' if adjuntos_txt else ''}
+                👤 {remitente} {f'&nbsp;|&nbsp; 📎 {n_adjuntos} adjunto(s)' if n_adjuntos > 0 else ''}
             </div>
             <div style="color:#D1D5DB;font-size:0.85em;margin-top:6px;background:rgba(255,255,255,0.03);padding:6px 10px;border-radius:6px;">
-                {correo['cuerpo_corto'][:150]}{'...' if len(correo['cuerpo_corto']) > 150 else ''}
+                {correo['cuerpo_corto'][:150]}{'...' if len(correos_pendientes[idx].get('cuerpo_corto', '')) > 150 else ''}
             </div>
         </div>
         """, unsafe_allow_html=True)
+
+        # ── Ver contenido completo + adjuntos ──
+        with st.expander("📄 Ver contenido del correo", expanded=False):
+            # Tabs: Vista HTML / Texto plano
+            tiene_html = correo.get('tiene_html', False)
+            if tiene_html:
+                tab_html, tab_texto = st.tabs(["🌐 Vista original", "📝 Texto plano"])
+
+                with tab_html:
+                    import streamlit.components.v1 as components
+                    html_seguro = correo.get('html_raw', '')
+                    # Sanitizar: quitar scripts
+                    html_seguro = re.sub(r'<script[^>]*>.*?</script>', '', html_seguro, flags=re.DOTALL | re.IGNORECASE)
+                    html_seguro = re.sub(r'<iframe[^>]*>.*?</iframe>', '', html_seguro, flags=re.DOTALL | re.IGNORECASE)
+                    components.html(html_seguro, height=500, scrolling=True)
+
+                with tab_texto:
+                    if correo.get('cuerpo'):
+                        st.text_area(
+                            "Contenido", value=correo['cuerpo'][:3000],
+                            height=200, disabled=True,
+                            key=f"correo_body_{idx}",
+                            label_visibility="collapsed"
+                        )
+            else:
+                if correo.get('cuerpo'):
+                    st.text_area(
+                        "Contenido", value=correo['cuerpo'][:3000],
+                        height=200, disabled=True,
+                        key=f"correo_body_{idx}",
+                        label_visibility="collapsed"
+                    )
+
+            # Imágenes embebidas (inline)
+            imagenes = correo.get('imagenes_inline', {})
+            if imagenes:
+                st.markdown("**🖼️ Imágenes en el correo:**")
+                import base64
+                for cid, img in imagenes.items():
+                    try:
+                        img_bytes = base64.b64decode(img['datos_b64'])
+                        st.image(img_bytes, use_container_width=True)
+                    except Exception:
+                        st.caption(f"⚠️ No se pudo mostrar imagen inline ({img['tipo']})")
+
+            # Adjuntos con botón de descarga
+            adjuntos = correo.get('adjuntos', [])
+            if adjuntos:
+                st.markdown(f"**📎 Adjuntos ({len(adjuntos)}):**")
+                for a_idx, att in enumerate(adjuntos):
+                    col_info, col_btn = st.columns([3, 1])
+                    with col_info:
+                        tamano_kb = att['tamano'] / 1024
+                        st.caption(f"📄 {att['nombre']} — {tamano_kb:.1f} KB ({att['tipo']})")
+                    with col_btn:
+                        if att.get('datos_b64'):
+                            import base64 as _b64
+                            datos_bytes = _b64.b64decode(att['datos_b64'])
+                            st.download_button(
+                                "⬇️ Descargar",
+                                data=datos_bytes,
+                                file_name=att['nombre'],
+                                mime=att['tipo'],
+                                key=f"dl_{idx}_{a_idx}",
+                                use_container_width=True,
+                            )
+                        else:
+                            st.caption("Sin datos")
 
         # ── Botones de acción directa ──
         col_crear, col_descartar, col_espacio = st.columns([2, 2, 4])
