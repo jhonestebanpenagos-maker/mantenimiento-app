@@ -12,6 +12,38 @@ from datetime import datetime, timedelta
 
 
 # ==============================================================================
+# 📦 PERSISTENCIA DE CORREOS PROCESADOS (Supabase)
+# ==============================================================================
+def _obtener_procesados():
+    """Obtiene los message_id de correos ya procesados desde Supabase."""
+    from utils.db import supabase
+    if not supabase:
+        return set()
+    try:
+        res = supabase.table("emails_procesados").select("message_id").execute()
+        return {row["message_id"] for row in (res.data or [])}
+    except Exception:
+        # La tabla puede no existir aún
+        return set()
+
+
+def _marcar_procesado(message_id: str, orden_id: int = None, accion: str = "orden"):
+    """Marca un correo como procesado en Supabase (persistente)."""
+    from utils.db import supabase
+    if not supabase:
+        return
+    try:
+        supabase.table("emails_procesados").upsert({
+            "message_id": message_id,
+            "orden_id": orden_id,
+            "accion": accion,
+            "fecha_procesado": datetime.now().isoformat(),
+        }).execute()
+    except Exception as e:
+        print(f"⚠️ No se pudo marcar correo como procesado: {e}")
+
+
+# ==============================================================================
 # 🔧 CONFIGURACIÓN
 # ==============================================================================
 IMAP_SERVER = "imap.gmail.com"
@@ -375,15 +407,12 @@ password = "xxxx xxxx xxxx xxxx"
         st.info("📭 No hay correos descargados. Haz clic en **Revisar Correo** para buscar nuevos mensajes.")
         return
 
-    # Filtrar ya procesados
-    procesados = st.session_state.get('_correos_procesados', set())
+    # Filtrar ya procesados (persistidos en Supabase, no en session state)
+    procesados = _obtener_procesados()
     correos_pendientes = [c for c in correos if c['message_id'] not in procesados]
 
     if not correos_pendientes:
         st.success("✅ Todos los correos han sido procesados.")
-        if st.button("🔄 Descargar nuevos"):
-            st.session_state.pop('_correos_pendientes', None)
-            st.rerun()
         return
 
     st.markdown(f"#### 📬 {len(correos_pendientes)} correo(s) pendiente(s)")
@@ -481,7 +510,9 @@ password = "xxxx xxxx xxxx xxxx"
                                         "tipo_mantenimiento": tipo,
                                         "estado": "Abierta",
                                         "tecnico_asignado": str(tech_opts[tecnico]),
-                                        "fecha_creacion": datetime.now().isoformat()
+                                        "fecha_creacion": datetime.now().isoformat(),
+                                        "origen": "correo",
+                                        "correo_message_id": correo['message_id'],
                                     })
                                     if res.data:
                                         nuevo_id = res.data[0]['id']
@@ -492,9 +523,8 @@ password = "xxxx xxxx xxxx xxxx"
                                             "mensaje": f"📧 Creada desde correo de {correo['remitente']}\nAsunto: {correo['asunto']}",
                                             "fecha": datetime.now().isoformat()
                                         })
-                                        # Marcar como procesado
-                                        procesados.add(correo['message_id'])
-                                        st.session_state['_correos_procesados'] = procesados
+                                        # Marcar como procesado (persistente en Supabase)
+                                        _marcar_procesado(correo['message_id'], orden_id=nuevo_id, accion="orden")
                                         st.success(f"✅ Orden #{nuevo_id} creada desde correo.")
                                         st.rerun()
                                 else:
@@ -502,9 +532,8 @@ password = "xxxx xxxx xxxx xxxx"
                             except Exception as e:
                                 st.error(f"Error creando orden: {e}")
                     else:
-                        # Descartar
-                        procesados.add(correo['message_id'])
-                        st.session_state['_correos_procesados'] = procesados
+                        # Descartar (persistente en Supabase)
+                        _marcar_procesado(correo['message_id'], accion="descartado")
                         st.toast("🗑️ Correo descartado.")
                         st.rerun()
 
@@ -515,4 +544,4 @@ password = "xxxx xxxx xxxx xxxx"
     col1, col2, col3 = st.columns(3)
     col1.metric("📬 Descargados", len(correos))
     col2.metric("⏳ Pendientes", total_pend)
-    col3.metric("✅ Procesados", total_proc)
+    col3.metric("✅ Procesados (histórico)", total_proc)
