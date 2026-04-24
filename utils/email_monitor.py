@@ -22,10 +22,10 @@ def _obtener_procesados():
         return set()
     try:
         res = supabase.table("emails_procesados").select("message_id").execute()
-        ids = {row["message_id"] for row in (res.data or [])}
+        ids = {row["message_id"].strip() for row in (res.data or []) if row.get("message_id")}
         print(f"📋 Procesados en BD: {len(ids)} registros")
         for mid in list(ids)[:5]:
-            print(f"   → {mid[:80]}")
+            print(f"   → [{mid}]")
         return ids
     except Exception as e:
         print(f"⚠️ Error obteniendo procesados: {type(e).__name__}: {e}")
@@ -40,13 +40,14 @@ def _marcar_procesado(message_id: str, orden_id: int = None, accion: str = "orde
         print("⚠️ _marcar_procesado: supabase es None")
         st.error("❌ No hay conexión a Supabase")
         return
+    message_id_limpio = message_id.strip()
     datos = {
-        "message_id": message_id,
+        "message_id": message_id_limpio,
         "orden_id": orden_id,
         "accion": accion,
         "fecha_procesado": datetime.now().isoformat(),
     }
-    print(f"💾 Guardando en emails_procesados: {datos}")
+    print(f"💾 Guardando en emails_procesados: message_id=[{message_id_limpio}] accion={accion}")
     try:
         res = supabase.table("emails_procesados").upsert(datos).execute()
         print(f"✅ Guardado OK: {res.data}")
@@ -271,7 +272,7 @@ def descargar_correos_nuevos(max_correos=20, dias_atras=3):
             asunto = _decodificar_header(msg.get("Subject", ""))
             remitente_raw = _decodificar_header(msg.get("From", ""))
             fecha_raw = msg.get("Date", "")
-            message_id = msg.get("Message-ID", str(msg_id.decode()))
+            message_id = (msg.get("Message-ID") or str(msg_id.decode())).strip()
 
             # Parsear remitente: "Nombre <correo>" → nombre + correo
             remitente = remitente_raw
