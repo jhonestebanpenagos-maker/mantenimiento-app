@@ -21,9 +21,12 @@ def _obtener_procesados():
         return set()
     try:
         res = supabase.table("emails_procesados").select("message_id").execute()
-        return {row["message_id"] for row in (res.data or [])}
-    except Exception:
-        # La tabla puede no existir aún
+        ids = {row["message_id"] for row in (res.data or [])}
+        print(f"📋 Correos procesados en BD: {len(ids)}")
+        return ids
+    except Exception as e:
+        print(f"⚠️ Error obteniendo procesados: {e}")
+        st.warning(f"⚠️ No se pudo consultar correos procesados: {e}")
         return set()
 
 
@@ -39,8 +42,10 @@ def _marcar_procesado(message_id: str, orden_id: int = None, accion: str = "orde
             "accion": accion,
             "fecha_procesado": datetime.now().isoformat(),
         }).execute()
+        print(f"✅ Correo marcado como procesado: {message_id[:50]}... ({accion})")
     except Exception as e:
-        print(f"⚠️ No se pudo marcar correo como procesado: {e}")
+        print(f"⚠️ Error marcando correo procesado: {e}")
+        st.error(f"❌ No se pudo guardar el correo como procesado: {e}")
 
 
 # ==============================================================================
@@ -457,6 +462,10 @@ password = "xxxx xxxx xxxx xxxx"
     # Filtrar ya procesados (persistidos en Supabase, no en session state)
     procesados = _obtener_procesados()
     correos_pendientes = [c for c in correos if c['message_id'] not in procesados]
+
+    # Debug visible
+    if procesados:
+        st.caption(f"🗄️ {len(procesados)} correo(s) registrado(s) como procesados en la base de datos — {len(correos_pendientes)} pendiente(s) de {len(correos)} descargados")
 
     if not correos_pendientes:
         st.success("✅ Todos los correos han sido procesados.")
