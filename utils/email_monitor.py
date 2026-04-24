@@ -577,6 +577,9 @@ password = "xxxx xxxx xxxx xxxx"
         # ── Acción: Descartar (un click) ──
         if descartar_clicked:
             _marcar_procesado(msg_id, accion="descartado")
+            # Quitar de la lista local sin perder los demás
+            pendientes = st.session_state.get('_correos_pendientes', [])
+            st.session_state['_correos_pendientes'] = [c for c in pendientes if c['message_id'] != msg_id]
             st.toast(f"🗑️ Correo descartado: {correo['asunto'][:40]}")
             st.rerun()
 
@@ -642,6 +645,9 @@ password = "xxxx xxxx xxxx xxxx"
                                     })
                                     _marcar_procesado(msg_id, orden_id=nuevo_id, accion="orden")
                                     st.session_state.pop(f'_crear_ot_{idx}', None)
+                                    # Quitar de la lista local sin perder los demás
+                                    pendientes = st.session_state.get('_correos_pendientes', [])
+                                    st.session_state['_correos_pendientes'] = [c for c in pendientes if c['message_id'] != msg_id]
                                     st.success(f"✅ Orden #{nuevo_id} creada desde correo.")
                                     st.rerun()
                             else:
