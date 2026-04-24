@@ -335,8 +335,25 @@ def generar_pdf_orden(orden, activo_nombre, tecnico_nombre):
 
     pdf.section_title('9. FIRMAS DE CIERRE')
 
+    # Detectar si es firma de admin (cierra directamente sin supervisor)
+    es_admin_firma = False
+    for b in bitacora:
+        msg = b.get('mensaje', '')
+        if 'Orden CERRADA por Admin' in msg or 'Firma de supervisor no requerida' in msg:
+            es_admin_firma = True
+            break
+
     for tipo, datos in firmas.items():
         label = "Tecnico" if tipo == "tecnico" else "Supervisor"
+        # Si es admin y no hay firma de supervisor, no mostrar como pendiente
+        if tipo == 'supervisor' and es_admin_firma and not datos:
+            pdf.set_font('Arial', 'I', 9)
+            pdf.set_text_color(100, 100, 100)
+            pdf.cell(5, 6, '', 0, 0)
+            pdf.cell(10, 6, '[-]', 0, 0)
+            pdf.cell(0, 6, pdf._safe('Firma Supervisor: No requerida (Admin)'), 0, 1)
+            pdf.set_text_color(0, 0, 0)
+            continue
         if datos:
             fecha_firma = (datos.get('fecha', '') or '')[:16].replace('T', ' ')
             pdf.set_font('Arial', 'B', 9)
@@ -610,8 +627,23 @@ def generar_reporte_ordenes_pdf(ordenes_data, df_users, df_act, incluir_abiertas
         except Exception:
             firmas = {"tecnico": None, "supervisor": None}
 
+        # Detectar si es admin (cierra directamente)
+        es_admin_firma = False
+        for b in bitacora:
+            msg = b.get('mensaje', '')
+            if 'Orden CERRADA por Admin' in msg or 'Firma de supervisor no requerida' in msg:
+                es_admin_firma = True
+                break
+
         for tipo, datos in firmas.items():
             label = "Tecnico" if tipo == "tecnico" else "Supervisor"
+            if tipo == 'supervisor' and es_admin_firma and not datos:
+                pdf.set_font('Arial', 'I', 9)
+                pdf.set_text_color(100, 100, 100)
+                pdf.cell(10, 6, '[-]', 0, 0)
+                pdf.cell(0, 6, pdf._safe('Firma Supervisor: No requerida (Admin)'), 0, 1)
+                pdf.set_text_color(0, 0, 0)
+                continue
             if datos:
                 fecha_firma = (datos.get('fecha', '') or '')[:16].replace('T', ' ')
                 pdf.set_font('Arial', 'B', 9)
