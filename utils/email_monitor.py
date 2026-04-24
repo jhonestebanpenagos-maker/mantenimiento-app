@@ -518,7 +518,13 @@ password = "xxxx xxxx xxxx xxxx"
                     # Sanitizar: quitar scripts
                     html_seguro = re.sub(r'<script[^>]*>.*?</script>', '', html_seguro, flags=re.DOTALL | re.IGNORECASE)
                     html_seguro = re.sub(r'<iframe[^>]*>.*?</iframe>', '', html_seguro, flags=re.DOTALL | re.IGNORECASE)
-                    components.html(html_seguro, height=500, scrolling=True)
+                    # Envolver en contenedor con fondo claro para visibilidad
+                    html_envuelto = f"""
+                    <div style="background:#ffffff;color:#1f2937;padding:16px;border-radius:8px;font-family:Arial,sans-serif;font-size:14px;line-height:1.6;overflow:auto;">
+                        {html_seguro}
+                    </div>
+                    """
+                    components.html(html_envuelto, height=500, scrolling=True)
 
                 with tab_texto:
                     if correo.get('cuerpo'):
