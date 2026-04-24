@@ -12,6 +12,7 @@ from utils.time_tracking import render_time_tracker
 from utils.costos import render_costos
 from utils.firmas import render_firmas_cierre
 from utils.uploads import subir_archivo_generico
+from pdf_utils import render_pdf_viewer
 
 def render_mis_gestiones(df_act, df_users, df_ordenes):
     st.info("Aquí administras las órdenes asignadas a ti (Cotizaciones, Compras, Trámites).")
@@ -83,6 +84,29 @@ def _render_orden_gestion(row, nombre_activo, df_users, usuario):
         </div>
         """, unsafe_allow_html=True)
 
+        # ══════════════════════════════════════════════════════════════════
+        # 📄 DESCARGA DE PDF INDIVIDUAL
+        # ══════════════════════════════════════════════════════════════════
+        try:
+            from pdf_utils import generar_pdf_orden
+            tecnico_nombre = usuario
+            if not df_users.empty:
+                tech_match = df_users[df_users['id'].astype(str) == str(row.get('tecnico_asignado', ''))]
+                if not tech_match.empty:
+                    tecnico_nombre = tech_match.iloc[0]['nombre']
+
+            pdf_data = generar_pdf_orden(row, nombre_activo, tecnico_nombre)
+            st.download_button(
+                "📄 Descargar PDF de esta Orden",
+                data=pdf_data,
+                file_name=f"Reporte_OT_{row['id']}.pdf",
+                mime="application/pdf",
+                key=f"btn_pdf_mg_{row['id']}",
+                use_container_width=True
+            )
+        except Exception as e:
+            print(f"Error PDF en mis_gestiones: {e}")
+
         # ── Sincronizar adjuntos del correo original ──
         correo_msg_id = row.get('correo_message_id') if 'correo_message_id' in row.index else None
         if correo_msg_id:
@@ -127,7 +151,24 @@ def _render_orden_gestion(row, nombre_activo, df_users, usuario):
                         fecha_fmt = b['fecha'][:10] + " " + b['fecha'][11:16]
                         usuario_log = b.get('usuario_text', 'Usuario')
                         url = b['archivo_url']
-                        adjunto_html = generar_adjunto_html(url)
+
+                        # HTML del adjunto con visor para PDFs
+                        adjunto_html = ""
+                        pdf_viewer_expander = False
+                        if url:
+                            ul = url.lower()
+                            if ul.endswith(('.jpg', '.jpeg', '.png', '.webp')):
+                                adjunto_html = f"""<br><a href="{url}" target="_blank" style="color:#10B981;font-weight:bold;">🖼️ Ver Imagen</a>"""
+                            elif ul.endswith('.pdf'):
+                                adjunto_html = f"""<br><a href="{url}" target="_blank" style="color:#EF4444;font-weight:bold;">📄 Ver PDF</a>"""
+                                pdf_viewer_expander = True
+                            elif ul.endswith(('.xls', '.xlsx')):
+                                adjunto_html = f"""<br><a href="{url}" target="_blank" style="color:#16A34A;font-weight:bold;">📊 Ver Excel</a>"""
+                            elif ul.endswith('.msg'):
+                                adjunto_html = f"""<br><a href="{url}" target="_blank" style="color:#3B82F6;font-weight:bold;">📧 Ver Correo</a>"""
+                            else:
+                                adjunto_html = f"""<br><a href="{url}" target="_blank" style="color:#F59E0B;font-weight:bold;">📎 Ver Archivo</a>"""
+
                         st.markdown(f"""
                         <div style="background-color:rgba(255,255,255,0.05);border-left:3px solid #F59E0B;padding:10px;border-radius:0 5px 5px 0;margin-bottom:5px;">
                             <div style="display:flex;justify-content:space-between;color:#9CA3AF;font-size:0.85em;">
@@ -137,6 +178,12 @@ def _render_orden_gestion(row, nombre_activo, df_users, usuario):
                             {adjunto_html}
                         </div>
                         """, unsafe_allow_html=True)
+
+                        # Visor inline para PDFs adjuntos
+                        if pdf_viewer_expander:
+                            with st.expander(f"👁️ Ver contenido del PDF", expanded=False):
+                                render_pdf_viewer(url, titulo=f"Adjunto de {usuario_log}")
+
                     with c_actions:
                         if st.button("✏️", key=f"btn_edit_{b['id']}", help="Editar"):
                             editar_avance_dialog(b['id'], b['mensaje'], b['archivo_url'])
@@ -199,10 +246,3 @@ def _render_orden_gestion(row, nombre_activo, df_users, usuario):
                 st.toast("🏆 Orden finalizada correctamente.")
                 time.sleep(0.3)
                 st.rerun()
-
-
-# ==============================================================================
-# 📥 BUZÓN DE SOLICITUDES
-# ==============================================================================
-
-
