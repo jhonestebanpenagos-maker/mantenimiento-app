@@ -49,6 +49,8 @@ def render_gestion_global(df_act, df_users, df_ordenes):
     if filtro_estado != "Todas":
         query_filters['estado'] = filtro_estado
 
+    filters_tuple = tuple(query_filters.items()) if query_filters else None
+
     PER_PAGE = 20
 
     if filtro_ot_externo:
@@ -72,7 +74,7 @@ def render_gestion_global(df_act, df_users, df_ordenes):
             "ordenes",
             page=st.session_state.gestion_pagina,
             per_page=PER_PAGE,
-            filters=query_filters if query_filters else None,
+            filters_tuple=filters_tuple,
             order_by="id",
             desc=True
         )
