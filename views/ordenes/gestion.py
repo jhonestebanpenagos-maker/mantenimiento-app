@@ -134,6 +134,13 @@ def _render_orden_detalle(id_orden_selec, orden_actual, df_display, idx_tabla, d
 
         # ── Sincronizar adjuntos del correo original ──
         correo_msg_id = orden_actual.get('correo_message_id')
+
+        # DEBUG temporal — quitar después
+        with st.expander("🔍 Debug correo", expanded=False):
+            st.write(f"correo_message_id = `{correo_msg_id}`")
+            st.write(f"tipo = {type(correo_msg_id).__name__}")
+            st.write(f"campos orden = {list(orden_actual.index) if hasattr(orden_actual, 'index') else 'N/A'}")
+
         if correo_msg_id:
             # Verificar si ya tiene adjuntos en bitácora
             try:
