@@ -70,7 +70,7 @@ def render_gestion_global(df_act, df_users, df_ordenes):
             total = 0
             total_pag = 1
     else:
-        df_display, total, total_pag = run_query_paginated(
+        _data, total, total_pag = run_query_paginated(
             "ordenes",
             page=st.session_state.gestion_pagina,
             per_page=PER_PAGE,
@@ -78,6 +78,7 @@ def render_gestion_global(df_act, df_users, df_ordenes):
             order_by="id",
             desc=True
         )
+        df_display = pd.DataFrame(_data) if _data else pd.DataFrame()
 
     if not df_display.empty:
         map_act = dict(zip(df_act['id'], df_act['nombre'])) if not df_act.empty else {}
