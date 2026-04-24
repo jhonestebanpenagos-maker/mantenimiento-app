@@ -289,6 +289,94 @@ def _subir_adjuntos_correo(adjuntos, orden_id):
     return urls_subidas
 
 
+def sincronizar_adjuntos_correo(orden_id, correo_message_id):
+    """
+    Descarga un correo específico por su Message-ID desde Gmail,
+    extrae los adjuntos y los sube a la OT existente.
+    Retorna (n_subidos, n_total) o (0, 0) si falla.
+    """
+    from utils.db import db_insert
+
+    if not correo_message_id:
+        return 0, 0
+
+    mail = _conectar_imap()
+    if not mail:
+        return 0, 0
+
+    try:
+        mail.select("INBOX")
+        # Buscar por Message-ID
+        status, mensajes = mail.search(None, f'(HEADER Message-ID "{correo_message_id}")')
+        if status != "OK" or not mensajes[0].strip():
+            # Intentar búsqueda más amplia por texto
+            status, mensajes = mail.search(None, f'(TEXT "{correo_message_id}")')
+        if status != "OK" or not mensajes[0].strip():
+            print(f"⚠️ No se encontró el correo con Message-ID: {correo_message_id}")
+            return 0, 0
+
+        ids = mensajes[0].split()
+        msg_id = ids[-1]  # Tomar el más reciente si hay múltiples
+
+        status, datos = mail.fetch(msg_id, "(RFC822)")
+        if status != "OK":
+            return 0, 0
+
+        msg = email.message_from_bytes(datos[0][1])
+        adjuntos = _extraer_adjuntos(msg)
+        imagenes_inline = _extraer_imagenes_inline(msg)
+
+        if not adjuntos and not imagenes_inline:
+            return 0, 0
+
+        n_total = len(adjuntos) + len(imagenes_inline)
+        n_subidos = 0
+
+        # Subir adjuntos
+        if adjuntos:
+            urls = _subir_adjuntos_correo(adjuntos, orden_id)
+            n_subidos += len(urls)
+
+        # Subir imágenes inline
+        if imagenes_inline:
+            from utils.uploads import subir_archivo_generico as _subir_img
+            for cid, img in imagenes_inline.items():
+                try:
+                    img_bytes = base64.b64decode(img['datos_b64'])
+                    archivo_img = _ArchivoDesdeBytes(img_bytes, f"inline_{cid}.jpg")
+                    url_img = _subir_img(archivo_img)
+                    if url_img:
+                        db_insert("bitacora", {
+                            "orden_id": orden_id,
+                            "usuario_text": "CORREO (sincronización)",
+                            "mensaje": f"🖼️ Imagen embebida del correo (CID: {cid})",
+                            "archivo_url": url_img,
+                            "fecha": datetime.now().isoformat()
+                        })
+                        n_subidos += 1
+                except Exception as e_img:
+                    print(f"⚠️ Error subiendo inline {cid}: {e_img}")
+
+        # Registrar en bitácora que se sincronizaron adjuntos
+        db_insert("bitacora", {
+            "orden_id": orden_id,
+            "usuario_text": "SISTEMA",
+            "mensaje": f"🔄 Sincronización de adjuntos: {n_subidos}/{n_total} archivos subidos desde correo original.",
+            "fecha": datetime.now().isoformat()
+        })
+
+        return n_subidos, n_total
+
+    except Exception as e:
+        print(f"❌ Error sincronizando adjuntos: {e}")
+        return 0, 0
+    finally:
+        try:
+            mail.logout()
+        except Exception:
+            pass
+
+
 # ==============================================================================
 # 📬 DESCARGA DE CORREOS
 # ==============================================================================

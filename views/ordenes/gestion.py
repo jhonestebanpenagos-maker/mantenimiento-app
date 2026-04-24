@@ -132,6 +132,36 @@ def _render_orden_detalle(id_orden_selec, orden_actual, df_display, idx_tabla, d
                 print(f"Error generando PDF: {e}")
                 pass
 
+        # ── Sincronizar adjuntos del correo original ──
+        correo_msg_id = orden_actual.get('correo_message_id')
+        if correo_msg_id:
+            # Verificar si ya tiene adjuntos en bitácora
+            try:
+                bit_check = supabase.table("bitacora").select("id") \
+                    .eq("orden_id", int(id_orden_selec)) \
+                    .not_.is_("archivo_url", "null") \
+                    .neq("archivo_url", "") \
+                    .execute()
+                tiene_adjuntos = len(bit_check.data or []) > 0
+            except Exception:
+                tiene_adjuntos = False
+
+            if not tiene_adjuntos:
+                if st.button("📎 Sincronizar adjuntos del correo", key=f"sync_att_{id_orden_selec}",
+                             use_container_width=True, type="secondary"):
+                    with st.spinner("Conectando a Gmail y descargando adjuntos..."):
+                        from utils.email_monitor import sincronizar_adjuntos_correo
+                        n_ok, n_total = sincronizar_adjuntos_correo(
+                            int(id_orden_selec), correo_msg_id
+                        )
+                        if n_total == 0:
+                            st.warning("⚠️ No se encontraron adjuntos en el correo original o el correo ya no está disponible.")
+                        elif n_ok > 0:
+                            st.success(f"✅ {n_ok}/{n_total} adjunto(s) sincronizados. Recarga la página para verlos.")
+                            st.rerun()
+                        else:
+                            st.error("❌ No se pudieron subir los adjuntos. Revisa la conexión.")
+
         with st.form(key=f"form_edit_orden_g_{id_orden_selec}"):
             c_edit1, c_edit2, c_edit3 = st.columns(3)
             est_opts = ["Abierta", "Por Validar", "Concluida", "Cancelada"]
