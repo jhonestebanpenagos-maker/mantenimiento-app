@@ -369,6 +369,65 @@ def _render_bitacora(id_orden_selec):
         except Exception as e:
             st.error("⚠️ No se pudo cargar la bitácora de esta orden.")
 
+    # ══════════════════════════════════════════════════════════════════
+    # 📧 VINCULAR CORREOS DEL BUZÓN COMO AVANCES
+    # ══════════════════════════════════════════════════════════════════
+    if estado_orden in ['Abierta', 'Por Validar']:
+        st.markdown("---")
+        st.markdown("#### 📧 Vincular correo del buzón")
+
+        # Verificar si hay correos pendientes en session_state
+        correos_pendientes = st.session_state.get('_correos_pendientes', [])
+        from utils.email_monitor import _obtener_procesados
+        procesados = _obtener_procesados()
+        correos_no_vinculados = [c for c in correos_pendientes if c['message_id'] not in procesados]
+
+        if not correos_no_vinculados:
+            st.caption("📭 No hay correos pendientes en el buzón. Ve a la pestaña **📧 Correo** para descargar correos primero.")
+        else:
+            st.caption(f"Hay {len(correos_no_vinculados)} correo(s) disponible(s) en el buzón.")
+
+            # Mostrar selector de correo
+            opciones_correo = []
+            opciones_correo_map = {}
+            for c in correos_no_vinculados:
+                remitente = c.get('remitente_nombre') or c.get('remitente', '?')
+                label = f"📧 {c['asunto'][:50]} — {remitente} ({c['fecha'][:10] if c.get('fecha') else '?'})"
+                opciones_correo.append(label)
+                opciones_correo_map[label] = c
+
+            correo_sel_label = st.selectbox(
+                "Seleccionar correo para vincular",
+                opciones_correo,
+                key=f"vincular_correo_sel_{oid}",
+                label_visibility="collapsed",
+            )
+
+            col_vinc, col_info = st.columns([1, 2])
+            with col_vinc:
+                if st.button("🔗 Vincular como avance", key=f"btn_vinc_desde_ot_{oid}",
+                             type="primary", use_container_width=True):
+                    correo_sel = opciones_correo_map[correo_sel_label]
+                    from utils.email_monitor import vincular_correo_a_orden
+                    with st.spinner(f"Vinculando correo a OT #{oid}..."):
+                        exito = vincular_correo_a_orden(correo_sel, oid)
+                    if exito:
+                        # Quitar de la lista local
+                        pendientes = st.session_state.get('_correos_pendientes', [])
+                        st.session_state['_correos_pendientes'] = [
+                            c for c in pendientes if c['message_id'] != correo_sel['message_id']
+                        ]
+                        st.success(f"✅ Correo vinculado como avance de OT #{oid}")
+                        st.rerun()
+                    else:
+                        st.error("❌ No se pudo vincular el correo.")
+
+            with col_info:
+                # Mostrar preview del correo seleccionado
+                correo_preview = opciones_correo_map[correo_sel_label]
+                st.caption(f"👤 {correo_preview.get('remitente_nombre') or correo_preview.get('remitente', '?')}")
+                st.caption(f"📝 {correo_preview.get('cuerpo_corto', '')[:120]}{'...' if len(correo_preview.get('cuerpo_corto', '')) > 120 else ''}")
+
 
 # ==============================================================================
 # 📧 COMPONENTE UNIFICADO: ARCHIVO / CORREO (CON CALLBACK)

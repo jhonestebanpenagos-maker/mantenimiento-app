@@ -572,6 +572,156 @@ password = "xxxx xxxx xxxx xxxx"
 
 
 # ==============================================================================
+# 🔗 VINCULACIÓN DE CORREOS A ÓRDENES EXISTENTES
+# ==============================================================================
+def vincular_correo_a_orden(correo: dict, orden_id: int) -> bool:
+    """
+    Vincula un correo del buzón como avance de una orden de trabajo existente.
+    - Agrega el contenido del correo como entrada en bitácora
+    - Sube los adjuntos e imágenes inline a Cloudinary
+    - Marca el correo como procesado con accion='avance'
+    Retorna True si fue exitoso.
+    """
+    from utils.db import db_insert
+
+    try:
+        remitente = correo.get('remitente_nombre') or correo.get('remitente', 'Desconocido')
+        asunto = correo.get('asunto', '(Sin asunto)')
+        cuerpo = correo.get('cuerpo', '')[:2000]
+
+        # 1. Agregar entrada en bitácora con el contenido del correo
+        mensaje = (
+            f"📧 Correo de seguimiento vinculado\n"
+            f"De: {remitente}\n"
+            f"Asunto: {asunto}\n\n"
+            f"{cuerpo}"
+        )
+        db_insert("bitacora", {
+            "orden_id": orden_id,
+            "usuario_text": f"CORREO ({remitente})",
+            "mensaje": mensaje,
+            "fecha": datetime.now().isoformat(),
+        })
+
+        # 2. Subir adjuntos si hay
+        adjuntos = correo.get('adjuntos', [])
+        if adjuntos:
+            _subir_adjuntos_correo(adjuntos, orden_id)
+
+        # 3. Subir imágenes inline si hay
+        imagenes_inline = correo.get('imagenes_inline', {})
+        if imagenes_inline:
+            from utils.uploads import subir_archivo_generico as _subir_img
+            for cid, img in imagenes_inline.items():
+                try:
+                    img_bytes = base64.b64decode(img['datos_b64'])
+                    archivo_img = _ArchivoDesdeBytes(img_bytes, f"inline_{cid}.jpg")
+                    url_img = _subir_img(archivo_img)
+                    if url_img:
+                        db_insert("bitacora", {
+                            "orden_id": orden_id,
+                            "usuario_text": f"CORREO ({remitente})",
+                            "mensaje": f"🖼️ Imagen embebida del correo (CID: {cid})",
+                            "archivo_url": url_img,
+                            "fecha": datetime.now().isoformat(),
+                        })
+                except Exception as e_img:
+                    print(f"⚠️ Error subiendo inline {cid}: {e_img}")
+
+        # 4. Marcar correo como procesado
+        _marcar_procesado(correo['message_id'], orden_id=orden_id, accion="avance")
+        print(f"✅ Correo vinculado a OT #{orden_id}: {asunto[:50]}")
+        return True
+
+    except Exception as e:
+        print(f"❌ Error vinculando correo a OT #{orden_id}: {e}")
+        return False
+
+
+def obtener_correos_no_vinculados():
+    """
+    Obtiene correos del buzón que aún no están vinculados a ninguna orden.
+    Retorna lista de correos pendientes (no procesados).
+    """
+    correos = st.session_state.get('_correos_pendientes', [])
+    if not correos:
+        return []
+
+    procesados = _obtener_procesados()
+    return [c for c in correos if c['message_id'] not in procesados]
+
+
+def render_selector_ordenes_para_vincular(correo_idx: int, correo: dict, df_ordenes, df_act):
+    """
+    Renderiza un selector para que el usuario elija a qué orden existente vincular un correo.
+    Muestra solo órdenes Abiertas o Por Validar.
+    """
+    from utils.db import db_insert
+
+    # Filtrar órdenes activas
+    ordenes_activas = df_ordenes[df_ordenes['estado'].isin(['Abierta', 'Por Validar'])].copy()
+
+    if ordenes_activas.empty:
+        st.info("No hay órdenes abiertas para vincular. Crea una orden primero.")
+        return
+
+    # Mapear activos
+    map_act = dict(zip(df_act['id'], df_act['nombre'])) if not df_act.empty else {}
+    ordenes_activas['Activo'] = ordenes_activas['activo_id'].map(map_act).fillna("Sin activo")
+
+    # Construir opciones legibles
+    opciones = []
+    opciones_map = {}
+    for _, row in ordenes_activas.iterrows():
+        label = f"OT #{row['id']} — {row.get('Activo', '?')} — {(row.get('descripcion', '') or '')[:60]}"
+        opciones.append(label)
+        opciones_map[label] = int(row['id'])
+
+    st.markdown("**🔗 Vincular a orden existente:**")
+    orden_sel = st.selectbox(
+        "Seleccionar orden",
+        opciones,
+        key=f"vincular_sel_{correo_idx}",
+        label_visibility="collapsed",
+    )
+
+    col_vinc, col_cancel = st.columns([2, 2])
+    with col_vinc:
+        vincular_clicked = st.button(
+            "✅ Vincular como avance",
+            key=f"btn_vincular_{correo_idx}",
+            type="primary",
+            use_container_width=True,
+        )
+    with col_cancel:
+        cancelar_clicked = st.button(
+            "❌ Cancelar",
+            key=f"btn_cancelar_vinc_{correo_idx}",
+            use_container_width=True,
+        )
+
+    if cancelar_clicked:
+        st.session_state.pop(f'_vincular_ot_{correo_idx}', None)
+        st.rerun()
+
+    if vincular_clicked:
+        orden_id = opciones_map[orden_sel]
+        with st.spinner(f"Vinculando correo a OT #{orden_id}..."):
+            exito = vincular_correo_a_orden(correo, orden_id)
+        if exito:
+            # Quitar de la lista local
+            pendientes = st.session_state.get('_correos_pendientes', [])
+            st.session_state['_correos_pendientes'] = [
+                c for c in pendientes if c['message_id'] != correo['message_id']
+            ]
+            st.session_state.pop(f'_vincular_ot_{correo_idx}', None)
+            st.success(f"✅ Correo vinculado como avance de OT #{orden_id}")
+            st.rerun()
+        else:
+            st.error("❌ No se pudo vincular el correo. Intenta de nuevo.")
+
+
+# ==============================================================================
 # 🎨 RENDERIZADO DEL BUZÓN
 # ==============================================================================
 def render_buzon_correo():
@@ -627,6 +777,7 @@ password = "xxxx xxxx xxxx xxxx"
     from utils.db import run_query, db_insert
     df_act = run_query("activos")
     df_users = run_query("usuarios")
+    df_ordenes = run_query("ordenes")
 
     for idx, correo in enumerate(correos_pendientes):
         msg_id = correo['message_id']
@@ -731,10 +882,13 @@ password = "xxxx xxxx xxxx xxxx"
                             st.caption("Sin datos")
 
         # ── Botones de acción directa ──
-        col_crear, col_descartar, col_espacio = st.columns([2, 2, 4])
+        col_crear, col_vincular, col_descartar, col_espacio = st.columns([2, 2, 2, 2])
 
         with col_crear:
             crear_clicked = st.button("✅ Crear Orden", key=f"btn_crear_{idx}", type="primary", use_container_width=True)
+
+        with col_vincular:
+            vincular_clicked = st.button("🔗 Vincular a OT", key=f"btn_vincular_{idx}", use_container_width=True)
 
         with col_descartar:
             descartar_clicked = st.button("🗑️ Descartar", key=f"btn_descartar_{idx}", use_container_width=True)
@@ -747,6 +901,15 @@ password = "xxxx xxxx xxxx xxxx"
             st.session_state['_correos_pendientes'] = [c for c in pendientes if c['message_id'] != msg_id]
             st.toast(f"🗑️ Correo descartado: {correo['asunto'][:40]}")
             st.rerun()
+
+        # ── Acción: Vincular a OT existente (muestra selector debajo) ──
+        if vincular_clicked:
+            st.session_state[f'_vincular_ot_{idx}'] = True
+            st.session_state.pop(f'_crear_ot_{idx}', None)  # Cerrar form crear si está abierto
+
+        if st.session_state.get(f'_vincular_ot_{idx}', False):
+            render_selector_ordenes_para_vincular(idx, correo, df_ordenes, df_act)
+            st.markdown("---")
 
         # ── Acción: Crear Orden (muestra formulario debajo) ──
         if crear_clicked:
