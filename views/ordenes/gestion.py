@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 import time
+import html as html_mod
 from datetime import datetime
 from utils.db import supabase, run_query, run_query_paginated, render_paginacion, db_insert, db_update, db_delete, invalidate_cache
 from utils.helpers import mostrar_notificaciones, agregar_notificacion, registrar_accion_critica, error_amigable, navegar_a
@@ -344,12 +345,16 @@ def _render_bitacora(id_orden_selec):
                         else:
                             adjunto_html = f"""<br><a href="{url}" target="_blank" style="color:#F59E0B;font-weight:bold;">📎 Ver Archivo</a>"""
 
+                    # Escapar HTML en mensaje y usuario para evitar inyección
+                    mensaje_seguro = html_mod.escape(b['mensaje']).replace('\n', '<br>')
+                    usuario_seguro = html_mod.escape(usuario_log)
+
                     st.markdown(f"""
                     <div style="background-color:rgba(255,255,255,0.05);padding:10px;border-radius:6px;margin-bottom:8px;border-left:3px solid #60A5FA;">
                         <div style="font-size:0.8em;color:#9CA3AF;display:flex;justify-content:space-between;">
-                            <span>{usuario_log}</span><span>{fecha_fmt}</span>
+                            <span>{usuario_seguro}</span><span>{fecha_fmt}</span>
                         </div>
-                        <div style="color:#E5E7EB;margin-top:4px;font-size:0.95em;">{b['mensaje']}</div>
+                        <div style="color:#E5E7EB;margin-top:4px;font-size:0.95em;">{mensaje_seguro}</div>
                         {adjunto_html}
                     </div>
                     """, unsafe_allow_html=True)

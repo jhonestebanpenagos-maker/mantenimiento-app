@@ -788,6 +788,11 @@ def migrar_correos_antiguos_bitacora(orden_id: int = None):
                         en_cuerpo = True
                 cuerpo = '\n'.join(cuerpo_lineas).strip()
 
+                # Limpiar HTML del cuerpo (puede venir del correo original)
+                cuerpo = _html_a_texto(cuerpo) if '<' in cuerpo else cuerpo
+                # Quitar líneas vacías excesivas
+                cuerpo = re.sub(r'\n{3,}', '\n\n', cuerpo).strip()
+
                 # Generar archivo HTML y subirlo
                 import html as html_mod
                 cuerpo_escapado = html_mod.escape(cuerpo).replace('\n', '<br>')
