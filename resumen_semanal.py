@@ -13,6 +13,12 @@ SUPABASE_URL = os.environ.get("SUPABASE_URL")
 SUPABASE_KEY = os.environ.get("SUPABASE_KEY")
 TELEGRAM_TOKEN = os.environ.get("TELEGRAM_TOKEN")
 
+# Validación de token
+if not TELEGRAM_TOKEN:
+    print("❌ ERROR FATAL: No se encontró TELEGRAM_TOKEN en las variables de entorno.")
+    print("   Agrega TELEGRAM_TOKEN como secret en GitHub Actions.")
+    exit(1)
+
 def enviar_telegram(chat_id, mensaje):
     """Envía mensaje por Telegram"""
     try:
@@ -25,6 +31,7 @@ def enviar_telegram(chat_id, mensaje):
         print(f"✅ Mensaje enviado a {chat_id}")
     except Exception as e:
         print(f"❌ Error enviando a {chat_id}: {e}")
+        raise
 
 def generar_resumen():
     if not SUPABASE_URL or not SUPABASE_KEY:
