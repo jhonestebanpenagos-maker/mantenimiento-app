@@ -714,6 +714,135 @@ def obtener_correos_no_vinculados():
     return [c for c in correos if c['message_id'] not in procesados]
 
 
+# ==============================================================================
+# 🔄 MIGRACIÓN: CONVERTIR ENTRADAS ANTIGUAS DE BITÁCORA A FORMATO COMPACTO
+# ==============================================================================
+def migrar_correos_antiguos_bitacora(orden_id: int = None):
+    """
+    Busca entradas antiguas en la bitácora donde el correo fue vinculado
+    con el formato viejo (todo el cuerpo en el mensaje) y las convierte
+    al formato compacto (resumen + archivo HTML adjunto).
+
+    Si orden_id se especifica, solo migra esa orden. Si es None, migra todas.
+    Retorna (n_migrados, n_total_encontrados).
+    """
+    from utils.db import supabase, db_update
+
+    try:
+        # Buscar entradas con el formato antiguo
+        # Patrón: usuario_text empieza con "CORREO (" y el mensaje contiene
+        # "📧 Correo de seguimiento vinculado" o tiene más de 300 chars
+        query = supabase.table("bitacora").select("*")
+        if orden_id:
+            query = query.eq("orden_id", int(orden_id))
+
+        res = query.execute()
+        if not res.data:
+            return 0, 0
+
+        entradas_antiguas = []
+        for b in res.data:
+            usuario = b.get('usuario_text', '') or ''
+            mensaje = b.get('mensaje', '') or ''
+
+            # Detectar formato antiguo: usuario_text = "CORREO (...)" y mensaje largo
+            es_correo_antiguo = (
+                usuario.startswith('CORREO (')
+                and ('📧 Correo de seguimiento vinculado' in mensaje or len(mensaje) > 300)
+                and 'Creada desde correo' not in mensaje  # Excluir la entrada de creación
+            )
+            if es_correo_antiguo:
+                entradas_antiguas.append(b)
+
+        if not entradas_antiguas:
+            return 0, 0
+
+        n_migrados = 0
+        for entrada in entradas_antiguas:
+            try:
+                # Extraer datos del mensaje antiguo
+                mensaje_viejo = entrada.get('mensaje', '') or ''
+                usuario_viejo = entrada.get('usuario_text', '') or ''
+
+                # Extraer remitente del usuario_text: "CORREO (nombre)" → "nombre"
+                remitente = usuario_viejo
+                if usuario_viejo.startswith('CORREO (') and usuario_viejo.endswith(')'):
+                    remitente = usuario_viejo[8:-1]
+
+                # Extraer asunto del mensaje
+                asunto = '(Sin asunto)'
+                for linea in mensaje_viejo.split('\n'):
+                    if linea.startswith('Asunto:'):
+                        asunto = linea[7:].strip()
+                        break
+
+                # Extraer cuerpo (todo después de la primera línea vacía)
+                cuerpo = ''
+                lineas = mensaje_viejo.split('\n')
+                en_cuerpo = False
+                cuerpo_lineas = []
+                for linea in lineas:
+                    if en_cuerpo:
+                        cuerpo_lineas.append(linea)
+                    elif linea.strip() == '' and 'Asunto:' in mensaje_viejo:
+                        en_cuerpo = True
+                cuerpo = '\n'.join(cuerpo_lineas).strip()
+
+                # Generar archivo HTML y subirlo
+                import html as html_mod
+                cuerpo_escapado = html_mod.escape(cuerpo).replace('\n', '<br>')
+                html_content = f"""<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>{html_mod.escape(asunto)}</title></head>
+<body style="margin:0;padding:0;background:#f9fafb;">
+<div style="font-family:Arial,sans-serif;max-width:700px;padding:20px;">
+    <div style="border-bottom:2px solid #3B82F6;padding-bottom:12px;margin-bottom:16px;">
+        <h2 style="color:#1E40AF;margin:0;">📧 {html_mod.escape(asunto)}</h2>
+        <p style="color:#6B7280;margin:4px 0 0;">De: {html_mod.escape(remitente)}</p>
+    </div>
+    <div style="line-height:1.6;color:#374151;">{cuerpo_escapado}</div>
+</div>
+</body></html>"""
+
+                url_correo = None
+                try:
+                    from utils.uploads import subir_archivo_generico
+                    archivo_bytes = html_content.encode('utf-8')
+                    nombre_archivo = f"correo_{entrada['orden_id']}_{asunto[:30].replace(' ', '_')}.html"
+                    archivo = _ArchivoDesdeBytes(archivo_bytes, nombre_archivo)
+                    url_correo = subir_archivo_generico(archivo)
+                except Exception as e_html:
+                    print(f"⚠️ Error subiendo HTML migrado: {e_html}")
+
+                # Construir mensaje compacto
+                cuerpo_corto = cuerpo[:150].replace('\n', ' ').strip()
+                if len(cuerpo) > 150:
+                    cuerpo_corto += "..."
+                mensaje_nuevo = f"📧 {asunto}"
+                if cuerpo_corto:
+                    mensaje_nuevo += f'\n💬 "{cuerpo_corto}"'
+
+                # Actualizar registro
+                datos_update = {
+                    "usuario_text": f"📧 {remitente}",
+                    "mensaje": mensaje_nuevo,
+                }
+                if url_correo:
+                    datos_update["archivo_url"] = url_correo
+
+                db_update("bitacora", datos_update, "id", entrada['id'])
+                n_migrados += 1
+                print(f"✅ Migrado bitácora #{entrada['id']} (OT #{entrada['orden_id']})")
+
+            except Exception as e_entry:
+                print(f"⚠️ Error migrando entrada #{entrada.get('id')}: {e_entry}")
+
+        return n_migrados, len(entradas_antiguas)
+
+    except Exception as e:
+        print(f"❌ Error en migración de bitácora: {e}")
+        return 0, 0
+
+
 def render_selector_ordenes_para_vincular(correo_idx: int, correo: dict, df_ordenes, df_act):
     """
     Renderiza un selector con búsqueda para que el usuario elija a qué orden vincular un correo.

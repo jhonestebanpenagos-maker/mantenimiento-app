@@ -370,6 +370,36 @@ def _render_bitacora(id_orden_selec):
             st.error("⚠️ No se pudo cargar la bitácora de esta orden.")
 
     # ══════════════════════════════════════════════════════════════════
+    # 🔄 MIGRAR CORREOS ANTIGUOS (FORMATO VIEJO → COMPACTO)
+    # ══════════════════════════════════════════════════════════════════
+    try:
+        bit_check = supabase.table("bitacora").select("*").eq("orden_id", oid).execute()
+        entradas_antiguas = []
+        for b in (bit_check.data or []):
+            usuario = b.get('usuario_text', '') or ''
+            mensaje = b.get('mensaje', '') or ''
+            if (usuario.startswith('CORREO (')
+                    and ('📧 Correo de seguimiento vinculado' in mensaje or len(mensaje) > 300)
+                    and 'Creada desde correo' not in mensaje):
+                entradas_antiguas.append(b)
+
+        if entradas_antiguas:
+            st.markdown("---")
+            st.info(f"🔄 Hay {len(entradas_antiguas)} correo(s) vinculado(s) con formato antiguo.")
+            if st.button("🔄 Actualizar formato de correos antiguos", key=f"migrar_{oid}",
+                         use_container_width=True):
+                with st.spinner("Migrando correos al formato compacto..."):
+                    from utils.email_monitor import migrar_correos_antiguos_bitacora
+                    n_ok, n_total = migrar_correos_antiguos_bitacora(orden_id=oid)
+                if n_ok > 0:
+                    st.success(f"✅ {n_ok}/{n_total} correos migrados al formato compacto.")
+                    st.rerun()
+                else:
+                    st.warning("No se pudieron migrar los correos.")
+    except Exception as e_mig:
+        print(f"Error verificando correos antiguos: {e_mig}")
+
+    # ══════════════════════════════════════════════════════════════════
     # 📧 VINCULAR CORREOS DEL BUZÓN COMO AVANCES
     # ══════════════════════════════════════════════════════════════════
     if estado_orden in ['Abierta', 'Por Validar']:
