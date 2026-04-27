@@ -577,8 +577,9 @@ password = "xxxx xxxx xxxx xxxx"
 def vincular_correo_a_orden(correo: dict, orden_id: int) -> bool:
     """
     Vincula un correo del buzón como avance de una orden de trabajo existente.
-    - Agrega el contenido del correo como entrada en bitácora
-    - Sube los adjuntos e imágenes inline a Cloudinary
+    - Crea una entrada compacta en bitácora con resumen
+    - Sube el correo completo como archivo adjunto (HTML)
+    - Sube adjuntos e imágenes inline del correo
     - Marca el correo como procesado con accion='avance'
     Retorna True si fue exitoso.
     """
@@ -587,28 +588,38 @@ def vincular_correo_a_orden(correo: dict, orden_id: int) -> bool:
     try:
         remitente = correo.get('remitente_nombre') or correo.get('remitente', 'Desconocido')
         asunto = correo.get('asunto', '(Sin asunto)')
-        cuerpo = correo.get('cuerpo', '')[:2000]
+        fecha_correo = (correo.get('fecha', '') or '')[:16].replace('T', ' ')
 
-        # 1. Agregar entrada en bitácora con el contenido del correo
-        mensaje = (
-            f"📧 Correo de seguimiento vinculado\n"
-            f"De: {remitente}\n"
-            f"Asunto: {asunto}\n\n"
-            f"{cuerpo}"
-        )
-        db_insert("bitacora", {
+        # 1. Generar archivo HTML del correo completo y subirlo
+        url_correo = _generar_y_subir_correo_html(correo, orden_id)
+
+        # 2. Entrada compacta en bitácora
+        n_adj = len(correo.get('adjuntos', []))
+        adj_tag = f" · 📎 {n_adj} adjunto(s)" if n_adj > 0 else ""
+        cuerpo_corto = (correo.get('cuerpo', '') or '')[:150].replace('\n', ' ')
+        if len((correo.get('cuerpo', '') or '')) > 150:
+            cuerpo_corto += "..."
+
+        mensaje = f"📧 {asunto}{adj_tag}"
+        if cuerpo_corto:
+            mensaje += f"\n💬 \"{cuerpo_corto}\""
+
+        datos_bitacora = {
             "orden_id": orden_id,
-            "usuario_text": f"CORREO ({remitente})",
+            "usuario_text": f"📧 {remitente}",
             "mensaje": mensaje,
             "fecha": datetime.now().isoformat(),
-        })
+        }
+        if url_correo:
+            datos_bitacora["archivo_url"] = url_correo
+        db_insert("bitacora", datos_bitacora)
 
-        # 2. Subir adjuntos si hay
+        # 3. Subir adjuntos del correo
         adjuntos = correo.get('adjuntos', [])
         if adjuntos:
             _subir_adjuntos_correo(adjuntos, orden_id)
 
-        # 3. Subir imágenes inline si hay
+        # 4. Subir imágenes inline
         imagenes_inline = correo.get('imagenes_inline', {})
         if imagenes_inline:
             from utils.uploads import subir_archivo_generico as _subir_img
@@ -620,15 +631,15 @@ def vincular_correo_a_orden(correo: dict, orden_id: int) -> bool:
                     if url_img:
                         db_insert("bitacora", {
                             "orden_id": orden_id,
-                            "usuario_text": f"CORREO ({remitente})",
-                            "mensaje": f"🖼️ Imagen embebida del correo (CID: {cid})",
+                            "usuario_text": f"📧 {remitente}",
+                            "mensaje": f"🖼️ Imagen del correo",
                             "archivo_url": url_img,
                             "fecha": datetime.now().isoformat(),
                         })
                 except Exception as e_img:
                     print(f"⚠️ Error subiendo inline {cid}: {e_img}")
 
-        # 4. Marcar correo como procesado
+        # 5. Marcar correo como procesado
         _marcar_procesado(correo['message_id'], orden_id=orden_id, accion="avance")
         print(f"✅ Correo vinculado a OT #{orden_id}: {asunto[:50]}")
         return True
@@ -636,6 +647,58 @@ def vincular_correo_a_orden(correo: dict, orden_id: int) -> bool:
     except Exception as e:
         print(f"❌ Error vinculando correo a OT #{orden_id}: {e}")
         return False
+
+
+def _generar_y_subir_correo_html(correo: dict, orden_id: int) -> str | None:
+    """
+    Genera un archivo HTML con el contenido completo del correo y lo sube a Cloudinary.
+    Retorna la URL del archivo subido, o None si falla.
+    """
+    from utils.uploads import subir_archivo_generico
+
+    try:
+        remitente = correo.get('remitente_nombre') or correo.get('remitente', 'Desconocido')
+        asunto = correo.get('asunto', '(Sin asunto)')
+        fecha_correo = correo.get('fecha', '')
+        cuerpo = correo.get('cuerpo', '') or ''
+        html_raw = correo.get('html_raw', '')
+
+        # Si hay HTML original, usarlo; si no, generar uno limpio
+        if html_raw:
+            contenido = html_raw
+        else:
+            # Convertir texto plano a HTML básico
+            import html as html_mod
+            cuerpo_escapado = html_mod.escape(cuerpo).replace('\n', '<br>')
+            contenido = f"""
+            <div style="font-family:Arial,sans-serif;max-width:700px;padding:20px;">
+                <div style="border-bottom:2px solid #3B82F6;padding-bottom:12px;margin-bottom:16px;">
+                    <h2 style="color:#1E40AF;margin:0;">📧 {html_mod.escape(asunto)}</h2>
+                    <p style="color:#6B7280;margin:4px 0 0;">De: {html_mod.escape(remitente)} · {html_mod.escape(fecha_correo)}</p>
+                </div>
+                <div style="line-height:1.6;color:#374151;">{cuerpo_escapado}</div>
+            </div>
+            """
+
+        # Sanitizar scripts
+        contenido = re.sub(r'<script[^>]*>.*?</script>', '', contenido, flags=re.DOTALL | re.IGNORECASE)
+        contenido = re.sub(r'<iframe[^>]*>.*?</iframe>', '', contenido, flags=re.DOTALL | re.IGNORECASE)
+
+        # Envolver en documento HTML completo
+        html_completo = f"""<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>{asunto}</title></head>
+<body style="margin:0;padding:0;background:#f9fafb;">{contenido}</body></html>"""
+
+        # Subir como archivo
+        archivo_bytes = html_completo.encode('utf-8')
+        nombre_archivo = f"correo_{orden_id}_{asunto[:30].replace(' ', '_')}.html"
+        archivo = _ArchivoDesdeBytes(archivo_bytes, nombre_archivo)
+        url = subir_archivo_generico(archivo)
+        return url
+
+    except Exception as e:
+        print(f"⚠️ Error generando HTML del correo: {e}")
+        return None
 
 
 def obtener_correos_no_vinculados():
