@@ -653,8 +653,8 @@ def obtener_correos_no_vinculados():
 
 def render_selector_ordenes_para_vincular(correo_idx: int, correo: dict, df_ordenes, df_act):
     """
-    Renderiza un selector para que el usuario elija a qué orden existente vincular un correo.
-    Muestra solo órdenes Abiertas o Por Validar.
+    Renderiza un selector con búsqueda para que el usuario elija a qué orden vincular un correo.
+    Permite buscar por ID, nombre de activo o descripción.
     """
     from utils.db import db_insert
 
@@ -669,15 +669,66 @@ def render_selector_ordenes_para_vincular(correo_idx: int, correo: dict, df_orde
     map_act = dict(zip(df_act['id'], df_act['nombre'])) if not df_act.empty else {}
     ordenes_activas['Activo'] = ordenes_activas['activo_id'].map(map_act).fillna("Sin activo")
 
-    # Construir opciones legibles
+    st.markdown("**🔗 Vincular a orden existente:**")
+
+    # ── Búsqueda por texto ──
+    col_buscar, col_filtro = st.columns([3, 2])
+    with col_buscar:
+        texto_busqueda = st.text_input(
+            "🔍 Buscar",
+            placeholder="ID, activo o descripción...",
+            key=f"vincular_buscar_{correo_idx}",
+            label_visibility="collapsed",
+        )
+    with col_filtro:
+        activos_filtro = ["Todos"] + sorted(
+            [a for a in ordenes_activas['Activo'].unique() if a != "Sin activo"]
+        )
+        filtro_activo = st.selectbox(
+            "Filtrar activo",
+            activos_filtro,
+            key=f"vincular_filtro_act_{correo_idx}",
+            label_visibility="collapsed",
+        )
+
+    # ── Aplicar filtros ──
+    df_filtrado = ordenes_activas.copy()
+
+    if filtro_activo != "Todos":
+        df_filtrado = df_filtrado[df_filtrado['Activo'] == filtro_activo]
+
+    if texto_busqueda.strip():
+        q = texto_busqueda.strip().lower()
+        # Buscar por ID exacto
+        if q.isdigit():
+            df_filtrado = df_filtrado[df_filtrado['id'] == int(q)]
+        else:
+            # Buscar en activo y descripción
+            mask = (
+                df_filtrado['Activo'].str.lower().str.contains(q, na=False) |
+                df_filtrado['descripcion'].str.lower().str.contains(q, na=False)
+            )
+            df_filtrado = df_filtrado[mask]
+
+    # ── Mostrar resultados ──
+    if df_filtrado.empty:
+        st.warning("No se encontraron órdenes con ese criterio.")
+        return
+
+    st.caption(f"{len(df_filtrado)} orden(es) encontrada(s)")
+
+    # Construir opciones
     opciones = []
     opciones_map = {}
-    for _, row in ordenes_activas.iterrows():
-        label = f"OT #{row['id']} — {row.get('Activo', '?')} — {(row.get('descripcion', '') or '')[:60]}"
+    for _, row in df_filtrado.iterrows():
+        oid = int(row['id'])
+        desc_corta = (row.get('descripcion', '') or '')[:50]
+        estado = row.get('estado', '?')
+        icono = "🔨" if estado == "Abierta" else "🧐"
+        label = f"{icono} OT #{oid} — {row.get('Activo', '?')} — {desc_corta}"
         opciones.append(label)
-        opciones_map[label] = int(row['id'])
+        opciones_map[label] = oid
 
-    st.markdown("**🔗 Vincular a orden existente:**")
     orden_sel = st.selectbox(
         "Seleccionar orden",
         opciones,
