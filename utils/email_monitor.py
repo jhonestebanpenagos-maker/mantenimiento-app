@@ -689,14 +689,14 @@ def render_selector_ordenes_para_vincular(correo_idx: int, correo: dict, df_orde
     with col_vinc:
         vincular_clicked = st.button(
             "✅ Vincular como avance",
-            key=f"btn_vincular_{correo_idx}",
+            key=f"btn_vincular_confirm_{correo_idx}",
             type="primary",
             use_container_width=True,
         )
     with col_cancel:
         cancelar_clicked = st.button(
             "❌ Cancelar",
-            key=f"btn_cancelar_vinc_{correo_idx}",
+            key=f"btn_cancelar_vinc_confirm_{correo_idx}",
             use_container_width=True,
         )
 
