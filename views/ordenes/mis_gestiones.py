@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 import time
+import html as html_mod
 from datetime import datetime
 from utils.db import supabase, run_query, run_query_paginated, render_paginacion, db_insert, db_update, db_delete, invalidate_cache
 from utils.helpers import mostrar_notificaciones, agregar_notificacion, registrar_accion_critica, error_amigable, navegar_a
@@ -169,12 +170,16 @@ def _render_orden_gestion(row, nombre_activo, df_users, usuario):
                             else:
                                 adjunto_html = f"""<br><a href="{url}" target="_blank" style="color:#F59E0B;font-weight:bold;">📎 Ver Archivo</a>"""
 
+                        # Escapar HTML en mensaje y usuario
+                        mensaje_seguro = html_mod.escape(b['mensaje']).replace('\n', '<br>')
+                        usuario_seguro = html_mod.escape(usuario_log)
+
                         st.markdown(f"""
                         <div style="background-color:rgba(255,255,255,0.05);border-left:3px solid #F59E0B;padding:10px;border-radius:0 5px 5px 0;margin-bottom:5px;">
                             <div style="display:flex;justify-content:space-between;color:#9CA3AF;font-size:0.85em;">
-                                <span>📅 {fecha_fmt}</span><span>👤 <b>{usuario_log}</b></span>
+                                <span>📅 {fecha_fmt}</span><span>👤 <b>{usuario_seguro}</b></span>
                             </div>
-                            <div style="margin-top:5px;color:#E5E7EB;white-space:pre-wrap;">{b['mensaje']}</div>
+                            <div style="margin-top:5px;color:#E5E7EB;white-space:pre-wrap;">{mensaje_seguro}</div>
                             {adjunto_html}
                         </div>
                         """, unsafe_allow_html=True)
@@ -201,6 +206,32 @@ def _render_orden_gestion(row, nombre_activo, df_users, usuario):
 
         except Exception as e:
             error_amigable(e, "cargar historial")
+
+        # ── Migrar correos antiguos a formato compacto ──
+        try:
+            entradas_antiguas = []
+            for b in (bitacora.data or []):
+                usuario = b.get('usuario_text', '') or ''
+                mensaje = b.get('mensaje', '') or ''
+                if (usuario.startswith('CORREO (')
+                        and ('📧 Correo de seguimiento vinculado' in mensaje or len(mensaje) > 300)
+                        and 'Creada desde correo' not in mensaje):
+                    entradas_antiguas.append(b)
+
+            if entradas_antiguas:
+                st.info(f"🔄 Hay {len(entradas_antiguas)} correo(s) con formato antiguo.")
+                if st.button("🔄 Actualizar formato de correos", key=f"migrar_mg_{row['id']}",
+                             use_container_width=True):
+                    with st.spinner("Migrando..."):
+                        from utils.email_monitor import migrar_correos_antiguos_bitacora
+                        n_ok, n_total = migrar_correos_antiguos_bitacora(orden_id=int(row['id']))
+                    if n_ok > 0:
+                        st.success(f"✅ {n_ok} correo(s) actualizados.")
+                        st.rerun()
+                    else:
+                        st.warning("No se pudieron migrar.")
+        except Exception as e_mig:
+            print(f"Error verificando correos antiguos: {e_mig}")
 
         st.divider()
         st.markdown("##### ➕ Registrar Nuevo Avance")
