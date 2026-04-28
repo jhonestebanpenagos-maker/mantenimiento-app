@@ -4,12 +4,12 @@
 # ============================================
 
 streamlit==1.38.0
-pandas==2.0.3
+pandas>=2.1.0,<2.3.0
 supabase==1.2.0
 qrcode==7.4.2
 pillow==10.1.0
-opencv-python-headless==4.8.1.78
-numpy==1.24.3
+opencv-python-headless>=4.8.0
+numpy>=1.24.3,<2.0.0
 plotly==5.15.0
 cloudinary==1.36.0
 requests==2.31.0
@@ -17,6 +17,7 @@ fpdf==1.7.2
 openpyxl
 bcrypt>=4.0.0
 extract-msg>=0.41.0
+setuptools>=70.0.0
 
 # ============================================
 # DEPENDENCIAS PARA BOT DE TELEGRAM
