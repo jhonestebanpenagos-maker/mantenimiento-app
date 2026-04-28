@@ -62,6 +62,29 @@ div[data-testid="stToast"] p { color: #F3F4F6 !important; }
 
 /* BARRA LATERAL */
 [data-testid="stSidebar"] { background-color: var(--bg-sidebar); border-right: 1px solid #30363d; color: #F3F4F6 !important; }
+
+/* Botón de apertura/cierre del sidebar — visible sobre el fondo oscuro */
+button[data-testid="stBaseButton-header"],
+button[aria-label="Close sidebar"],
+button[aria-label="Open sidebar"],
+[data-testid="stSidebarCollapsedControl"],
+[data-testid="stSidebarCollapseControl"] {
+    color: #F59E0B !important;
+    background-color: rgba(245, 158, 11, 0.15) !important;
+    border: 1px solid rgba(245, 158, 11, 0.4) !important;
+    border-radius: 6px !important;
+    padding: 4px 8px !important;
+    opacity: 1 !important;
+    visibility: visible !important;
+}
+button[data-testid="stBaseButton-header"]:hover,
+button[aria-label="Close sidebar"]:hover,
+button[aria-label="Open sidebar"]:hover,
+[data-testid="stSidebarCollapsedControl"]:hover,
+[data-testid="stSidebarCollapseControl"]:hover {
+    background-color: rgba(245, 158, 11, 0.3) !important;
+    border-color: #F59E0B !important;
+}
 [data-testid="stSidebar"] p, [data-testid="stSidebar"] span, [data-testid="stSidebar"] label { color: #F3F4F6 !important; }
 [data-testid="stSidebarNav"] span { color: #E5E7EB !important; font-weight: 500; }
 [data-testid="stSidebarNav"] a[aria-current="page"] { background-color: rgba(245, 158, 11, 0.1); border-left: 3px solid var(--pro-orange); }
