@@ -29,7 +29,8 @@ def render():
     df_act = run_query("activos")
     df_users = run_query("usuarios")
     df_ordenes = run_query("ordenes")
-    df_solicitudes = run_query("solicitudes")
+    df_solicitudes_all = run_query("solicitudes")
+    df_solicitudes = df_solicitudes_all[df_solicitudes_all['estado'] == 'Pendiente'] if not df_solicitudes_all.empty else df_solicitudes_all
 
     if not supabase:
         st.error("Sin conexión a base de datos.")

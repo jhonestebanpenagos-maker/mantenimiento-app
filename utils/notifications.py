@@ -9,10 +9,22 @@ from datetime import datetime
 # ==============================================================================
 def notificar_telegram(chat_id, mensaje, foto_url=None):
     if not chat_id:
-        return
+        print("⚠️ notificar_telegram: chat_id vacío, no se envía.")
+        return False
     try:
-        token_raw = st.secrets["telegram"]["bot_token"]
-        token = token_raw.split("/bot")[-1].split("/")[0] if "/bot" in token_raw else token_raw
+        # Buscar token: primero env var, luego secrets.toml
+        import os
+        token = os.environ.get("TELEGRAM_BOT_TOKEN") or os.environ.get("TELEGRAM_TOKEN")
+        if not token:
+            try:
+                token_raw = st.secrets["telegram"]["bot_token"]
+                token = token_raw.split("/bot")[-1].split("/")[0] if "/bot" in token_raw else token_raw
+            except (KeyError, FileNotFoundError):
+                pass
+        if not token:
+            print("❌ notificar_telegram: Token de Telegram no configurado (ni env var ni secrets.toml)")
+            return False
+
         base_url = f"https://api.telegram.org/bot{token}"
         payload = {"chat_id": chat_id, "parse_mode": "Markdown"}
         if foto_url:
@@ -22,11 +34,15 @@ def notificar_telegram(chat_id, mensaje, foto_url=None):
         else:
             payload["text"] = mensaje
             url_envio = f"{base_url}/sendMessage"
-        requests.post(url_envio, data=payload)
-    except KeyError:
-        print("Error Telegram: credenciales no configuradas en secrets.toml")
+        resp = requests.post(url_envio, data=payload, timeout=10)
+        if resp.status_code != 200:
+            print(f"⚠️ Telegram API status {resp.status_code}: {resp.text[:200]}")
+            return False
+        print(f"✅ Telegram enviado a chat_id={chat_id}")
+        return True
     except Exception as e:
-        print(f"Error Telegram: {type(e).__name__}")
+        print(f"❌ Error Telegram: {type(e).__name__}: {e}")
+        return False
 
 
 # ==============================================================================
