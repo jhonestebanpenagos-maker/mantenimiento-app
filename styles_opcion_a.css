@@ -25,7 +25,7 @@
    ========================================= */
 #MainMenu {visibility: hidden;}
 footer {visibility: hidden;}
-header {visibility: hidden;}
+
 
 @media (max-width: 768px) {
     .block-container {
