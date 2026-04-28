@@ -54,27 +54,39 @@ footer {visibility: hidden;}
     border-right: 1px solid var(--border);
 }
 
-/* Botón de apertura/cierre del sidebar — visible sobre fondo claro */
+/* Botón de apertura/cierre del sidebar — siempre visible */
 button[data-testid="stBaseButton-header"],
 button[aria-label="Close sidebar"],
 button[aria-label="Open sidebar"],
 [data-testid="stSidebarCollapsedControl"],
 [data-testid="stSidebarCollapseControl"] {
     color: #2563EB !important;
-    background-color: rgba(37, 99, 235, 0.1) !important;
-    border: 1px solid rgba(37, 99, 235, 0.3) !important;
+    background-color: rgba(37, 99, 235, 0.12) !important;
+    border: 2px solid #2563EB !important;
     border-radius: 6px !important;
     padding: 4px 8px !important;
     opacity: 1 !important;
     visibility: visible !important;
+    z-index: 999999 !important;
+    position: relative !important;
 }
 button[data-testid="stBaseButton-header"]:hover,
 button[aria-label="Close sidebar"]:hover,
 button[aria-label="Open sidebar"]:hover,
 [data-testid="stSidebarCollapsedControl"]:hover,
 [data-testid="stSidebarCollapseControl"]:hover {
-    background-color: rgba(37, 99, 235, 0.2) !important;
-    border-color: #2563EB !important;
+    background-color: rgba(37, 99, 235, 0.25) !important;
+    border-color: #1D4ED8 !important;
+}
+
+/* Barra superior que aparece con sidebar colapsado — que no tape el botón */
+[data-testid="stHeader"],
+.stApp > header {
+    background-color: transparent !important;
+    z-index: 0 !important;
+}
+[data-testid="stToolbar"] {
+    background-color: transparent !important;
 }
 [data-testid="stSidebarNav"] span {
     color: var(--text-primary) !important;
