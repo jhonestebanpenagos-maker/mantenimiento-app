@@ -24,7 +24,10 @@
    ========================================= */
 #MainMenu {visibility: hidden;}
 footer {visibility: hidden;}
-header {visibility: hidden;}
+/* header: NO ocultar completamente — el botón del sidebar vive ahí en Streamlit 1.56+ */
+header [data-testid="stToolbar"] {display: none !important;}
+button[kind="header"] {display: none !important;}
+
 
 @media (max-width: 768px) {
     .block-container {
