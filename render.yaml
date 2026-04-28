@@ -1,0 +1,48 @@
+services:
+  # ══════════════════════════════════════════
+  # SERVICIO 1: App Streamlit (Web)
+  # ══════════════════════════════════════════
+  - type: web
+    name: orion-app
+    runtime: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: streamlit run app.py --server.port=$PORT --server.address=0.0.0.0
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.11"
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_KEY
+        sync: false
+      - key: CLOUDINARY_CLOUD_NAME
+        sync: false
+      - key: CLOUDINARY_API_KEY
+        sync: false
+      - key: CLOUDINARY_API_SECRET
+        sync: false
+      - key: TELEGRAM_BOT_TOKEN
+        sync: false
+
+  # ══════════════════════════════════════════
+  # SERVICIO 2: Bot Telegram (Worker)
+  # ══════════════════════════════════════════
+  - type: worker
+    name: orion-bot-telegram
+    runtime: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: python bot_telegram.py
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.11"
+      - key: TELEGRAM_TOKEN
+        sync: false
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_KEY
+        sync: false
+      - key: CLOUDINARY_CLOUD_NAME
+        sync: false
+      - key: CLOUDINARY_API_KEY
+        sync: false
+      - key: CLOUDINARY_API_SECRET
+        sync: false

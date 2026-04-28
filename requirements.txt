@@ -17,3 +17,9 @@ fpdf==1.7.2
 openpyxl
 bcrypt>=4.0.0
 extract-msg>=0.41.0
+
+# ============================================
+# DEPENDENCIAS PARA BOT DE TELEGRAM
+# ============================================
+python-telegram-bot==21.3
+flask==3.0.0
