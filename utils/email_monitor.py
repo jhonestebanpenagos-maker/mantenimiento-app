@@ -557,10 +557,13 @@ def descargar_correos_nuevos(max_correos=20, dias_atras=7):
 
 def cargar_contenido_correo(correo: dict) -> dict:
     """
-    Carga el contenido completo de UN correo (cuerpo, HTML, adjuntos).
-    Busca por Message-ID en Gmail (no necesita imap_id).
+    Carga el contenido completo de UN correo si no fue descargado en el batch.
     Retorna el correo actualizado con el contenido.
     """
+    # Si ya se descargó en el batch, no hacer nada
+    if correo.get('contenido_cargado'):
+        return correo
+
     import socket
 
     message_id = correo.get('message_id', '').strip()
@@ -1676,10 +1679,10 @@ password = "xxxx xxxx xxxx xxxx"
                     pass
                 st.stop()
 
-            # Paso 6: Descargar headers (BATCH — una sola llamada IMAP)
-            st.markdown(f"**6️⃣ Descargando headers de {len(ids)} correos...**")
+            # Paso 6: Descargar contenido COMPLETO (BATCH — una sola llamada IMAP)
+            st.markdown(f"**6️⃣ Descargando {len(ids)} correos con contenido completo...**")
             status_text = st.empty()
-            status_text.caption("Conectando con Gmail...")
+            status_text.caption("Descargando correos de Gmail...")
             resultados = []
             errores = 0
 
@@ -1687,31 +1690,33 @@ password = "xxxx xxxx xxxx xxxx"
             ids_str = ",".join(mid.decode() if isinstance(mid, bytes) else str(mid) for mid in ids)
 
             try:
-                mail.socket().settimeout(30)
-                status, datos = mail.fetch(ids_str, "(BODY[HEADER.FIELDS (FROM SUBJECT DATE MESSAGE-ID)])")
+                mail.socket().settimeout(60)
+                status, datos = mail.fetch(ids_str, "(RFC822)")
             except socket.timeout:
-                st.error("❌ Timeout descargando headers (30s). Intenta con menos días.")
+                st.error("❌ Timeout descargando correos (60s). Intenta con menos días o menos correos.")
                 status, datos = "TIMEOUT", None
             except Exception as e:
                 st.error(f"❌ Error en fetch batch: `{type(e).__name__}`: {e}")
                 status, datos = "ERROR", None
 
             if status == "OK" and datos:
-                # datos es una lista de tuplas: [(header_bytes, b')'), ...]
+                status_text.caption("Procesando contenido...")
+                # datos es lista de tuplas: [(b'fetch ... (RFC822 {nbytes}', bytes_del_mensaje), ...]
                 for item in datos:
                     try:
                         if not isinstance(item, tuple) or len(item) < 2:
                             continue
-                        header_bytes = item[1]
-                        if not isinstance(header_bytes, bytes) or len(header_bytes) < 10:
+                        raw_bytes = item[1]
+                        if not isinstance(raw_bytes, bytes) or len(raw_bytes) < 50:
                             continue
 
-                        msg_header = email.message_from_bytes(header_bytes)
-                        asunto = _decodificar_header(msg_header.get("Subject", ""))
-                        remitente_raw = _decodificar_header(msg_header.get("From", ""))
-                        fecha_raw = msg_header.get("Date", "")
-                        message_id = (msg_header.get("Message-ID") or "").strip()
+                        msg = email.message_from_bytes(raw_bytes)
 
+                        # Extraer headers
+                        asunto = _decodificar_header(msg.get("Subject", ""))
+                        remitente_raw = _decodificar_header(msg.get("From", ""))
+                        fecha_raw = msg.get("Date", "")
+                        message_id = (msg.get("Message-ID") or "").strip()
                         if not message_id:
                             continue
 
@@ -1724,29 +1729,34 @@ password = "xxxx xxxx xxxx xxxx"
                         elif "@" in remitente_raw:
                             remitente = remitente_raw.strip()
 
+                        # Extraer contenido completo
+                        cuerpo = _extraer_texto_plano(msg)
+                        html_raw = _extraer_html_raw(msg)
+                        adjuntos = _extraer_adjuntos(msg)
+                        imagenes_inline = _extraer_imagenes_inline(msg)
+
                         correo_data = {
                             'message_id': message_id,
-                            'imap_id': '',  # No necesario con batch
+                            'imap_id': '',
                             'remitente': remitente,
                             'remitente_nombre': remitente_nombre,
                             'asunto': asunto or '(Sin asunto)',
                             'fecha': _parsear_fecha(fecha_raw),
-                            'cuerpo': '',
-                            'cuerpo_corto': '',
-                            'html_raw': '',
-                            'adjuntos': [],
-                            'imagenes_inline': {},
-                            'tiene_adjuntos': False,
-                            'tiene_html': False,
-                            'tiene_imagenes': False,
+                            'cuerpo': cuerpo[:5000],
+                            'cuerpo_corto': cuerpo[:200],
+                            'html_raw': html_raw,
+                            'adjuntos': adjuntos,
+                            'imagenes_inline': imagenes_inline,
+                            'tiene_adjuntos': len(adjuntos) > 0,
+                            'tiene_html': bool(html_raw),
+                            'tiene_imagenes': len(imagenes_inline) > 0,
                             'leido': False,
-                            'contenido_cargado': False,
+                            'contenido_cargado': True,
                         }
                         resultados.append(correo_data)
-                        _guardar_correo_pendiente(correo_data)
                     except Exception as e:
                         errores += 1
-                        print(f"⚠️ Error parseando header: {type(e).__name__}: {e}")
+                        print(f"⚠️ Error procesando correo: {type(e).__name__}: {e}")
             else:
                 errores = len(ids)
                 print(f"⚠️ Fetch batch falló: status={status}")
