@@ -663,6 +663,111 @@ def _actualizar_correo_en_session(correo: dict):
     st.session_state['_correos_pendientes'] = pendientes
 
 
+def _descargar_correos_por_message_ids(message_ids: list) -> list:
+    """
+    Descarga el contenido completo de una lista de correos por sus Message-IDs.
+    Usa búsqueda IMAP por Message-ID individual (no hay forma batch de buscar por ID).
+    Retorna lista de dicts con contenido completo.
+    """
+    import socket
+
+    if not message_ids:
+        return []
+
+    mail = _conectar_imap()
+    if not mail:
+        return []
+
+    resultados = []
+    try:
+        mail.select("INBOX", readonly=True)
+        total = len(message_ids)
+
+        for i, mid in enumerate(message_ids):
+            try:
+                mail.socket().settimeout(IMAP_TIMEOUT)
+
+                # Buscar por Message-ID
+                status, mensajes = mail.search(None, f'(HEADER Message-ID "{mid}")')
+                if status != "OK" or not mensajes[0].strip():
+                    # Fallback: texto
+                    status, mensajes = mail.search(None, f'(TEXT "{mid}")')
+                if status != "OK" or not mensajes[0].strip():
+                    print(f"⚠️ [{i+1}/{total}] No encontrado: {mid[:50]}")
+                    continue
+
+                ids = mensajes[0].split()
+                msg_id = ids[-1]
+
+                status, datos = mail.fetch(msg_id, "(RFC822)")
+                if status != "OK" or not datos or not datos[0]:
+                    continue
+
+                raw_bytes = datos[0][1] if isinstance(datos[0], tuple) else datos[0]
+                if not isinstance(raw_bytes, bytes):
+                    continue
+
+                msg = email.message_from_bytes(raw_bytes)
+
+                asunto = _decodificar_header(msg.get("Subject", ""))
+                remitente_raw = _decodificar_header(msg.get("From", ""))
+                fecha_raw = msg.get("Date", "")
+                message_id = (msg.get("Message-ID") or mid).strip()
+
+                remitente = remitente_raw
+                remitente_nombre = ""
+                match = re.match(r'^"?([^"<]*)"?\s*<([^>]+)>', remitente_raw)
+                if match:
+                    remitente_nombre = match.group(1).strip()
+                    remitente = match.group(2).strip()
+                elif "@" in remitente_raw:
+                    remitente = remitente_raw.strip()
+
+                cuerpo = _extraer_texto_plano(msg)
+                html_raw = _extraer_html_raw(msg)
+                adjuntos = _extraer_adjuntos(msg)
+                imagenes_inline = _extraer_imagenes_inline(msg)
+
+                correo_data = {
+                    'message_id': message_id,
+                    'imap_id': '',
+                    'remitente': remitente,
+                    'remitente_nombre': remitente_nombre,
+                    'asunto': asunto or '(Sin asunto)',
+                    'fecha': _parsear_fecha(fecha_raw),
+                    'cuerpo': cuerpo[:5000],
+                    'cuerpo_corto': cuerpo[:200],
+                    'html_raw': html_raw,
+                    'adjuntos': adjuntos,
+                    'imagenes_inline': imagenes_inline,
+                    'tiene_adjuntos': len(adjuntos) > 0,
+                    'tiene_html': bool(html_raw),
+                    'tiene_imagenes': len(imagenes_inline) > 0,
+                    'leido': False,
+                    'contenido_cargado': True,
+                }
+                resultados.append(correo_data)
+                print(f"✅ [{i+1}/{total}] Descargado: {asunto[:40]}")
+
+            except socket.timeout:
+                print(f"⚠️ [{i+1}/{total}] Timeout: {mid[:50]}")
+                continue
+            except Exception as e:
+                print(f"⚠️ [{i+1}/{total}] Error: {e}")
+                continue
+
+        return resultados
+
+    except Exception as e:
+        print(f"❌ Error en _descargar_correos_por_message_ids: {e}")
+        return resultados
+    finally:
+        try:
+            mail.logout()
+        except Exception:
+            pass
+
+
 # ==============================================================================
 # 🔍 COMPARACIÓN GMAIL vs BASE DE DATOS
 # ==============================================================================
@@ -1006,6 +1111,44 @@ def render_auditoria_correos():
 
     st.markdown("---")
 
+    # ── Verificar si existe la tabla emails_pendientes ──
+    from utils.db import supabase as _supa
+    tabla_pendientes_ok = False
+    if _supa:
+        try:
+            _supa.table("emails_pendientes").select("message_id").limit(1).execute()
+            tabla_pendientes_ok = True
+        except Exception:
+            tabla_pendientes_ok = False
+
+    if not tabla_pendientes_ok:
+        st.warning("⚠️ La tabla `emails_pendientes` no existe en Supabase. Créala para habilitar el guardado de pendientes.")
+        with st.expander("📋 SQL para crear la tabla", expanded=False):
+            st.code("""
+CREATE TABLE IF NOT EXISTS emails_pendientes (
+    message_id TEXT PRIMARY KEY,
+    remitente TEXT DEFAULT '',
+    remitente_nombre TEXT DEFAULT '',
+    asunto TEXT DEFAULT '',
+    fecha_correo TEXT DEFAULT '',
+    cuerpo_corto TEXT DEFAULT '',
+    n_adjuntos INTEGER DEFAULT 0,
+    leido BOOLEAN DEFAULT FALSE,
+    descargado_en TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Índice para búsquedas rápidas
+CREATE INDEX IF NOT EXISTS idx_emails_pendientes_message_id
+    ON emails_pendientes(message_id);
+
+-- Permisos (si usas RLS)
+ALTER TABLE emails_pendientes ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Allow all" ON emails_pendientes FOR ALL USING (true);
+""", language="sql")
+            st.caption("Copia este SQL y ejecútalo en el SQL Editor de Supabase Dashboard.")
+
+    st.markdown("---")
+
     # ── 🔍 DETECCIÓN DE CORREOS EN LIMBO (comparar Gmail vs BD) ──
     st.markdown("#### 🩺 Detección de Correos en Limbo")
     st.caption("Compara la bandeja de Gmail con la base de datos para encontrar correos que se escaparon.")
@@ -1019,10 +1162,14 @@ def render_auditoria_correos():
         st.markdown("<br>", unsafe_allow_html=True)
         ejecutar_cmp = st.button("🔍 Escanear Gmail vs BD", type="primary", use_container_width=True, key="aud_btn_cmp")
 
+    # ── Resultados del escaneo (persistidos en session_state) ──
+    datos_cmp = st.session_state.get('_auditoria_cmp_resultados', None)
     if ejecutar_cmp:
         with st.spinner(f"Conectando a Gmail y comparando (hasta {max_corr_aud} correos, {dias_aud} días)..."):
             datos_cmp = comparar_gmail_vs_bd(max_correos=max_corr_aud, dias_atras=dias_aud)
+        st.session_state['_auditoria_cmp_resultados'] = datos_cmp
 
+    if datos_cmp:
         for err in datos_cmp['errores']:
             st.error(f"❌ {err}")
 
@@ -1039,71 +1186,50 @@ def render_auditoria_correos():
                    delta_color="inverse" if en_limbo > 0 else "off")
 
         if datos_cmp['en_limbo']:
-            st.error(f"⚠️ **{en_limbo} correos están en LIMBO** — en Gmail pero no en `emails_procesados` ni `emails_pendientes`.")
-            st.markdown(f"##### 📋 Correos en LIMBO ({en_limbo})")
+            st.error(f"⚠️ **{en_limbo} correos están en LIMBO** — en Gmail pero no gestionados.")
 
-            for i, h in enumerate(datos_cmp['en_limbo']):
-                asunto = (h.get('asunto', '') or '')[:70]
-                remitente = (h.get('remitente', '') or '')[:50]
-                fecha = (h.get('fecha', '') or '')[:25]
-                mid = h.get('message_id', '?')[:60]
-
-                col_info_l, col_acc_l = st.columns([4, 2])
-                with col_info_l:
-                    st.markdown(f"""
-                    <div style="border-left:3px solid #EF4444;padding:8px 12px;margin-bottom:4px;background:rgba(239,68,68,0.05);border-radius:0 6px 6px 0;">
-                        <div style="color:#EF4444;font-weight:600;font-size:0.9em;">📧 {asunto}</div>
-                        <div style="color:#9CA3AF;font-size:0.8em;">👤 {remitente} · {fecha}</div>
-                        <div style="color:#6B7280;font-size:0.7em;">ID: {mid}</div>
-                    </div>
-                    """, unsafe_allow_html=True)
-                with col_acc_l:
-                    c_desc_l, c_pend_l = st.columns(2)
-                    with c_desc_l:
-                        if st.button("🗑️", key=f"aud_desc_{i}", help="Descartar", use_container_width=True):
-                            _marcar_procesado(h['message_id'], accion="descartado")
-                            st.toast(f"🗑️ Descartado: {asunto[:30]}")
-                            st.rerun()
-                    with c_pend_l:
-                        if st.button("💾", key=f"aud_pend_{i}", help="Guardar como pendiente", use_container_width=True):
-                            _guardar_correo_pendiente({
-                                'message_id': h['message_id'],
-                                'remitente': h.get('remitente', ''),
-                                'remitente_nombre': '',
-                                'asunto': h.get('asunto', ''),
-                                'fecha': h.get('fecha', ''),
-                                'cuerpo_corto': '',
-                                'adjuntos': [],
-                                'leido': False,
-                            })
-                            st.toast(f"💾 Guardado como pendiente: {asunto[:30]}")
-                            st.rerun()
-
-            # Acciones masivas
+            # ── ACCIÓN PRINCIPAL: Cargar limbo para revisar ──
             st.markdown("---")
-            col_mas1, col_mas2 = st.columns(2)
-            with col_mas1:
-                if st.button("💾 Guardar TODOS como pendientes", type="secondary", use_container_width=True, key="aud_guardar_todos"):
-                    guardados = 0
-                    for h in datos_cmp['en_limbo']:
-                        try:
-                            _guardar_correo_pendiente({
-                                'message_id': h['message_id'],
-                                'remitente': h.get('remitente', ''),
-                                'remitente_nombre': '',
-                                'asunto': h.get('asunto', ''),
-                                'fecha': h.get('fecha', ''),
-                                'cuerpo_corto': '',
-                                'adjuntos': [],
-                                'leido': False,
-                            })
-                            guardados += 1
-                        except Exception:
-                            pass
-                    st.success(f"✅ {guardados} correos guardados como pendientes.")
-                    st.rerun()
-            with col_mas2:
-                if st.button("🗑️ Descartar TODOS los limbo", type="secondary", use_container_width=True, key="aud_desc_todos"):
+            st.markdown("##### 📋 Acciones sobre correos en limbo")
+
+            col_cargar, col_guardar, col_descartar = st.columns(3)
+            with col_cargar:
+                if st.button(f"📥 Cargar {en_limbo} correos para REVISAR", type="primary", use_container_width=True, key="aud_cargar_limbo"):
+                    # Descargar contenido completo de los correos en limbo
+                    with st.spinner(f"Descargando contenido de {en_limbo} correos desde Gmail..."):
+                        correos_limbo = _descargar_correos_por_message_ids(
+                            [h['message_id'] for h in datos_cmp['en_limbo']]
+                        )
+                    if correos_limbo:
+                        st.session_state['_correos_pendientes'] = correos_limbo
+                        st.success(f"✅ {len(correos_limbo)} correo(s) cargado(s). Cambia a la pestaña **📧 Correo** para revisarlos y tomar acciones.")
+                        st.session_state['_auditoria_cmp_resultados'] = None  # Limpiar resultados
+                    else:
+                        st.error("❌ No se pudieron descargar los correos. Verifica la conexión a Gmail.")
+            with col_guardar:
+                if tabla_pendientes_ok:
+                    if st.button(f"💾 Guardar {en_limbo} como pendientes", type="secondary", use_container_width=True, key="aud_guardar_limbo"):
+                        guardados = 0
+                        for h in datos_cmp['en_limbo']:
+                            try:
+                                _guardar_correo_pendiente({
+                                    'message_id': h['message_id'],
+                                    'remitente': h.get('remitente', ''),
+                                    'remitente_nombre': '',
+                                    'asunto': h.get('asunto', ''),
+                                    'fecha': h.get('fecha', ''),
+                                    'cuerpo_corto': '',
+                                    'adjuntos': [],
+                                    'leido': False,
+                                })
+                                guardados += 1
+                            except Exception:
+                                pass
+                        st.success(f"✅ {guardados} correos guardados como pendientes.")
+                else:
+                    st.button("💾 Guardar (tabla no existe)", disabled=True, use_container_width=True, key="aud_guardar_limbo_dis")
+            with col_descartar:
+                if st.button(f"🗑️ Descartar TODOS los limbo", type="secondary", use_container_width=True, key="aud_desc_limbo"):
                     descartados = 0
                     for h in datos_cmp['en_limbo']:
                         try:
@@ -1112,7 +1238,36 @@ def render_auditoria_correos():
                         except Exception:
                             pass
                     st.success(f"🗑️ {descartados} correos descartados.")
+                    st.session_state['_auditoria_cmp_resultados'] = None
                     st.rerun()
+
+            st.markdown("---")
+
+            # ── Lista detallada de correos en limbo ──
+            with st.expander(f"📋 Ver detalle de los {en_limbo} correos en limbo", expanded=False):
+                for i, h in enumerate(datos_cmp['en_limbo']):
+                    asunto = (h.get('asunto', '') or '')[:70]
+                    remitente = (h.get('remitente', '') or '')[:50]
+                    fecha = (h.get('fecha', '') or '')[:25]
+                    mid = h.get('message_id', '?')[:60]
+
+                    col_info_l, col_acc_l = st.columns([4, 1])
+                    with col_info_l:
+                        st.markdown(f"""
+                        <div style="border-left:3px solid #EF4444;padding:6px 10px;margin-bottom:3px;background:rgba(239,68,68,0.05);border-radius:0 6px 6px 0;">
+                            <div style="color:#EF4444;font-weight:600;font-size:0.85em;">📧 {asunto}</div>
+                            <div style="color:#9CA3AF;font-size:0.75em;">👤 {remitente} · {fecha}</div>
+                        </div>
+                        """, unsafe_allow_html=True)
+                    with col_acc_l:
+                        if st.button("🗑️", key=f"aud_desc_ind_{i}", help="Descartar este correo", use_container_width=True):
+                            _marcar_procesado(h['message_id'], accion="descartado")
+                            # Quitar de los resultados
+                            datos_cmp['en_limbo'] = [x for x in datos_cmp['en_limbo'] if x['message_id'] != h['message_id']]
+                            st.session_state['_auditoria_cmp_resultados'] = datos_cmp
+                            st.toast(f"🗑️ Descartado: {asunto[:30]}")
+                            st.rerun()
+
         else:
             st.success("✅ **Sin correos en limbo.** Todos los correos de Gmail están en la base de datos.")
 
@@ -1208,7 +1363,7 @@ def render_auditoria_correos():
             st.warning(f"📧 {msg_id} — Acción: {accion} — Fecha: {fecha}")
 
     # ── Si no hay nada ──
-    if not procesados and not ordenes_correo and not ejecutar_cmp:
+    if not procesados and not ordenes_correo and not datos_cmp:
         st.info("📭 No hay registros de correos procesados en la base de datos. Usa **Escanear Gmail vs BD** arriba para comparar directamente con Gmail.")
 
 
