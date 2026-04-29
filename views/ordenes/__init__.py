@@ -19,7 +19,7 @@ from .preventivos import render_preventivos
 from .buzon import render_buzon
 from .mis_gestiones import render_mis_gestiones
 from .interceptor import render_interceptor
-from utils.email_monitor import render_buzon_correo
+from utils.email_monitor import render_buzon_correo, render_auditoria_correos
 
 
 def render():
@@ -73,6 +73,7 @@ def render():
         ("buzon",   "📥", "Buzón"),
         ("calidad", "🧐", "Calidad"),
         ("correo",  "📧", "Correo"),
+        ("auditoria", "🔍", "Auditoría"),
         ("gestion", "🎛️", "Global"),
     ]
 
@@ -115,6 +116,8 @@ def render():
         render_preventivos(df_act, df_users)
     elif tab_activa == 'correo':
         render_buzon_correo()
+    elif tab_activa == 'auditoria':
+        render_auditoria_correos()
 
 
 # ==============================================================================

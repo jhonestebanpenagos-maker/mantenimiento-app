@@ -35,6 +35,52 @@ def _obtener_procesados():
         return set()
 
 
+def _guardar_correo_pendiente(correo: dict):
+    """Guarda un correo descargado en la tabla emails_pendientes para persistencia."""
+    from utils.db import supabase
+    if not supabase:
+        return
+    try:
+        datos = {
+            "message_id": correo['message_id'].strip(),
+            "remitente": correo.get('remitente', ''),
+            "remitente_nombre": correo.get('remitente_nombre', ''),
+            "asunto": correo.get('asunto', ''),
+            "fecha_correo": correo.get('fecha', ''),
+            "cuerpo_corto": correo.get('cuerpo_corto', '')[:500],
+            "n_adjuntos": len(correo.get('adjuntos', [])),
+            "leido": correo.get('leido', False),
+            "descargado_en": datetime.now().isoformat(),
+        }
+        supabase.table("emails_pendientes").upsert(datos).execute()
+    except Exception as e:
+        print(f"⚠️ Error guardando pendiente: {e}")
+
+
+def _obtener_pendientes_guardados():
+    """Obtiene correos pendientes previamente descargados desde la tabla emails_pendientes."""
+    from utils.db import supabase
+    if not supabase:
+        return []
+    try:
+        res = supabase.table("emails_pendientes").select("*").order("descargado_en", desc=True).limit(50).execute()
+        return res.data or []
+    except Exception as e:
+        print(f"⚠️ Error obteniendo pendientes guardados: {e}")
+        return []
+
+
+def _eliminar_pendiente(message_id: str):
+    """Elimina un correo de la tabla emails_pendientes (porque ya se gestionó)."""
+    from utils.db import supabase
+    if not supabase:
+        return
+    try:
+        supabase.table("emails_pendientes").delete().eq("message_id", message_id.strip()).execute()
+    except Exception as e:
+        print(f"⚠️ Error eliminando pendiente: {e}")
+
+
 def _marcar_procesado(message_id: str, orden_id: int = None, accion: str = "orden"):
     """Marca un correo como procesado en Supabase (persistente)."""
     from utils.db import supabase
@@ -444,7 +490,7 @@ def descargar_correos_nuevos(max_correos=20, dias_atras=3):
             status_flags, datos_flags = mail.fetch(msg_id, "(FLAGS)")
             leido = b'\\Seen' in (datos_flags[0] if datos_flags[0] else b'')
 
-            resultados.append({
+            correo_data = {
                 'message_id': message_id,
                 'remitente': remitente,
                 'remitente_nombre': remitente_nombre,
@@ -459,7 +505,11 @@ def descargar_correos_nuevos(max_correos=20, dias_atras=3):
                 'tiene_html': bool(html_raw),
                 'tiene_imagenes': len(imagenes_inline) > 0,
                 'leido': leido,
-            })
+            }
+            resultados.append(correo_data)
+
+            # Persistir en tabla emails_pendientes para que no se pierdan
+            _guardar_correo_pendiente(correo_data)
 
         return resultados
 
@@ -476,8 +526,191 @@ def descargar_correos_nuevos(max_correos=20, dias_atras=3):
 
 
 # ==============================================================================
-# 🩺 DIAGNÓSTICO
+# 🩺 DIAGNÓSTICO Y AUDITORÍA
 # ==============================================================================
+def barrido_base_datos_correos():
+    """
+    Barrido completo de la base de datos de correos.
+    Muestra el estado REAL de todos los correos: procesados, rechazados,
+    vinculados, pendientes, y cruza con órdenes creadas.
+    Retorna un dict con toda la info para renderizar.
+    """
+    from utils.db import supabase
+
+    resultado = {
+        'procesados': [],
+        'ordenes_desde_correo': [],
+        'solicitudes_correo': [],
+        'resumen': {},
+    }
+
+    if not supabase:
+        return resultado
+
+    # 1. Todos los correos procesados
+    try:
+        res = supabase.table("emails_procesados").select("*").order("fecha_procesado", desc=True).execute()
+        resultado['procesados'] = res.data or []
+    except Exception as e:
+        print(f"⚠️ Error consultando emails_procesados: {e}")
+
+    # 2. Órdenes creadas desde correo (campo origen='correo' o que tengan correo_message_id)
+    try:
+        res_ord = supabase.table("ordenes").select("*").eq("origen", "correo").order("id", desc=True).execute()
+        resultado['ordenes_desde_correo'] = res_ord.data or []
+    except Exception as e:
+        print(f"⚠️ Error consultando órdenes desde correo: {e}")
+        # Fallback: buscar por correo_message_id no nulo
+        try:
+            res_ord2 = supabase.table("ordenes").select("*").not_.is_("correo_message_id", "null").order("id", desc=True).execute()
+            resultado['ordenes_desde_correo'] = res_ord2.data or []
+        except Exception:
+            pass
+
+    # 3. Solicitudes que vienen de correo (si existe el campo)
+    try:
+        res_sol = supabase.table("solicitudes").select("*").order("id", desc=True).limit(100).execute()
+        resultado['solicitudes_correo'] = [
+            s for s in (res_sol.data or [])
+            if s.get('origen') == 'correo' or s.get('chat_id', '').startswith('email')
+        ]
+    except Exception:
+        pass
+
+    # 4. Resumen estadístico
+    procesados = resultado['procesados']
+    ordenes = resultado['ordenes_desde_correo']
+
+    acciones = {}
+    for p in procesados:
+        acc = p.get('accion', 'desconocido')
+        acciones[acc] = acciones.get(acc, 0) + 1
+
+    resultado['resumen'] = {
+        'total_procesados': len(procesados),
+        'total_ordenes_correo': len(ordenes),
+        'por_accion': acciones,
+        'con_orden': len([p for p in procesados if p.get('orden_id')]),
+        'sin_orden': len([p for p in procesados if not p.get('orden_id')]),
+    }
+
+    return resultado
+
+
+def render_auditoria_correos():
+    """
+    Renderiza la página de auditoría completa de correos.
+    Muestra: procesados, rechazados, vinculados, pendientes, y cruza con OTs.
+    """
+    st.markdown("### 🔍 Auditoría de Correos — Barrido de Base de Datos")
+    st.caption("Estado real de todos los correos que han pasado por el sistema.")
+
+    datos = barrido_base_datos_correos()
+    resumen = datos['resumen']
+
+    # ── Métricas principales ──
+    col1, col2, col3, col4 = st.columns(4)
+    col1.metric("📨 Total Procesados", resumen['total_procesados'])
+    col2.metric("🛠️ Órdenes desde Correo", resumen['total_ordenes_correo'])
+    col3.metric("🔗 Con OT Asignada", resumen['con_orden'])
+    col4.metric("⚠️ Sin OT Asignada", resumen['sin_orden'])
+
+    st.markdown("---")
+
+    # ── Desglose por acción ──
+    por_accion = resumen.get('por_accion', {})
+    if por_accion:
+        st.markdown("#### 📊 Desglose por Acción")
+        acc_cols = st.columns(len(por_accion))
+        iconos_accion = {
+            'orden': '✅', 'avance': '🔗', 'descartado': '🗑️',
+            'rechazado': '❌', 'desconocido': '❓',
+        }
+        for i, (accion, count) in enumerate(por_accion.items()):
+            with acc_cols[i]:
+                icono = iconos_accion.get(accion, '📋')
+                st.metric(f"{icono} {accion.capitalize()}", count)
+
+    st.markdown("---")
+
+    # ── Tabla detallada de procesados ──
+    procesados = datos['procesados']
+    if procesados:
+        st.markdown("#### 📋 Historial Completo de Correos Procesados")
+
+        # Filtro por acción
+        acciones_disponibles = ['Todas'] + list(por_accion.keys())
+        filtro_accion = st.selectbox("Filtrar por acción", acciones_disponibles, key="filtro_accion_correo")
+
+        filtrados = procesados
+        if filtro_accion != 'Todas':
+            filtrados = [p for p in procesados if p.get('accion') == filtro_accion]
+
+        for p in filtrados:
+            accion = p.get('accion', '?')
+            icono = iconos_accion.get(accion, '📋')
+            orden_id = p.get('orden_id')
+            msg_id = p.get('message_id', '?')[:40]
+            fecha = (p.get('fecha_procesado', '') or '')[:16].replace('T', ' ')
+
+            color_accion = {
+                'orden': '#10B981', 'avance': '#3B82F6', 'descartado': '#6B7280',
+                'rechazado': '#EF4444',
+            }.get(accion, '#F59E0B')
+
+            orden_link = f"→ **OT #{orden_id}**" if orden_id else "→ Sin OT asignada"
+
+            st.markdown(f"""
+            <div style="border-left:3px solid {color_accion};padding:8px 14px;margin-bottom:6px;background:rgba(255,255,255,0.02);border-radius:0 6px 6px 0;">
+                <div style="display:flex;justify-content:space-between;">
+                    <span>{icono} <b>{accion.upper()}</b> {orden_link}</span>
+                    <span style="color:#6B7280;font-size:0.8em;">{fecha}</span>
+                </div>
+                <div style="color:#9CA3AF;font-size:0.8em;margin-top:2px;">Message-ID: {msg_id}...</div>
+            </div>
+            """, unsafe_allow_html=True)
+
+    # ── Órdenes creadas desde correo ──
+    ordenes_correo = datos['ordenes_desde_correo']
+    if ordenes_correo:
+        st.markdown("---")
+        st.markdown(f"#### 🛠️ Órdenes Creadas desde Correo ({len(ordenes_correo)})")
+
+        for orden in ordenes_correo:
+            estado = orden.get('estado', '?')
+            icono_estado = {'Abierta': '🔨', 'Por Validar': '🧐', 'Concluida': '✅', 'Cancelada': '❌'}.get(estado, '📋')
+            fecha = (orden.get('fecha_creacion', '') or '')[:10]
+            desc = (orden.get('descripcion', '') or '')[:80]
+            msg_id = orden.get('correo_message_id', '')
+
+            st.markdown(f"""
+            <div style="border-left:3px solid #F59E0B;padding:8px 14px;margin-bottom:6px;background:rgba(255,255,255,0.02);border-radius:0 6px 6px 0;">
+                <div style="display:flex;justify-content:space-between;">
+                    <span>{icono_estado} <b>OT #{orden['id']}</b> — {estado}</span>
+                    <span style="color:#6B7280;font-size:0.8em;">{fecha}</span>
+                </div>
+                <div style="color:#D1D5DB;font-size:0.85em;margin-top:2px;">{desc}</div>
+                {'<div style="color:#6B7280;font-size:0.75em;">📧 ' + msg_id[:50] + '</div>' if msg_id else ''}
+            </div>
+            """, unsafe_allow_html=True)
+
+    # ── Correos huérfanos (en procesados pero sin orden ni acción clara) ──
+    huerfanos = [p for p in procesados if not p.get('orden_id') and p.get('accion') not in ('descartado', 'rechazado')]
+    if huerfanos:
+        st.markdown("---")
+        st.markdown(f"#### ⚠️ Correos Huérfanos — Procesados sin OT ({len(huerfanos)})")
+        st.caption("Estos correos están marcados como procesados pero no tienen orden asignada ni fueron descartados explícitamente.")
+        for p in huerfanos:
+            msg_id = p.get('message_id', '?')[:50]
+            fecha = (p.get('fecha_procesado', '') or '')[:16].replace('T', ' ')
+            accion = p.get('accion', '?')
+            st.warning(f"📧 {msg_id} — Acción: {accion} — Fecha: {fecha}")
+
+    # ── Si no hay nada ──
+    if not procesados and not ordenes_correo:
+        st.info("📭 No hay registros de correos procesados en la base de datos. Los correos se procesan cuando haces clic en 'Revisar Correo' en la pestaña de Correo.")
+
+
 def _diagnosticar_gmail():
     """Diagnóstico paso a paso de la conexión Gmail IMAP."""
     st.markdown("#### 🩺 Diagnóstico de Conexión Gmail")
@@ -962,6 +1195,7 @@ def render_selector_ordenes_para_vincular(correo_idx: int, correo: dict, df_orde
             st.session_state['_correos_pendientes'] = [
                 c for c in pendientes if c['message_id'] != correo['message_id']
             ]
+            _eliminar_pendiente(correo['message_id'])
             st.session_state.pop(f'_vincular_ot_{correo_idx}', None)
             st.success(f"✅ Correo vinculado como avance de OT #{orden_id}")
             st.rerun()
@@ -1007,7 +1241,58 @@ password = "xxxx xxxx xxxx xxxx"
     # ── Correos pendientes ──
     correos = st.session_state.get('_correos_pendientes', [])
 
+    # Si no hay correos en session_state, intentar restaurar desde BD
     if not correos:
+        pendientes_guardados = _obtener_pendientes_guardados()
+        if pendientes_guardados:
+            st.info(f"💾 Se encontraron {len(pendientes_guardados)} correo(s) guardado(s) de una sesión anterior. Haz clic en **Revisar Correo** para actualizar o usa los guardados.")
+            # Mostrar resumen de los guardados (sin datos completos de adjuntos/HTML)
+            procesados = _obtener_procesados()
+            pendientes_filtrados = [p for p in pendientes_guardados if p['message_id'] not in procesados]
+
+            if not pendientes_filtrados:
+                st.success("✅ Todos los correos guardados ya fueron procesados.")
+                return
+
+            st.markdown(f"#### 💾 {len(pendientes_filtrados)} correo(s) guardado(s) pendiente(s)")
+            st.caption("⚠️ Estos son los metadatos guardados. Para ver contenido completo y adjuntos, haz clic en **Revisar Correo**.")
+
+            for idx, pg in enumerate(pendientes_filtrados):
+                icono = '📩' if not pg.get('leido') else '📧'
+                remitente = pg.get('remitente_nombre') or pg.get('remitente', '?')
+                fecha_corta = (pg.get('fecha_correo', '') or '')[:10]
+                n_adj = pg.get('n_adjuntos', 0)
+
+                st.markdown(f"""
+                <div style="border:1px solid #374151;border-radius:10px;padding:14px 16px;margin-bottom:10px;background:#1F2937;">
+                    <div style="display:flex;justify-content:space-between;align-items:center;">
+                        <div>
+                            <span style="font-size:1.1rem;">{icono}</span>
+                            <span style="color:#F59E0B;font-weight:600;">{pg.get('asunto', '(Sin asunto)')[:70]}</span>
+                        </div>
+                        <span style="color:#6B7280;font-size:0.8em;">{fecha_corta}</span>
+                    </div>
+                    <div style="color:#9CA3AF;font-size:0.85em;margin-top:4px;">
+                        👤 {remitente} {f'&nbsp;|&nbsp; 📎 {n_adj} adjunto(s)' if n_adj > 0 else ''}
+                    </div>
+                    <div style="color:#D1D5DB;font-size:0.85em;margin-top:6px;background:rgba(255,255,255,0.03);padding:6px 10px;border-radius:6px;">
+                        {(pg.get('cuerpo_corto', '') or '')[:150]}
+                    </div>
+                </div>
+                """, unsafe_allow_html=True)
+
+                msg_id_guardado = pg['message_id']
+                col_descartar_guardado = st.columns([8, 2])[1]
+                with col_descartar_guardado:
+                    if st.button("🗑️ Descartar", key=f"btn_desc_guardado_{idx}", use_container_width=True):
+                        _marcar_procesado(msg_id_guardado, accion="descartado")
+                        _eliminar_pendiente(msg_id_guardado)
+                        st.toast(f"🗑️ Correo descartado")
+                        st.rerun()
+
+            st.markdown("---")
+            return
+
         st.info("📭 No hay correos descargados. Haz clic en **Revisar Correo** para buscar nuevos mensajes.")
         return
 
@@ -1144,6 +1429,7 @@ password = "xxxx xxxx xxxx xxxx"
         # ── Acción: Descartar (un click) ──
         if descartar_clicked:
             _marcar_procesado(msg_id, accion="descartado")
+            _eliminar_pendiente(msg_id)
             # Quitar de la lista local sin perder los demás
             pendientes = st.session_state.get('_correos_pendientes', [])
             st.session_state['_correos_pendientes'] = [c for c in pendientes if c['message_id'] != msg_id]
@@ -1249,6 +1535,7 @@ password = "xxxx xxxx xxxx xxxx"
                                                 print(f"⚠️ Error subiendo inline {cid}: {e_img}")
 
                                     _marcar_procesado(msg_id, orden_id=nuevo_id, accion="orden")
+                                    _eliminar_pendiente(msg_id)
                                     st.session_state.pop(f'_crear_ot_{idx}', None)
                                     # Quitar de la lista local sin perder los demás
                                     pendientes = st.session_state.get('_correos_pendientes', [])
