@@ -1672,22 +1672,9 @@ password = "xxxx xxxx xxxx xxxx"
             for i, msg_id in enumerate(ids):
                 status_text.caption(f"Correo {i+1}/{len(ids)}...")
                 try:
-                    # Usar thread con timeout para que NO se cuelgue
-                    from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeout
-
-                    def _fetch_header(mid):
-                        mail.socket().settimeout(8)
-                        return mail.fetch(mid, "(RFC822.HEADER)")
-
-                    with ThreadPoolExecutor(max_workers=1) as executor:
-                        future = executor.submit(_fetch_header, msg_id)
-                        try:
-                            status, datos = future.result(timeout=12)
-                        except (FuturesTimeout, socket.timeout):
-                            errores += 1
-                            print(f"⚠️ Timeout header {i+1}")
-                            progress.progress((i + 1) / len(ids))
-                            continue
+                    # Timeout a nivel de socket — sin threads, conexión IMAP segura
+                    mail.socket().settimeout(15)
+                    status, datos = mail.fetch(msg_id, "(RFC822.HEADER)")
 
                     if status != "OK" or not datos or not datos[0]:
                         errores += 1
@@ -1736,9 +1723,12 @@ password = "xxxx xxxx xxxx xxxx"
                     resultados.append(correo_data)
                     _guardar_correo_pendiente(correo_data)
 
+                except socket.timeout:
+                    errores += 1
+                    print(f"⚠️ Timeout header {i+1}/{len(ids)}")
                 except Exception as e:
                     errores += 1
-                    print(f"⚠️ Error header {i+1}: {e}")
+                    print(f"⚠️ Error header {i+1}: {type(e).__name__}: {e}")
                 finally:
                     progress.progress((i + 1) / len(ids))
 
