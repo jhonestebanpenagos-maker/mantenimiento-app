@@ -558,15 +558,15 @@ def descargar_correos_nuevos(max_correos=20, dias_atras=7):
 def cargar_contenido_correo(correo: dict) -> dict:
     """
     Carga el contenido completo de UN correo (cuerpo, HTML, adjuntos).
-    Se llama bajo demanda cuando el usuario hace clic en un correo.
+    Busca por Message-ID en Gmail (no necesita imap_id).
     Retorna el correo actualizado con el contenido.
     """
     import socket
 
-    imap_id = correo.get('imap_id')
-    if not imap_id:
+    message_id = correo.get('message_id', '').strip()
+    if not message_id:
         correo['contenido_cargado'] = True
-        correo['cuerpo'] = '[No disponible - sin ID IMAP]'
+        correo['cuerpo'] = '[No disponible - sin Message-ID]'
         return correo
 
     mail = _conectar_imap()
@@ -579,7 +579,21 @@ def cargar_contenido_correo(correo: dict) -> dict:
         mail.select("INBOX", readonly=True)
         mail.socket().settimeout(IMAP_TIMEOUT)
 
-        status, datos = mail.fetch(imap_id.encode(), "(RFC822)")
+        # Buscar por Message-ID
+        status, mensajes = mail.search(None, f'(HEADER Message-ID "{message_id}")')
+        if status != "OK" or not mensajes[0].strip():
+            # Fallback: búsqueda por texto
+            status, mensajes = mail.search(None, f'(TEXT "{message_id}")')
+
+        if status != "OK" or not mensajes[0].strip():
+            correo['contenido_cargado'] = True
+            correo['cuerpo'] = '[Correo no encontrado en Gmail]'
+            return correo
+
+        ids = mensajes[0].split()
+        msg_id = ids[-1]  # Más reciente
+
+        status, datos = mail.fetch(msg_id, "(RFC822)")
         if status != "OK" or not datos or not datos[0]:
             correo['contenido_cargado'] = True
             correo['cuerpo'] = '[Error descargando contenido]'
@@ -1662,98 +1676,82 @@ password = "xxxx xxxx xxxx xxxx"
                     pass
                 st.stop()
 
-            # Paso 6: Descargar headers
+            # Paso 6: Descargar headers (BATCH — una sola llamada IMAP)
             st.markdown(f"**6️⃣ Descargando headers de {len(ids)} correos...**")
-            progress = st.progress(0)
             status_text = st.empty()
+            status_text.caption("Conectando con Gmail...")
             resultados = []
             errores = 0
 
-            for i, msg_id in enumerate(ids):
-                status_text.caption(f"Correo {i+1}/{len(ids)}...")
-                try:
-                    # Timeout a nivel de socket — sin threads, conexión IMAP segura
-                    mail.socket().settimeout(15)
-                    status, datos = mail.fetch(msg_id, "(BODY[HEADER.FIELDS (FROM SUBJECT DATE MESSAGE-ID)])")
+            # Construir lista de IDs para fetch batch: "1,2,3,4,..."
+            ids_str = ",".join(mid.decode() if isinstance(mid, bytes) else str(mid) for mid in ids)
 
-                    # ── DEBUG: loggear formato de respuesta ──
-                    if i < 3:
-                        print(f"🔍 DEBUG fetch {i}: status={status}, datos type={type(datos)}, datos[0] type={type(datos[0]) if datos else 'N/A'}")
-                        if datos and datos[0]:
-                            if isinstance(datos[0], tuple):
-                                print(f"   datos[0] es tuple, len={len(datos[0])}, datos[0][1][:100]={datos[0][1][:100]}")
-                            else:
-                                print(f"   datos[0] NO es tuple: {str(datos[0])[:200]}")
+            try:
+                mail.socket().settimeout(30)
+                status, datos = mail.fetch(ids_str, "(BODY[HEADER.FIELDS (FROM SUBJECT DATE MESSAGE-ID)])")
+            except socket.timeout:
+                st.error("❌ Timeout descargando headers (30s). Intenta con menos días.")
+                status, datos = "TIMEOUT", None
+            except Exception as e:
+                st.error(f"❌ Error en fetch batch: `{type(e).__name__}`: {e}")
+                status, datos = "ERROR", None
 
-                    if status != "OK" or not datos or not datos[0]:
+            if status == "OK" and datos:
+                # datos es una lista de tuplas: [(header_bytes, b')'), ...]
+                for item in datos:
+                    try:
+                        if not isinstance(item, tuple) or len(item) < 2:
+                            continue
+                        header_bytes = item[1]
+                        if not isinstance(header_bytes, bytes) or len(header_bytes) < 10:
+                            continue
+
+                        msg_header = email.message_from_bytes(header_bytes)
+                        asunto = _decodificar_header(msg_header.get("Subject", ""))
+                        remitente_raw = _decodificar_header(msg_header.get("From", ""))
+                        fecha_raw = msg_header.get("Date", "")
+                        message_id = (msg_header.get("Message-ID") or "").strip()
+
+                        if not message_id:
+                            continue
+
+                        remitente = remitente_raw
+                        remitente_nombre = ""
+                        match = re.match(r'^"?([^"<]*)"?\s*<([^>]+)>', remitente_raw)
+                        if match:
+                            remitente_nombre = match.group(1).strip()
+                            remitente = match.group(2).strip()
+                        elif "@" in remitente_raw:
+                            remitente = remitente_raw.strip()
+
+                        correo_data = {
+                            'message_id': message_id,
+                            'imap_id': '',  # No necesario con batch
+                            'remitente': remitente,
+                            'remitente_nombre': remitente_nombre,
+                            'asunto': asunto or '(Sin asunto)',
+                            'fecha': _parsear_fecha(fecha_raw),
+                            'cuerpo': '',
+                            'cuerpo_corto': '',
+                            'html_raw': '',
+                            'adjuntos': [],
+                            'imagenes_inline': {},
+                            'tiene_adjuntos': False,
+                            'tiene_html': False,
+                            'tiene_imagenes': False,
+                            'leido': False,
+                            'contenido_cargado': False,
+                        }
+                        resultados.append(correo_data)
+                        _guardar_correo_pendiente(correo_data)
+                    except Exception as e:
                         errores += 1
-                        if i < 3:
-                            print(f"🔍 DEBUG skip: status={status}, datos={bool(datos)}, datos[0]={bool(datos[0]) if datos else 'N/A'}")
-                        progress.progress((i + 1) / len(ids))
-                        continue
+                        print(f"⚠️ Error parseando header: {type(e).__name__}: {e}")
+            else:
+                errores = len(ids)
+                print(f"⚠️ Fetch batch falló: status={status}")
 
-                    header_bytes = datos[0][1] if isinstance(datos[0], tuple) else datos[0]
-                    if not isinstance(header_bytes, bytes):
-                        errores += 1
-                        if i < 3:
-                            print(f"🔍 DEBUG skip: header_bytes no es bytes, es {type(header_bytes)}")
-                        progress.progress((i + 1) / len(ids))
-                        continue
-
-                    msg_header = email.message_from_bytes(header_bytes)
-                    asunto = _decodificar_header(msg_header.get("Subject", ""))
-                    remitente_raw = _decodificar_header(msg_header.get("From", ""))
-                    fecha_raw = msg_header.get("Date", "")
-                    message_id = (msg_header.get("Message-ID") or str(msg_id.decode())).strip()
-
-                    # ── DEBUG: loggear parsing ──
-                    if i < 3:
-                        print(f"🔍 DEBUG parsed {i}: asunto={asunto[:50]!r}, remitente={remitente_raw[:50]!r}, msg_id={message_id[:50]!r}")
-
-                    remitente = remitente_raw
-                    remitente_nombre = ""
-                    match = re.match(r'^"?([^"<]*)"?\s*<([^>]+)>', remitente_raw)
-                    if match:
-                        remitente_nombre = match.group(1).strip()
-                        remitente = match.group(2).strip()
-                    elif "@" in remitente_raw:
-                        remitente = remitente_raw.strip()
-
-                    correo_data = {
-                        'message_id': message_id,
-                        'imap_id': msg_id.decode() if isinstance(msg_id, bytes) else str(msg_id),
-                        'remitente': remitente,
-                        'remitente_nombre': remitente_nombre,
-                        'asunto': asunto or '(Sin asunto)',
-                        'fecha': _parsear_fecha(fecha_raw),
-                        'cuerpo': '',
-                        'cuerpo_corto': '',
-                        'html_raw': '',
-                        'adjuntos': [],
-                        'imagenes_inline': {},
-                        'tiene_adjuntos': False,
-                        'tiene_html': False,
-                        'tiene_imagenes': False,
-                        'leido': False,
-                        'contenido_cargado': False,
-                    }
-                    resultados.append(correo_data)
-                    _guardar_correo_pendiente(correo_data)
-
-                except socket.timeout:
-                    errores += 1
-                    print(f"⚠️ Timeout header {i+1}/{len(ids)}")
-                except Exception as e:
-                    errores += 1
-                    print(f"⚠️ Error header {i+1}: {type(e).__name__}: {e}")
-                finally:
-                    progress.progress((i + 1) / len(ids))
-
-            progress.empty()
             status_text.empty()
-
-            # ── DEBUG: resumen final ──
-            print(f"🔍 DEBUG RESUMEN: ids={len(ids)}, resultados={len(resultados)}, errores={errores}")
 
             try:
                 mail.logout()
