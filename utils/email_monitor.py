@@ -570,22 +570,24 @@ def cargar_contenido_correo(correo: dict) -> dict:
     Carga el contenido completo de UN correo si no fue descargado en el batch.
     Retorna el correo actualizado con el contenido.
     """
+    import socket
+
     # Si ya se descargó en el batch, no hacer nada
     if correo.get('contenido_cargado'):
         return correo
-
-    import socket
 
     message_id = correo.get('message_id', '').strip()
     if not message_id:
         correo['contenido_cargado'] = True
         correo['cuerpo'] = '[No disponible - sin Message-ID]'
+        _actualizar_correo_en_session(correo)
         return correo
 
     mail = _conectar_imap()
     if not mail:
         correo['contenido_cargado'] = True
-        correo['cuerpo'] = '[Error conectando a Gmail]'
+        correo['cuerpo'] = '[Error conectando a Gmail - verifica credenciales]'
+        _actualizar_correo_en_session(correo)
         return correo
 
     try:
@@ -600,7 +602,8 @@ def cargar_contenido_correo(correo: dict) -> dict:
 
         if status != "OK" or not mensajes[0].strip():
             correo['contenido_cargado'] = True
-            correo['cuerpo'] = '[Correo no encontrado en Gmail]'
+            correo['cuerpo'] = '[Correo no encontrado en Gmail - puede haber sido eliminado]'
+            _actualizar_correo_en_session(correo)
             return correo
 
         ids = mensajes[0].split()
@@ -609,7 +612,8 @@ def cargar_contenido_correo(correo: dict) -> dict:
         status, datos = mail.fetch(msg_id, "(RFC822)")
         if status != "OK" or not datos or not datos[0]:
             correo['contenido_cargado'] = True
-            correo['cuerpo'] = '[Error descargando contenido]'
+            correo['cuerpo'] = '[Error descargando contenido de Gmail]'
+            _actualizar_correo_en_session(correo)
             return correo
 
         msg = email.message_from_bytes(datos[0][1])
@@ -628,28 +632,35 @@ def cargar_contenido_correo(correo: dict) -> dict:
         correo['tiene_imagenes'] = len(imagenes_inline) > 0
         correo['contenido_cargado'] = True
 
-        # Actualizar en session_state
-        pendientes = st.session_state.get('_correos_pendientes', [])
-        for c in pendientes:
-            if c['message_id'] == correo['message_id']:
-                c.update(correo)
-                break
-
+        _actualizar_correo_en_session(correo)
+        print(f"✅ Contenido cargado: {correo['asunto'][:50]} | Adjuntos: {len(adjuntos)} | HTML: {bool(html_raw)}")
         return correo
 
     except socket.timeout:
         correo['contenido_cargado'] = True
-        correo['cuerpo'] = '[Timeout descargando contenido]'
+        correo['cuerpo'] = f'[Timeout descargando contenido - el correo puede ser muy pesado]'
+        _actualizar_correo_en_session(correo)
         return correo
     except Exception as e:
         correo['contenido_cargado'] = True
-        correo['cuerpo'] = f'[Error: {e}]'
+        correo['cuerpo'] = f'[Error: {type(e).__name__}: {str(e)[:200]}]'
+        _actualizar_correo_en_session(correo)
         return correo
     finally:
         try:
             mail.logout()
         except Exception:
             pass
+
+
+def _actualizar_correo_en_session(correo: dict):
+    """Actualiza un correo en session_state['_correos_pendientes'] de forma segura."""
+    pendientes = st.session_state.get('_correos_pendientes', [])
+    for i, c in enumerate(pendientes):
+        if c['message_id'] == correo['message_id']:
+            pendientes[i] = correo
+            break
+    st.session_state['_correos_pendientes'] = pendientes
 
 
 # ==============================================================================
@@ -659,6 +670,7 @@ def comparar_gmail_vs_bd(max_correos=100, dias_atras=30):
     """
     Compara TODOS los correos de la bandeja de Gmail contra la base de datos
     (emails_procesados + emails_pendientes) para encontrar correos en limbo.
+    Usa batch fetch para ser rápido.
     """
     import socket
     from utils.db import supabase
@@ -689,7 +701,7 @@ def comparar_gmail_vs_bd(max_correos=100, dias_atras=30):
 
     bd_todos = resultado['bd_procesados'] | resultado['bd_pendientes']
 
-    # 2. Conectar a Gmail y obtener headers
+    # 2. Conectar a Gmail y obtener headers EN BATCH
     mail = _conectar_imap()
     if not mail:
         resultado['errores'].append("No se pudo conectar a Gmail")
@@ -716,48 +728,61 @@ def comparar_gmail_vs_bd(max_correos=100, dias_atras=30):
         ids = ids[-max_correos:]
         resultado['gmail_total'] = len(ids)
 
+        # ── Batch fetch: todos los headers de una sola vez ──
+        BATCH_SIZE = 50
         gmail_message_ids = set()
 
-        for i, msg_id in enumerate(ids):
+        for batch_start in range(0, len(ids), BATCH_SIZE):
+            batch_ids = ids[batch_start:batch_start + BATCH_SIZE]
+            ids_str = ",".join(mid.decode() if isinstance(mid, bytes) else str(mid) for mid in batch_ids)
+
             try:
-                socket.setdefaulttimeout(15)
-                status, datos = mail.fetch(msg_id, "(BODY[HEADER.FIELDS (MESSAGE-ID FROM SUBJECT DATE)])")
-                if status != "OK" or not datos or not datos[0]:
-                    continue
-
-                header_bytes = datos[0][1] if isinstance(datos[0], tuple) else datos[0]
-                if not isinstance(header_bytes, bytes):
-                    continue
-
-                msg_h = email.message_from_bytes(header_bytes)
-                mid = (msg_h.get("Message-ID") or "").strip()
-                if not mid:
-                    mid = f"imap_{msg_id.decode()}"
-
-                asunto = _decodificar_header(msg_h.get("Subject", ""))
-                remitente = _decodificar_header(msg_h.get("From", ""))
-                fecha = msg_h.get("Date", "")
-
-                gmail_message_ids.add(mid)
-
-                en_procesados = mid in resultado['bd_procesados']
-                en_pendientes = mid in resultado['bd_pendientes']
-
-                resultado['gmail_headers'].append({
-                    'message_id': mid,
-                    'asunto': asunto,
-                    'remitente': remitente,
-                    'fecha': fecha,
-                    'en_procesados': en_procesados,
-                    'en_pendientes': en_pendientes,
-                    'en_alguna_tabla': en_procesados or en_pendientes,
-                })
-
+                socket.setdefaulttimeout(30)
+                status, datos_raw = mail.fetch(ids_str, "(BODY[HEADER.FIELDS (MESSAGE-ID FROM SUBJECT DATE)])")
             except socket.timeout:
+                resultado['errores'].append(f"Timeout en batch {batch_start//BATCH_SIZE + 1}")
                 continue
             except Exception as e:
-                resultado['errores'].append(f"Error header {i}: {e}")
+                resultado['errores'].append(f"Error en batch: {e}")
                 continue
+
+            if status != "OK" or not datos_raw:
+                continue
+
+            # Parsear batch — mismo formato que _parsear_correos_batch
+            for item in datos_raw:
+                try:
+                    if not isinstance(item, tuple) or len(item) < 2:
+                        continue
+                    header_bytes = item[1]
+                    if not isinstance(header_bytes, bytes) or len(header_bytes) < 20:
+                        continue
+
+                    msg_h = email.message_from_bytes(header_bytes)
+                    mid = (msg_h.get("Message-ID") or "").strip()
+                    if not mid:
+                        continue
+
+                    asunto = _decodificar_header(msg_h.get("Subject", ""))
+                    remitente = _decodificar_header(msg_h.get("From", ""))
+                    fecha = msg_h.get("Date", "")
+
+                    gmail_message_ids.add(mid)
+
+                    en_procesados = mid in resultado['bd_procesados']
+                    en_pendientes = mid in resultado['bd_pendientes']
+
+                    resultado['gmail_headers'].append({
+                        'message_id': mid,
+                        'asunto': asunto,
+                        'remitente': remitente,
+                        'fecha': fecha,
+                        'en_procesados': en_procesados,
+                        'en_pendientes': en_pendientes,
+                        'en_alguna_tabla': en_procesados or en_pendientes,
+                    })
+                except Exception as e:
+                    continue
 
         # 3. Correos en limbo
         resultado['en_limbo'] = [
@@ -1968,6 +1993,31 @@ password = "xxxx xxxx xxxx xxxx"
         return
 
     st.markdown(f"#### 📬 {len(correos_pendientes)} correo(s) pendiente(s)")
+
+    # ── Botón para cargar contenido de todos ──
+    sin_contenido = [c for c in correos_pendientes if not c.get('contenido_cargado')]
+    if sin_contenido:
+        if st.button(f"📥 Cargar contenido de TODOS ({len(sin_contenido)} correos)", type="secondary", use_container_width=True, key="btn_cargar_todos"):
+            progress = st.progress(0, text="Cargando contenido...")
+            cargados = 0
+            errores_carga = 0
+            for i, c in enumerate(sin_contenido):
+                progress.progress((i + 1) / len(sin_contenido), text=f"Cargando {i+1}/{len(sin_contenido)}: {c['asunto'][:40]}...")
+                try:
+                    resultado_carga = cargar_contenido_correo(c)
+                    if resultado_carga.get('contenido_cargado') and '[Error' not in (resultado_carga.get('cuerpo') or ''):
+                        cargados += 1
+                    else:
+                        errores_carga += 1
+                except Exception as e:
+                    errores_carga += 1
+                    print(f"⚠️ Error cargando contenido: {e}")
+            progress.empty()
+            if cargados > 0:
+                st.success(f"✅ {cargados} correo(s) con contenido cargado.")
+            if errores_carga > 0:
+                st.warning(f"⚠️ {errores_carga} correo(s) con error (puedes intentar individualmente).")
+            st.rerun()
 
     # Pre-cargar datos una sola vez
     from utils.db import run_query, db_insert
