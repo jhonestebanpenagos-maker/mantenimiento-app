@@ -1862,13 +1862,30 @@ def render_selector_ordenes_para_vincular(correo_idx: int, correo: dict, df_orde
 # ==============================================================================
 # 🎨 RENDERIZADO DEL BUZÓN
 # ==============================================================================
+
+def _es_correo_de_hoy(correo: dict, hoy) -> bool:
+    """Determina si un correo es de hoy basándose en su fecha."""
+    fecha_str = correo.get('fecha', '')
+    if not fecha_str:
+        return True  # Sin fecha = asumir hoy
+    try:
+        # fecha viene en ISO format
+        fecha_dt = datetime.fromisoformat(fecha_str.replace('Z', '+00:00'))
+        return fecha_dt.date() == hoy
+    except Exception:
+        return True  # No parseable = asumir hoy
+
+
 def render_buzon_correo():
     """
-    Renderiza el buzón de correo en la UI de Streamlit.
-    Muestra correos pendientes y permite aprobar/rechazar para crear OT.
+    Buzón de correo — flujo automático.
+    1. Descarga headers de últimos 2 días (batch, rápido)
+    2. Filtra contra emails_procesados automáticamente
+    3. Muestra solo correos pendientes (hoy + anteriores)
+    4. Contenido se carga bajo demanda
     """
     st.markdown("### 📧 Buzón de Correo")
-    st.caption("Revisa los correos reenviados desde Postobón y decide cuáles se convierten en Órdenes de Trabajo.")
+    st.caption("Revisa correos y decide cuáles se convierten en Órdenes de Trabajo.")
 
     # ── Configuración en secrets ──
     cfg = st.secrets.get("gmail", {})
@@ -1882,552 +1899,275 @@ password = "xxxx xxxx xxxx xxxx"
         st.caption("Necesitas una **contraseña de aplicación** de Gmail (no tu contraseña normal)")
         return
 
-    # ── Botones ──
-    col_btn, col_info, col_cmp = st.columns([1, 2, 1])
-    with col_btn:
-        if st.button("🔄 Revisar Correo", type="primary", use_container_width=True):
-            # Diagnóstico paso a paso
-            st.markdown("---")
-            st.markdown("#### 🩺 Diagnóstico en tiempo real")
+    # ── Botón principal ──
+    if st.button("🔄 Revisar Correo", type="primary", use_container_width=True):
+        with st.spinner("Conectando a Gmail y descargando headers (últimos 2 días)..."):
+            todos_headers = descargar_correos_nuevos(max_correos=50, dias_atras=2)
 
-            # Paso 1: Credenciales
-            st.markdown("**1️⃣ Verificando credenciales...**")
-            correo_cfg, password_cfg = _obtener_credenciales()
-            if not correo_cfg:
-                st.error("❌ `correo` no configurado en [gmail] de secrets.toml")
-                st.stop()
-            if not password_cfg:
-                st.error("❌ `password` no configurado en [gmail] de secrets.toml")
-                st.stop()
-            st.success(f"✅ Credenciales OK: `{correo_cfg}`")
+        if not todos_headers:
+            st.error("❌ No se pudieron descargar correos. Verifica la conexión a Gmail.")
+        else:
+            procesados = _obtener_procesados()
+            pendientes = [c for c in todos_headers if c['message_id'] not in procesados]
 
-            # Paso 2: Conexión IMAP
-            st.markdown("**2️⃣ Conectando a Gmail IMAP...**")
-            import socket
-            try:
-                socket.setdefaulttimeout(IMAP_TIMEOUT)
-                mail = imaplib.IMAP4_SSL(IMAP_SERVER, IMAP_PORT)
-                mail.socket().settimeout(IMAP_TIMEOUT)
-                st.success("✅ Conexión SSL establecida")
-            except Exception as e:
-                st.error(f"❌ No se pudo conectar: `{type(e).__name__}`: {e}")
-                st.stop()
-
-            # Paso 3: Login
-            st.markdown("**3️⃣ Autenticando...**")
-            try:
-                mail.login(correo_cfg, password_cfg)
-                st.success("✅ Login exitoso")
-            except Exception as e:
-                st.error(f"❌ Login falló: `{type(e).__name__}`: {str(e)[:300]}")
-                st.info("💡 Verifica que la contraseña de aplicación sea correcta")
-                try:
-                    mail.logout()
-                except Exception:
-                    pass
-                st.stop()
-
-            # Paso 4: Seleccionar INBOX
-            st.markdown("**4️⃣ Seleccionando INBOX...**")
-            try:
-                status_select, data_select = mail.select("INBOX", readonly=True)
-                if status_select == "OK":
-                    n_msgs = int(data_select[0]) if data_select and data_select[0] else 0
-                    st.success(f"✅ INBOX seleccionada — {n_msgs} mensajes totales")
-                else:
-                    st.error(f"❌ No se pudo seleccionar INBOX: {status_select}")
-                    mail.logout()
-                    st.stop()
-            except Exception as e:
-                st.error(f"❌ Error seleccionando INBOX: `{type(e).__name__}`: {e}")
-                try:
-                    mail.logout()
-                except Exception:
-                    pass
-                st.stop()
-
-            # Paso 5: Buscar correos
-            st.markdown("**5️⃣ Buscando correos (últimos 7 días)...**")
-            desde = datetime.now() - timedelta(days=7)
-            fecha_desde = desde.strftime("%d-%b-%Y")
-            try:
-                status_search, mensajes = mail.search(None, f'(SINCE "{fecha_desde}")')
-                if status_search != "OK":
-                    st.error(f"❌ Error en search: {status_search}")
-                    mail.logout()
-                    st.stop()
-
-                ids = mensajes[0].split()
-                if not ids:
-                    st.warning(f"⚠️ Search devolvió 0 resultados para SINCE {fecha_desde}")
-
-                    # Intentar búsqueda más amplia
-                    st.markdown("**5️⃣b Intentando búsqueda SINCE 30 días...**")
-                    desde30 = datetime.now() - timedelta(days=30)
-                    fecha30 = desde30.strftime("%d-%b-%Y")
-                    status30, mensajes30 = mail.search(None, f'(SINCE "{fecha30}")')
-                    ids30 = mensajes30[0].split() if status30 == "OK" and mensajes30[0] else []
-                    st.info(f"Búsqueda 30 días: {len(ids30)} resultados")
-
-                    if not ids30:
-                        # Intentar ALL
-                        st.markdown("**5️⃣c Intentando ALL...**")
-                        status_all, mensajes_all = mail.search(None, "ALL")
-                        ids_all = mensajes_all[0].split() if status_all == "OK" and mensajes_all[0] else []
-                        st.info(f"Búsqueda ALL: {len(ids_all)} resultados")
-
-                        if ids_all:
-                            st.warning(f"⚠️ Hay {len(ids_all)} correos en total, pero ninguno de los últimos 30 días. Último correo probablemente es antiguo.")
-                        else:
-                            st.error("❌ La bandeja está vacía o no se puede leer")
-                            mail.logout()
-                            st.stop()
-                    else:
-                        ids = ids30[-20:]
-                        ids.reverse()
-                else:
-                    st.success(f"✅ {len(ids)} correos encontrados")
-                    ids = ids[-20:]
-                    ids.reverse()
-
-            except Exception as e:
-                st.error(f"❌ Error en search: `{type(e).__name__}`: {e}")
-                try:
-                    mail.logout()
-                except Exception:
-                    pass
-                st.stop()
-
-            # Paso 6: Descargar HEADERS en batch (ultra rápido, sin adjuntos)
-            st.markdown(f"**6️⃣ Descargando {len(ids)} headers (rápido)...**")
-            status_text = st.empty()
-            status_text.caption("Descargando headers de Gmail...")
-            resultados = []
-            errores = 0
-
-            # Construir lista de IDs para fetch batch: "1,2,3,4,..."
-            ids_str = ",".join(mid.decode() if isinstance(mid, bytes) else str(mid) for mid in ids)
-
-            try:
-                mail.socket().settimeout(30)
-                status, datos_raw = mail.fetch(ids_str, "(BODY[HEADER.FIELDS (FROM SUBJECT DATE MESSAGE-ID)])")
-            except socket.timeout:
-                st.error("❌ Timeout descargando headers (30s). Intenta con menos días o menos correos.")
-                status, datos_raw = "TIMEOUT", None
-            except Exception as e:
-                st.error(f"❌ Error en fetch batch: `{type(e).__name__}`: {e}")
-                status, datos_raw = "ERROR", None
-
-            if status == "OK" and datos_raw:
-                status_text.caption("Procesando headers...")
-                resultados = _parsear_correos_batch(datos_raw)
-                errores = len(ids) - len(resultados)
-            else:
-                errores = len(ids)
-                print(f"⚠️ Fetch batch falló: status={status}")
-
-            status_text.empty()
-
-            try:
-                mail.logout()
-            except Exception:
-                pass
-
-            # Marcar como NO cargados (solo headers, contenido bajo demanda)
-            for r in resultados:
-                r['contenido_cargado'] = False
-
-            # Fusionar con correos ya guardados en session_state (no perder los ya descargados)
+            # Preservar contenido ya cargado de sesión anterior
             existentes = {c['message_id']: c for c in st.session_state.get('_correos_pendientes', []) if c.get('contenido_cargado')}
-            for r in resultados:
-                if r['message_id'] in existentes:
-                    # Preservar contenido ya cargado
-                    r.update(existentes[r['message_id']])
-                    r['contenido_cargado'] = True
+            for p in pendientes:
+                if p['message_id'] in existentes:
+                    p.update(existentes[p['message_id']])
 
-            st.session_state['_correos_pendientes'] = resultados
+            st.session_state['_correos_pendientes'] = pendientes
 
-            # Guardar en tabla de pendientes para persistencia
-            for correo_data in resultados:
-                _guardar_correo_pendiente(correo_data)
+            n_total = len(todos_headers)
+            n_pend = len(pendientes)
 
-            if resultados:
-                st.success(f"✅ {len(resultados)} correo(s) descargado(s)")
-                if errores > 0:
-                    st.warning(f"⚠️ {errores} correo(s) con timeout/error (omitidos)")
-                for r in resultados[:3]:
-                    st.caption(f"📧 {r['asunto'][:60]} — 👤 {r['remitente'][:40]}")
-                st.caption("💡 **Tip:** Haz clic en 'Ver contenido' en cada correo para cargar el contenido completo bajo demanda.")
+            if n_pend == 0:
+                st.success(f"✅ {n_total} correos revisados — todos gestionados.")
             else:
-                st.error(f"❌ 0 correos descargados. {errores} errores. La conexión puede estar inestable.")
-                st.info("💡 Intenta de nuevo — si persiste, puede ser un problema de red con el servidor de Gmail.")
+                hoy = datetime.now().date()
+                pend_hoy = [c for c in pendientes if _es_correo_de_hoy(c, hoy)]
+                pend_antiguos = [c for c in pendientes if not _es_correo_de_hoy(c, hoy)]
 
-            st.markdown("---")
-            st.rerun()
+                msg = f"📬 {n_pend} correo(s) pendiente(s) de {n_total} revisados"
+                if pend_antiguos:
+                    msg += f" — ⚠️ {len(pend_antiguos)} de días anteriores"
+                st.warning(msg)
 
-    with col_info:
-        st.caption("Descarga correos de los últimos 7 días. Solo se muestran los no procesados.")
-
-    with col_cmp:
-        if st.button("🔄 Comparar Gmail vs BD", use_container_width=True):
-            st.session_state['_mostrar_comparacion'] = True
-            st.rerun()
-
-    # ── Mostrar comparación si se solicitó ──
-    if st.session_state.get('_mostrar_comparacion', False):
-        render_comparacion_gmail_bd()
-        if st.button("❌ Cerrar comparación", use_container_width=True):
-            st.session_state['_mostrar_comparacion'] = False
-            st.rerun()
-        st.markdown("---")
+        st.rerun()
 
     # ── Correos pendientes ──
     correos = st.session_state.get('_correos_pendientes', [])
 
-    # Si no hay correos en session_state, intentar restaurar desde BD
-    if not correos:
-        pendientes_guardados = _obtener_pendientes_guardados()
-        if pendientes_guardados:
-            st.info(f"💾 Se encontraron {len(pendientes_guardados)} correo(s) guardado(s) de una sesión anterior. Haz clic en **Revisar Correo** para actualizar o usa los guardados.")
-            # Mostrar resumen de los guardados (sin datos completos de adjuntos/HTML)
-            procesados = _obtener_procesados()
-            pendientes_filtrados = [p for p in pendientes_guardados if p['message_id'] not in procesados]
-
-            if not pendientes_filtrados:
-                st.success("✅ Todos los correos guardados ya fueron procesados.")
-                return
-
-            st.markdown(f"#### 💾 {len(pendientes_filtrados)} correo(s) guardado(s) pendiente(s)")
-            st.caption("⚠️ Estos son los metadatos guardados. Para ver contenido completo y adjuntos, haz clic en **Revisar Correo**.")
-
-            for idx, pg in enumerate(pendientes_filtrados):
-                icono = '📩' if not pg.get('leido') else '📧'
-                remitente = pg.get('remitente_nombre') or pg.get('remitente', '?')
-                fecha_corta = (pg.get('fecha_correo', '') or '')[:10]
-                n_adj = pg.get('n_adjuntos', 0)
-
-                st.markdown(f"""
-                <div style="border:1px solid #374151;border-radius:10px;padding:14px 16px;margin-bottom:10px;background:#1F2937;">
-                    <div style="display:flex;justify-content:space-between;align-items:center;">
-                        <div>
-                            <span style="font-size:1.1rem;">{icono}</span>
-                            <span style="color:#F59E0B;font-weight:600;">{pg.get('asunto', '(Sin asunto)')[:70]}</span>
-                        </div>
-                        <span style="color:#6B7280;font-size:0.8em;">{fecha_corta}</span>
-                    </div>
-                    <div style="color:#9CA3AF;font-size:0.85em;margin-top:4px;">
-                        👤 {remitente} {f'&nbsp;|&nbsp; 📎 {n_adj} adjunto(s)' if n_adj > 0 else ''}
-                    </div>
-                    <div style="color:#D1D5DB;font-size:0.85em;margin-top:6px;background:rgba(255,255,255,0.03);padding:6px 10px;border-radius:6px;">
-                        {(pg.get('cuerpo_corto', '') or '')[:150]}
-                    </div>
-                </div>
-                """, unsafe_allow_html=True)
-
-                msg_id_guardado = pg['message_id']
-                col_descartar_guardado = st.columns([8, 2])[1]
-                with col_descartar_guardado:
-                    if st.button("🗑️ Descartar", key=f"btn_desc_guardado_{idx}", use_container_width=True):
-                        _marcar_procesado(msg_id_guardado, accion="descartado")
-                        _eliminar_pendiente(msg_id_guardado)
-                        st.toast(f"🗑️ Correo descartado")
-                        st.rerun()
-
-            st.markdown("---")
-            return
-
-        st.info("📭 No hay correos descargados. Haz clic en **Revisar Correo** para buscar nuevos mensajes.")
-        return
-
-    # Filtrar ya procesados (persistidos en Supabase)
+    # Filtrar contra procesados (por si se marcaron desde otra vista)
     procesados = _obtener_procesados()
     correos_pendientes = [c for c in correos if c['message_id'] not in procesados]
 
     if not correos_pendientes:
-        st.success("✅ Todos los correos han sido procesados.")
+        st.info("📭 Sin correos pendientes. Haz clic en **Revisar Correo** para buscar nuevos mensajes.")
         return
 
-    st.markdown(f"#### 📬 {len(correos_pendientes)} correo(s) pendiente(s)")
+    # ── Separar hoy vs anteriores ──
+    hoy = datetime.now().date()
+    pend_hoy = [c for c in correos_pendientes if _es_correo_de_hoy(c, hoy)]
+    pend_antiguos = [c for c in correos_pendientes if not _es_correo_de_hoy(c, hoy)]
 
-    # ── Botón para cargar contenido de todos ──
+    # ── Alerta de correos antiguos sin gestionar ──
+    if pend_antiguos:
+        st.warning(f"⚠️ **{len(pend_antiguos)} correo(s) de días anteriores** sin gestionar. Revísalos abajo para que no se acumulen.")
+
+    # ── Botón cargar contenido de todos ──
     sin_contenido = [c for c in correos_pendientes if not c.get('contenido_cargado')]
     if sin_contenido:
         if st.button(f"📥 Cargar contenido de TODOS ({len(sin_contenido)} correos)", type="secondary", use_container_width=True, key="btn_cargar_todos"):
             progress = st.progress(0, text="Cargando contenido...")
             cargados = 0
-            errores_carga = 0
             for i, c in enumerate(sin_contenido):
                 progress.progress((i + 1) / len(sin_contenido), text=f"Cargando {i+1}/{len(sin_contenido)}: {c['asunto'][:40]}...")
                 try:
-                    resultado_carga = cargar_contenido_correo(c)
-                    if resultado_carga.get('contenido_cargado') and '[Error' not in (resultado_carga.get('cuerpo') or ''):
+                    resultado = cargar_contenido_correo(c)
+                    if resultado.get('contenido_cargado') and '[Error' not in (resultado.get('cuerpo') or ''):
                         cargados += 1
-                    else:
-                        errores_carga += 1
                 except Exception as e:
-                    errores_carga += 1
                     print(f"⚠️ Error cargando contenido: {e}")
             progress.empty()
             if cargados > 0:
                 st.success(f"✅ {cargados} correo(s) con contenido cargado.")
-            if errores_carga > 0:
-                st.warning(f"⚠️ {errores_carga} correo(s) con error (puedes intentar individualmente).")
             st.rerun()
 
-    # Pre-cargar datos una sola vez
+    st.markdown("---")
+
+    # ── Pre-cargar datos ──
     from utils.db import run_query, db_insert
     df_act = run_query("activos")
     df_users = run_query("usuarios")
     df_ordenes = run_query("ordenes")
 
-    for idx, correo in enumerate(correos_pendientes):
-        msg_id = correo['message_id']
+    # ── Renderizar correos: hoy primero, luego antiguos ──
+    listas_a_renderizar = []
+    if pend_hoy:
+        listas_a_renderizar.append(("📨 Correos de hoy", pend_hoy))
+    if pend_antiguos:
+        listas_a_renderizar.append(("⏰ Correos anteriores sin gestionar", pend_antiguos))
 
-        # ── Tarjeta compacta del correo ──
-        icono = '📩' if not correo['leido'] else '📧'
-        remitente = correo['remitente_nombre'] or correo['remitente']
-        fecha_corta = correo['fecha'][:10] if correo['fecha'] else ''
-        adjuntos_txt = ', '.join(a['nombre'] for a in correo['adjuntos']) if correo['adjuntos'] else ''
-        n_adjuntos = len(correos_pendientes[idx].get('adjuntos', []))
+    idx_global = 0
+    for titulo, lista in listas_a_renderizar:
+        st.markdown(f"#### {titulo} ({len(lista)})")
 
-        st.markdown(f"""
-        <div style="border:1px solid #374151;border-radius:10px;padding:14px 16px;margin-bottom:10px;background:#1F2937;">
-            <div style="display:flex;justify-content:space-between;align-items:center;">
-                <div>
-                    <span style="font-size:1.1rem;">{icono}</span>
-                    <span style="color:#F59E0B;font-weight:600;">{correo['asunto'][:70]}</span>
+        for correo in lista:
+            idx = idx_global
+            idx_global += 1
+            msg_id = correo['message_id']
+
+            # ── Tarjeta compacta ──
+            icono = '📩' if not correo['leido'] else '📧'
+            remitente = correo['remitente_nombre'] or correo['remitente']
+            fecha_corta = correo['fecha'][:10] if correo['fecha'] else ''
+            n_adjuntos = len(correo.get('adjuntos', []))
+
+            st.markdown(f"""
+            <div style="border:1px solid #374151;border-radius:10px;padding:14px 16px;margin-bottom:10px;background:#1F2937;">
+                <div style="display:flex;justify-content:space-between;align-items:center;">
+                    <div>
+                        <span style="font-size:1.1rem;">{icono}</span>
+                        <span style="color:#F59E0B;font-weight:600;">{correo['asunto'][:70]}</span>
+                    </div>
+                    <span style="color:#6B7280;font-size:0.8em;">{fecha_corta}</span>
                 </div>
-                <span style="color:#6B7280;font-size:0.8em;">{fecha_corta}</span>
+                <div style="color:#9CA3AF;font-size:0.85em;margin-top:4px;">
+                    👤 {remitente} {f'&nbsp;|&nbsp; 📎 {n_adjuntos} adjunto(s)' if n_adjuntos > 0 else ''}
+                </div>
+                <div style="color:#D1D5DB;font-size:0.85em;margin-top:6px;background:rgba(255,255,255,0.03);padding:6px 10px;border-radius:6px;">
+                    {correo.get('cuerpo_corto', '')[:150] if correo.get('cuerpo_corto') else '<i style="color:#6B7280;">Contenido no cargado — haz clic en "Ver contenido" para cargar</i>'}
+                </div>
             </div>
-            <div style="color:#9CA3AF;font-size:0.85em;margin-top:4px;">
-                👤 {remitente} {f'&nbsp;|&nbsp; 📎 {n_adjuntos} adjunto(s)' if n_adjuntos > 0 else ''}
-            </div>
-            <div style="color:#D1D5DB;font-size:0.85em;margin-top:6px;background:rgba(255,255,255,0.03);padding:6px 10px;border-radius:6px;">
-                {correo.get('cuerpo_corto', '')[:150] if correo.get('cuerpo_corto') else '<i style="color:#6B7280;">Contenido no cargado — haz clic en "Ver contenido" para cargar</i>'}
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
+            """, unsafe_allow_html=True)
 
-        # ── Ver contenido completo + adjuntos ──
-        with st.expander("📄 Ver contenido del correo", expanded=False):
-            # Si el contenido NO se ha cargado aún, mostrar botón de carga
-            if not correo.get('contenido_cargado', False):
-                st.info("📥 Este correo aún no tiene su contenido descargado (solo headers).")
-                if st.button(f"⬇️ Cargar contenido completo", key=f"btn_cargar_{idx}", type="primary", use_container_width=True):
-                    with st.spinner("Descargando contenido del correo..."):
-                        correo = cargar_contenido_correo(correo)
-                    st.rerun()
-            else:
-                # Contenido ya cargado — mostrar normalmente
-                tiene_html = correo.get('tiene_html', False)
-                if tiene_html:
-                    tab_html, tab_texto = st.tabs(["🌐 Vista original", "📝 Texto plano"])
-
-                    with tab_html:
-                        import streamlit.components.v1 as components
-                        html_seguro = correo.get('html_raw', '')
-                        html_seguro = re.sub(r'<script[^>]*>.*?</script>', '', html_seguro, flags=re.DOTALL | re.IGNORECASE)
-                        html_seguro = re.sub(r'<iframe[^>]*>.*?</iframe>', '', html_seguro, flags=re.DOTALL | re.IGNORECASE)
-                        html_envuelto = f"""
-                        <div style="background:#ffffff;color:#1f2937;padding:16px;border-radius:8px;font-family:Arial,sans-serif;font-size:14px;line-height:1.6;overflow:auto;">
-                            {html_seguro}
-                        </div>
-                        """
-                        components.html(html_envuelto, height=500, scrolling=True)
-
-                    with tab_texto:
-                        if correo.get('cuerpo'):
-                            st.text_area(
-                                "Contenido", value=correo['cuerpo'][:3000],
-                                height=200, disabled=True,
-                                key=f"correo_body_{idx}",
-                                label_visibility="collapsed"
-                            )
+            # ── Ver contenido + adjuntos ──
+            with st.expander("📄 Ver contenido del correo", expanded=False):
+                if not correo.get('contenido_cargado', False):
+                    st.info("📥 Contenido no descargado (solo headers).")
+                    if st.button(f"⬇️ Cargar contenido", key=f"btn_cargar_{idx}", type="primary", use_container_width=True):
+                        with st.spinner("Descargando..."):
+                            correo = cargar_contenido_correo(correo)
+                        st.rerun()
                 else:
-                    if correo.get('cuerpo'):
-                        st.text_area(
-                            "Contenido", value=correo['cuerpo'][:3000],
-                            height=200, disabled=True,
-                            key=f"correo_body_{idx}",
-                            label_visibility="collapsed"
-                        )
-
-                # Imágenes embebidas (inline)
-                imagenes = correo.get('imagenes_inline', {})
-                if imagenes:
-                    st.markdown("**🖼️ Imágenes en el correo:**")
-                    import base64
-                    for cid, img in imagenes.items():
-                        try:
-                            img_bytes = base64.b64decode(img['datos_b64'])
-                            st.image(img_bytes, use_container_width=True)
-                        except Exception:
-                            st.caption(f"⚠️ No se pudo mostrar imagen inline ({img['tipo']})")
-
-                # Adjuntos con botón de descarga
-                adjuntos = correo.get('adjuntos', [])
-                if adjuntos:
-                    st.markdown(f"**📎 Adjuntos ({len(adjuntos)}):**")
-                    for a_idx, att in enumerate(adjuntos):
-                        col_info, col_btn = st.columns([3, 1])
-                        with col_info:
-                            tamano_kb = att['tamano'] / 1024
-                            st.caption(f"📄 {att['nombre']} — {tamano_kb:.1f} KB ({att['tipo']})")
-                        with col_btn:
-                            if att.get('datos_b64'):
-                                import base64 as _b64
-                                datos_bytes = _b64.b64decode(att['datos_b64'])
-                                st.download_button(
-                                    "⬇️ Descargar",
-                                    data=datos_bytes,
-                                    file_name=att['nombre'],
-                                    mime=att['tipo'],
-                                    key=f"dl_{idx}_{a_idx}",
-                                    use_container_width=True,
-                                )
-                            else:
-                                st.caption("Sin datos")
-
-        # ── Botones de acción directa ──
-        col_crear, col_vincular, col_descartar, col_espacio = st.columns([2, 2, 2, 2])
-
-        with col_crear:
-            crear_clicked = st.button("✅ Crear Orden", key=f"btn_crear_{idx}", type="primary", use_container_width=True)
-
-        with col_vincular:
-            vincular_clicked = st.button("🔗 Vincular a OT", key=f"btn_vincular_{idx}", use_container_width=True)
-
-        with col_descartar:
-            descartar_clicked = st.button("🗑️ Descartar", key=f"btn_descartar_{idx}", use_container_width=True)
-
-        # ── Acción: Descartar (un click) ──
-        if descartar_clicked:
-            _marcar_procesado(msg_id, accion="descartado")
-            _eliminar_pendiente(msg_id)
-            # Quitar de la lista local sin perder los demás
-            pendientes = st.session_state.get('_correos_pendientes', [])
-            st.session_state['_correos_pendientes'] = [c for c in pendientes if c['message_id'] != msg_id]
-            st.toast(f"🗑️ Correo descartado: {correo['asunto'][:40]}")
-            st.rerun()
-
-        # ── Acción: Vincular a OT existente (muestra selector debajo) ──
-        if vincular_clicked:
-            st.session_state[f'_vincular_ot_{idx}'] = True
-            st.session_state.pop(f'_crear_ot_{idx}', None)  # Cerrar form crear si está abierto
-
-        if st.session_state.get(f'_vincular_ot_{idx}', False):
-            render_selector_ordenes_para_vincular(idx, correo, df_ordenes, df_act)
-            st.markdown("---")
-
-        # ── Acción: Crear Orden (muestra formulario debajo) ──
-        if crear_clicked:
-            st.session_state[f'_crear_ot_{idx}'] = True
-
-        if st.session_state.get(f'_crear_ot_{idx}', False):
-            with st.form(key=f"form_correo_{idx}"):
-                st.markdown("**📋 Datos para la Orden de Trabajo**")
-
-                act_opciones = ["(Seleccionar activo)"]
-                if not df_act.empty:
-                    act_opciones += sorted(df_act['nombre'].tolist())
-                act_opciones.append("➕ Crear nuevo activo después")
-
-                activo_sel = st.selectbox("Activo", act_opciones, key=f"correo_activo_{idx}")
-
-                c1, c2 = st.columns(2)
-                tipo = c1.selectbox("Tipo", ["Correctivo", "Preventivo", "Predictivo", "Mejora"], key=f"correo_tipo_{idx}")
-                criticidad = c2.select_slider("Criticidad", ["Baja", "Media", "Alta", "Crítica"], value="Media", key=f"correo_crit_{idx}")
-
-                tech_opts = {}
-                if not df_users.empty:
-                    tech_opts = {u['nombre']: u['id'] for _, u in df_users.iterrows()}
-                tecnico = st.selectbox("Asignar a", list(tech_opts.keys()), key=f"correo_tecnico_{idx}") if tech_opts else None
-
-                desc_default = f"[Correo de {correo['remitente']}]\n\nAsunto: {correo['asunto']}\n\n{correo['cuerpo_corto']}"
-                descripcion = st.text_area("Descripción", value=desc_default, height=100, key=f"correo_desc_{idx}")
-
-                submitted = st.form_submit_button("✅ CREAR ORDEN", type="primary", use_container_width=True)
-
-                if submitted:
-                    if activo_sel == "(Seleccionar activo)":
-                        st.error("Selecciona un activo.")
-                    elif not descripcion.strip():
-                        st.error("La descripción es obligatoria.")
-                    elif not tecnico:
-                        st.error("Asigna un técnico.")
+                    tiene_html = correo.get('tiene_html', False)
+                    if tiene_html:
+                        tab_html, tab_texto = st.tabs(["🌐 Vista original", "📝 Texto plano"])
+                        with tab_html:
+                            import streamlit.components.v1 as components
+                            html_seguro = re.sub(r'<script[^>]*>.*?</script>', '', correo.get('html_raw', ''), flags=re.DOTALL | re.IGNORECASE)
+                            html_seguro = re.sub(r'<iframe[^>]*>.*?</iframe>', '', html_seguro, flags=re.DOTALL | re.IGNORECASE)
+                            components.html(f'<div style="background:#fff;color:#1f2937;padding:16px;border-radius:8px;font-family:Arial,sans-serif;font-size:14px;line-height:1.6;overflow:auto;">{html_seguro}</div>', height=500, scrolling=True)
+                        with tab_texto:
+                            if correo.get('cuerpo'):
+                                st.text_area("Contenido", value=correo['cuerpo'][:3000], height=200, disabled=True, key=f"correo_body_{idx}", label_visibility="collapsed")
                     else:
-                        try:
-                            act_id = int(df_act[df_act['nombre'] == activo_sel].iloc[0]['id']) if activo_sel != "➕ Crear nuevo activo después" else None
+                        if correo.get('cuerpo'):
+                            st.text_area("Contenido", value=correo['cuerpo'][:3000], height=200, disabled=True, key=f"correo_body_{idx}", label_visibility="collapsed")
 
-                            if act_id:
-                                res = db_insert("ordenes", {
-                                    "activo_id": act_id,
-                                    "descripcion": descripcion.strip(),
-                                    "criticidad": criticidad,
-                                    "tipo_mantenimiento": tipo,
-                                    "estado": "Abierta",
-                                    "tecnico_asignado": str(tech_opts[tecnico]),
-                                    "fecha_creacion": datetime.now().isoformat(),
-                                    "origen": "correo",
-                                    "correo_message_id": msg_id,
-                                })
-                                if res.data:
-                                    nuevo_id = res.data[0]['id']
-                                    db_insert("bitacora", {
-                                        "orden_id": nuevo_id,
-                                        "usuario_text": "CORREO (automático)",
-                                        "mensaje": f"📧 Creada desde correo de {correo['remitente']}\nAsunto: {correo['asunto']}",
-                                        "fecha": datetime.now().isoformat()
+                    imagenes = correo.get('imagenes_inline', {})
+                    if imagenes:
+                        st.markdown("**🖼️ Imágenes en el correo:**")
+                        import base64
+                        for cid, img in imagenes.items():
+                            try:
+                                st.image(base64.b64decode(img['datos_b64']), use_container_width=True)
+                            except Exception:
+                                st.caption(f"⚠️ No se pudo mostrar imagen inline ({img['tipo']})")
+
+                    adjuntos = correo.get('adjuntos', [])
+                    if adjuntos:
+                        st.markdown(f"**📎 Adjuntos ({len(adjuntos)}):**")
+                        for a_idx, att in enumerate(adjuntos):
+                            col_info, col_btn = st.columns([3, 1])
+                            with col_info:
+                                st.caption(f"📄 {att['nombre']} — {att['tamano']/1024:.1f} KB ({att['tipo']})")
+                            with col_btn:
+                                if att.get('datos_b64'):
+                                    import base64 as _b64
+                                    st.download_button("⬇️ Descargar", data=_b64.b64decode(att['datos_b64']), file_name=att['nombre'], mime=att['tipo'], key=f"dl_{idx}_{a_idx}", use_container_width=True)
+
+            # ── Acciones ──
+            col_crear, col_vincular, col_descartar, col_espacio = st.columns([2, 2, 2, 2])
+
+            with col_crear:
+                crear_clicked = st.button("✅ Crear Orden", key=f"btn_crear_{idx}", type="primary", use_container_width=True)
+            with col_vincular:
+                vincular_clicked = st.button("🔗 Vincular a OT", key=f"btn_vincular_{idx}", use_container_width=True)
+            with col_descartar:
+                descartar_clicked = st.button("🗑️ Descartar", key=f"btn_descartar_{idx}", use_container_width=True)
+
+            if descartar_clicked:
+                _marcar_procesado(msg_id, accion="descartado")
+                pendientes_actual = st.session_state.get('_correos_pendientes', [])
+                st.session_state['_correos_pendientes'] = [c for c in pendientes_actual if c['message_id'] != msg_id]
+                st.toast(f"🗑️ Descartado: {correo['asunto'][:40]}")
+                st.rerun()
+
+            if vincular_clicked:
+                st.session_state[f'_vincular_ot_{idx}'] = True
+                st.session_state.pop(f'_crear_ot_{idx}', None)
+
+            if st.session_state.get(f'_vincular_ot_{idx}', False):
+                render_selector_ordenes_para_vincular(idx, correo, df_ordenes, df_act)
+
+            if crear_clicked:
+                st.session_state[f'_crear_ot_{idx}'] = True
+
+            if st.session_state.get(f'_crear_ot_{idx}', False):
+                with st.form(key=f"form_correo_{idx}"):
+                    st.markdown("**📋 Datos para la Orden de Trabajo**")
+                    act_opciones = ["(Seleccionar activo)"]
+                    if not df_act.empty:
+                        act_opciones += sorted(df_act['nombre'].tolist())
+                    act_opciones.append("➕ Crear nuevo activo después")
+                    activo_sel = st.selectbox("Activo", act_opciones, key=f"correo_activo_{idx}")
+                    c1, c2 = st.columns(2)
+                    tipo = c1.selectbox("Tipo", ["Correctivo", "Preventivo", "Predictivo", "Mejora"], key=f"correo_tipo_{idx}")
+                    criticidad = c2.select_slider("Criticidad", ["Baja", "Media", "Alta", "Crítica"], value="Media", key=f"correo_crit_{idx}")
+                    tech_opts = {u['nombre']: u['id'] for _, u in df_users.iterrows()} if not df_users.empty else {}
+                    tecnico = st.selectbox("Asignar a", list(tech_opts.keys()), key=f"correo_tecnico_{idx}") if tech_opts else None
+                    desc_default = f"[Correo de {correo['remitente']}]\n\nAsunto: {correo['asunto']}\n\n{correo.get('cuerpo_corto', '')}"
+                    descripcion = st.text_area("Descripción", value=desc_default, height=100, key=f"correo_desc_{idx}")
+                    submitted = st.form_submit_button("✅ CREAR ORDEN", type="primary", use_container_width=True)
+
+                    if submitted:
+                        if activo_sel == "(Seleccionar activo)":
+                            st.error("Selecciona un activo.")
+                        elif not descripcion.strip():
+                            st.error("La descripción es obligatoria.")
+                        elif not tecnico:
+                            st.error("Asigna un técnico.")
+                        else:
+                            try:
+                                act_id = int(df_act[df_act['nombre'] == activo_sel].iloc[0]['id']) if activo_sel != "➕ Crear nuevo activo después" else None
+                                if act_id:
+                                    res = db_insert("ordenes", {
+                                        "activo_id": act_id, "descripcion": descripcion.strip(),
+                                        "criticidad": criticidad, "tipo_mantenimiento": tipo,
+                                        "estado": "Abierta", "tecnico_asignado": str(tech_opts[tecnico]),
+                                        "fecha_creacion": datetime.now().isoformat(),
+                                        "origen": "correo", "correo_message_id": msg_id,
                                     })
+                                    if res.data:
+                                        nuevo_id = res.data[0]['id']
+                                        db_insert("bitacora", {
+                                            "orden_id": nuevo_id, "usuario_text": "CORREO (automático)",
+                                            "mensaje": f"📧 Creada desde correo de {correo['remitente']}\nAsunto: {correo['asunto']}",
+                                            "fecha": datetime.now().isoformat()
+                                        })
+                                        adjuntos_correo = correo.get('adjuntos', [])
+                                        if adjuntos_correo:
+                                            with st.spinner(f"Subiendo {len(adjuntos_correo)} adjunto(s)..."):
+                                                _subir_adjuntos_correo(adjuntos_correo, nuevo_id)
+                                        imagenes_inline = correo.get('imagenes_inline', {})
+                                        if imagenes_inline:
+                                            from utils.uploads import subir_archivo_generico as _subir_img
+                                            for cid, img in imagenes_inline.items():
+                                                try:
+                                                    img_bytes = base64.b64decode(img['datos_b64'])
+                                                    url_img = _subir_img(_ArchivoDesdeBytes(img_bytes, f"inline_{cid}.jpg"))
+                                                    if url_img:
+                                                        db_insert("bitacora", {"orden_id": nuevo_id, "usuario_text": "CORREO (automático)", "mensaje": f"🖼️ Imagen del correo", "archivo_url": url_img, "fecha": datetime.now().isoformat()})
+                                                except Exception:
+                                                    pass
+                                        _marcar_procesado(msg_id, orden_id=nuevo_id, accion="orden")
+                                        pendientes_actual = st.session_state.get('_correos_pendientes', [])
+                                        st.session_state['_correos_pendientes'] = [c for c in pendientes_actual if c['message_id'] != msg_id]
+                                        st.session_state.pop(f'_crear_ot_{idx}', None)
+                                        st.success(f"✅ Orden #{nuevo_id} creada desde correo.")
+                                        st.rerun()
+                                else:
+                                    st.warning("⚠️ Crea el activo primero en el módulo de Inventario.")
+                            except Exception as e:
+                                st.error(f"Error creando orden: {e}")
 
-                                    # ── Subir adjuntos del correo a la orden ──
-                                    adjuntos_correo = correo.get('adjuntos', [])
-                                    if adjuntos_correo:
-                                        with st.spinner(f"Subiendo {len(adjuntos_correo)} adjunto(s) del correo..."):
-                                            urls = _subir_adjuntos_correo(adjuntos_correo, nuevo_id)
-                                            if urls:
-                                                print(f"✅ {len(urls)} adjunto(s) subido(s) a la OT #{nuevo_id}")
-
-                                    # ── Subir imágenes inline del correo ──
-                                    imagenes_inline = correo.get('imagenes_inline', {})
-                                    if imagenes_inline:
-                                        from utils.uploads import subir_archivo_generico as _subir_img
-                                        for cid, img in imagenes_inline.items():
-                                            try:
-                                                img_bytes = base64.b64decode(img['datos_b64'])
-                                                archivo_img = _ArchivoDesdeBytes(img_bytes, f"inline_{cid}.jpg")
-                                                url_img = _subir_img(archivo_img)
-                                                if url_img:
-                                                    db_insert("bitacora", {
-                                                        "orden_id": nuevo_id,
-                                                        "usuario_text": "CORREO (automático)",
-                                                        "mensaje": f"🖼️ Imagen embebida del correo (CID: {cid})",
-                                                        "archivo_url": url_img,
-                                                        "fecha": datetime.now().isoformat()
-                                                    })
-                                            except Exception as e_img:
-                                                print(f"⚠️ Error subiendo inline {cid}: {e_img}")
-
-                                    _marcar_procesado(msg_id, orden_id=nuevo_id, accion="orden")
-                                    _eliminar_pendiente(msg_id)
-                                    st.session_state.pop(f'_crear_ot_{idx}', None)
-                                    # Quitar de la lista local sin perder los demás
-                                    pendientes = st.session_state.get('_correos_pendientes', [])
-                                    st.session_state['_correos_pendientes'] = [c for c in pendientes if c['message_id'] != msg_id]
-                                    st.success(f"✅ Orden #{nuevo_id} creada desde correo.")
-                                    st.rerun()
-                            else:
-                                st.warning("⚠️ Selecciona 'Crear nuevo activo después' y crea el activo primero en el módulo de Inventario.")
-                        except Exception as e:
-                            st.error(f"Error creando orden: {e}")
-
-        st.markdown("---")
+            st.markdown("---")
 
     # ── Estadísticas ──
     st.markdown("---")
-    total_proc = len(procesados)
-    total_pend = len(correos_pendientes)
     col1, col2, col3 = st.columns(3)
     col1.metric("📬 Descargados", len(correos))
-    col2.metric("⏳ Pendientes", total_pend)
-    col3.metric("✅ Procesados (histórico)", total_proc)
+    col2.metric("⏳ Pendientes", len(correos_pendientes))
+    col3.metric("✅ Procesados (histórico)", len(procesados))
