@@ -1665,17 +1665,39 @@ password = "xxxx xxxx xxxx xxxx"
             # Paso 6: Descargar headers
             st.markdown(f"**6️⃣ Descargando headers de {len(ids)} correos...**")
             progress = st.progress(0)
+            status_text = st.empty()
             resultados = []
+            errores = 0
 
             for i, msg_id in enumerate(ids):
+                status_text.caption(f"Correo {i+1}/{len(ids)}...")
                 try:
-                    mail.socket().settimeout(10)
-                    status, datos = mail.fetch(msg_id, "(BODY[HEADER.FIELDS (FROM SUBJECT DATE MESSAGE-ID)])")
+                    # Usar thread con timeout para que NO se cuelgue
+                    from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeout
+
+                    def _fetch_header(mid):
+                        mail.socket().settimeout(8)
+                        return mail.fetch(mid, "(RFC822.HEADER)")
+
+                    with ThreadPoolExecutor(max_workers=1) as executor:
+                        future = executor.submit(_fetch_header, msg_id)
+                        try:
+                            status, datos = future.result(timeout=12)
+                        except (FuturesTimeout, socket.timeout):
+                            errores += 1
+                            print(f"⚠️ Timeout header {i+1}")
+                            progress.progress((i + 1) / len(ids))
+                            continue
+
                     if status != "OK" or not datos or not datos[0]:
+                        errores += 1
+                        progress.progress((i + 1) / len(ids))
                         continue
 
                     header_bytes = datos[0][1] if isinstance(datos[0], tuple) else datos[0]
                     if not isinstance(header_bytes, bytes):
+                        errores += 1
+                        progress.progress((i + 1) / len(ids))
                         continue
 
                     msg_header = email.message_from_bytes(header_bytes)
@@ -1693,13 +1715,6 @@ password = "xxxx xxxx xxxx xxxx"
                     elif "@" in remitente_raw:
                         remitente = remitente_raw.strip()
 
-                    try:
-                        mail.socket().settimeout(5)
-                        status_flags, datos_flags = mail.fetch(msg_id, "(FLAGS)")
-                        leido = b'\\Seen' in (datos_flags[0] if datos_flags and datos_flags[0] else b'')
-                    except Exception:
-                        leido = False
-
                     correo_data = {
                         'message_id': message_id,
                         'imap_id': msg_id.decode() if isinstance(msg_id, bytes) else str(msg_id),
@@ -1715,19 +1730,20 @@ password = "xxxx xxxx xxxx xxxx"
                         'tiene_adjuntos': False,
                         'tiene_html': False,
                         'tiene_imagenes': False,
-                        'leido': leido,
+                        'leido': False,
                         'contenido_cargado': False,
                     }
                     resultados.append(correo_data)
                     _guardar_correo_pendiente(correo_data)
 
                 except Exception as e:
-                    print(f"⚠️ Error header {i}: {e}")
-                    continue
+                    errores += 1
+                    print(f"⚠️ Error header {i+1}: {e}")
                 finally:
                     progress.progress((i + 1) / len(ids))
 
             progress.empty()
+            status_text.empty()
 
             try:
                 mail.logout()
@@ -1737,12 +1753,14 @@ password = "xxxx xxxx xxxx xxxx"
             st.session_state['_correos_pendientes'] = resultados
 
             if resultados:
-                st.success(f"✅ {len(resultados)} correo(s) descargado(s) correctamente")
-                st.markdown(f"**Primeros 3:**")
+                st.success(f"✅ {len(resultados)} correo(s) descargado(s)")
+                if errores > 0:
+                    st.warning(f"⚠️ {errores} correo(s) con timeout/error (omitidos)")
                 for r in resultados[:3]:
                     st.caption(f"📧 {r['asunto'][:60]} — 👤 {r['remitente'][:40]}")
             else:
-                st.error("❌ No se pudo descargar ningún correo a pesar de que la búsqueda encontró IDs.")
+                st.error(f"❌ 0 correos descargados. {errores} errores. La conexión puede estar inestable.")
+                st.info("💡 Intenta de nuevo — si persiste, puede ser un problema de red con el servidor de Gmail.")
 
             st.markdown("---")
             st.rerun()
