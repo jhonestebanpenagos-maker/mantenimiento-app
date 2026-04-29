@@ -1674,16 +1674,29 @@ password = "xxxx xxxx xxxx xxxx"
                 try:
                     # Timeout a nivel de socket — sin threads, conexión IMAP segura
                     mail.socket().settimeout(15)
-                    status, datos = mail.fetch(msg_id, "(RFC822.HEADER)")
+                    status, datos = mail.fetch(msg_id, "(BODY[HEADER.FIELDS (FROM SUBJECT DATE MESSAGE-ID)])")
+
+                    # ── DEBUG: loggear formato de respuesta ──
+                    if i < 3:
+                        print(f"🔍 DEBUG fetch {i}: status={status}, datos type={type(datos)}, datos[0] type={type(datos[0]) if datos else 'N/A'}")
+                        if datos and datos[0]:
+                            if isinstance(datos[0], tuple):
+                                print(f"   datos[0] es tuple, len={len(datos[0])}, datos[0][1][:100]={datos[0][1][:100]}")
+                            else:
+                                print(f"   datos[0] NO es tuple: {str(datos[0])[:200]}")
 
                     if status != "OK" or not datos or not datos[0]:
                         errores += 1
+                        if i < 3:
+                            print(f"🔍 DEBUG skip: status={status}, datos={bool(datos)}, datos[0]={bool(datos[0]) if datos else 'N/A'}")
                         progress.progress((i + 1) / len(ids))
                         continue
 
                     header_bytes = datos[0][1] if isinstance(datos[0], tuple) else datos[0]
                     if not isinstance(header_bytes, bytes):
                         errores += 1
+                        if i < 3:
+                            print(f"🔍 DEBUG skip: header_bytes no es bytes, es {type(header_bytes)}")
                         progress.progress((i + 1) / len(ids))
                         continue
 
@@ -1692,6 +1705,10 @@ password = "xxxx xxxx xxxx xxxx"
                     remitente_raw = _decodificar_header(msg_header.get("From", ""))
                     fecha_raw = msg_header.get("Date", "")
                     message_id = (msg_header.get("Message-ID") or str(msg_id.decode())).strip()
+
+                    # ── DEBUG: loggear parsing ──
+                    if i < 3:
+                        print(f"🔍 DEBUG parsed {i}: asunto={asunto[:50]!r}, remitente={remitente_raw[:50]!r}, msg_id={message_id[:50]!r}")
 
                     remitente = remitente_raw
                     remitente_nombre = ""
@@ -1734,6 +1751,9 @@ password = "xxxx xxxx xxxx xxxx"
 
             progress.empty()
             status_text.empty()
+
+            # ── DEBUG: resumen final ──
+            print(f"🔍 DEBUG RESUMEN: ids={len(ids)}, resultados={len(resultados)}, errores={errores}")
 
             try:
                 mail.logout()
