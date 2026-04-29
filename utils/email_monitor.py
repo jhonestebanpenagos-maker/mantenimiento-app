@@ -434,18 +434,69 @@ def sincronizar_adjuntos_correo(orden_id, correo_message_id):
 # ==============================================================================
 # 📬 DESCARGA DE CORREOS
 # ==============================================================================
-def _fetch_con_timeout(mail, msg_id, params, timeout=IMAP_TIMEOUT):
-    """Fetch con timeout por operación para evitar cuelgues."""
-    import socket
-    try:
-        mail.socket().settimeout(timeout)
-        return mail.fetch(msg_id, params)
-    except socket.timeout:
-        print(f"⚠️ Timeout fetching msg {msg_id} ({timeout}s)")
-        return "TIMEOUT", None
-    except Exception as e:
-        print(f"⚠️ Error fetching msg {msg_id}: {e}")
-        return "ERROR", None
+def _parsear_correos_batch(datos_raw):
+    """
+    Parsea la respuesta de IMAP fetch batch de forma robusta.
+    IMAP devuelve una lista donde:
+    - Los pares (bytes_header, b'') son tuplas con los datos
+    - El último elemento puede ser b')' (cierre del literal)
+    Retorna lista de dicts con la metadata parseada.
+    """
+    resultados = []
+    if not datos_raw:
+        return resultados
+
+    for item in datos_raw:
+        try:
+            # Solo procesar tuplas (header_bytes, suffix)
+            if not isinstance(item, tuple) or len(item) < 2:
+                continue
+            header_bytes = item[1]
+            if not isinstance(header_bytes, bytes) or len(header_bytes) < 20:
+                continue
+
+            msg_header = email.message_from_bytes(header_bytes)
+
+            asunto = _decodificar_header(msg_header.get("Subject", ""))
+            remitente_raw = _decodificar_header(msg_header.get("From", ""))
+            fecha_raw = msg_header.get("Date", "")
+            message_id = (msg_header.get("Message-ID") or "").strip()
+            if not message_id:
+                continue
+
+            remitente = remitente_raw
+            remitente_nombre = ""
+            match = re.match(r'^"?([^"<]*)"?\s*<([^>]+)>', remitente_raw)
+            if match:
+                remitente_nombre = match.group(1).strip()
+                remitente = match.group(2).strip()
+            elif "@" in remitente_raw:
+                remitente = remitente_raw.strip()
+
+            correo_data = {
+                'message_id': message_id,
+                'imap_id': '',
+                'remitente': remitente,
+                'remitente_nombre': remitente_nombre,
+                'asunto': asunto or '(Sin asunto)',
+                'fecha': _parsear_fecha(fecha_raw),
+                'cuerpo': '',
+                'cuerpo_corto': '',
+                'html_raw': '',
+                'adjuntos': [],
+                'imagenes_inline': {},
+                'tiene_adjuntos': False,
+                'tiene_html': False,
+                'tiene_imagenes': False,
+                'leido': False,
+                'contenido_cargado': False,
+            }
+            resultados.append(correo_data)
+        except Exception as e:
+            print(f"⚠️ Error parseando item batch: {e}")
+            continue
+
+    return resultados
 
 
 def descargar_correos_nuevos(max_correos=20, dias_atras=7):
@@ -478,69 +529,28 @@ def descargar_correos_nuevos(max_correos=20, dias_atras=7):
         ids = ids[-max_correos:]
         ids.reverse()
 
-        resultados = []
-        total = len(ids)
+        # ── Batch: descargar solo headers en una sola llamada ──
+        ids_str = ",".join(mid.decode() if isinstance(mid, bytes) else str(mid) for mid in ids)
+        try:
+            mail.socket().settimeout(30)
+            status, datos_raw = mail.fetch(ids_str, "(BODY[HEADER.FIELDS (FROM SUBJECT DATE MESSAGE-ID)])")
+        except socket.timeout:
+            st.error(f"❌ Timeout descargando headers ({30}s). Intenta con menos días.")
+            return []
+        except Exception as e:
+            st.error(f"❌ Error en fetch batch: `{type(e).__name__}`: {e}")
+            return []
 
-        for i, msg_id in enumerate(ids):
-            try:
-                # Solo headers — nunca descarga adjuntos
-                mail.socket().settimeout(10)
-                status, datos = mail.fetch(msg_id, "(BODY[HEADER.FIELDS (FROM SUBJECT DATE MESSAGE-ID)])")
-                if status != "OK" or not datos or not datos[0]:
-                    continue
+        if status != "OK" or not datos_raw:
+            st.error("❌ Error obteniendo headers de Gmail")
+            return []
 
-                header_bytes = datos[0][1] if isinstance(datos[0], tuple) else datos[0]
-                if not isinstance(header_bytes, bytes):
-                    continue
+        resultados = _parsear_correos_batch(datos_raw)
+        print(f"✅ Headers parseados: {len(resultados)} de {len(ids)} solicitados")
 
-                msg_header = email.message_from_bytes(header_bytes)
-
-                asunto = _decodificar_header(msg_header.get("Subject", ""))
-                remitente_raw = _decodificar_header(msg_header.get("From", ""))
-                fecha_raw = msg_header.get("Date", "")
-                message_id = (msg_header.get("Message-ID") or str(msg_id.decode())).strip()
-
-                remitente = remitente_raw
-                remitente_nombre = ""
-                match = re.match(r'^"?([^"<]*)"?\s*<([^>]+)>', remitente_raw)
-                if match:
-                    remitente_nombre = match.group(1).strip()
-                    remitente = match.group(2).strip()
-                elif "@" in remitente_raw:
-                    remitente = remitente_raw.strip()
-
-                # Flags
-                try:
-                    mail.socket().settimeout(5)
-                    status_flags, datos_flags = mail.fetch(msg_id, "(FLAGS)")
-                    leido = b'\\Seen' in (datos_flags[0] if datos_flags and datos_flags[0] else b'')
-                except Exception:
-                    leido = False
-
-                correo_data = {
-                    'message_id': message_id,
-                    'imap_id': msg_id.decode() if isinstance(msg_id, bytes) else str(msg_id),
-                    'remitente': remitente,
-                    'remitente_nombre': remitente_nombre,
-                    'asunto': asunto or '(Sin asunto)',
-                    'fecha': _parsear_fecha(fecha_raw),
-                    'cuerpo': '',
-                    'cuerpo_corto': '',
-                    'html_raw': '',
-                    'adjuntos': [],
-                    'imagenes_inline': {},
-                    'tiene_adjuntos': False,
-                    'tiene_html': False,
-                    'tiene_imagenes': False,
-                    'leido': leido,
-                    'contenido_cargado': False,
-                }
-                resultados.append(correo_data)
-                _guardar_correo_pendiente(correo_data)
-
-            except Exception as e:
-                print(f"⚠️ Error header {i+1}/{total}: {e}")
-                continue
+        # Guardar en tabla de pendientes
+        for correo_data in resultados:
+            _guardar_correo_pendiente(correo_data)
 
         return resultados
 
@@ -937,10 +947,11 @@ def barrido_base_datos_correos():
 def render_auditoria_correos():
     """
     Renderiza la página de auditoría completa de correos.
-    Muestra: procesados, rechazados, vinculados, pendientes, y cruza con OTs.
+    Muestra: procesados, rechazados, vinculados, pendientes, cruza con OTs,
+    Y detecta correos en limbo comparando con Gmail en tiempo real.
     """
-    st.markdown("### 🔍 Auditoría de Correos — Barrido de Base de Datos")
-    st.caption("Estado real de todos los correos que han pasado por el sistema.")
+    st.markdown("### 🔍 Auditoría de Correos")
+    st.caption("Estado real de todos los correos + detección de correos en limbo vs Gmail.")
 
     datos = barrido_base_datos_correos()
     resumen = datos['resumen']
@@ -956,19 +967,147 @@ def render_auditoria_correos():
 
     # ── Desglose por acción ──
     por_accion = resumen.get('por_accion', {})
+    iconos_accion = {
+        'orden': '✅', 'avance': '🔗', 'descartado': '🗑️',
+        'rechazado': '❌', 'desconocido': '❓',
+    }
     if por_accion:
         st.markdown("#### 📊 Desglose por Acción")
         acc_cols = st.columns(len(por_accion))
-        iconos_accion = {
-            'orden': '✅', 'avance': '🔗', 'descartado': '🗑️',
-            'rechazado': '❌', 'desconocido': '❓',
-        }
         for i, (accion, count) in enumerate(por_accion.items()):
             with acc_cols[i]:
                 icono = iconos_accion.get(accion, '📋')
                 st.metric(f"{icono} {accion.capitalize()}", count)
 
     st.markdown("---")
+
+    # ── 🔍 DETECCIÓN DE CORREOS EN LIMBO (comparar Gmail vs BD) ──
+    st.markdown("#### 🩺 Detección de Correos en Limbo")
+    st.caption("Compara la bandeja de Gmail con la base de datos para encontrar correos que se escaparon.")
+
+    col_cfg1, col_cfg2, col_cfg3 = st.columns([1, 1, 1])
+    with col_cfg1:
+        max_corr_aud = st.number_input("Máx. correos Gmail", min_value=20, max_value=500, value=100, step=10, key="aud_max_corr")
+    with col_cfg2:
+        dias_aud = st.number_input("Días hacia atrás", min_value=1, max_value=365, value=30, step=1, key="aud_dias")
+    with col_cfg3:
+        st.markdown("<br>", unsafe_allow_html=True)
+        ejecutar_cmp = st.button("🔍 Escanear Gmail vs BD", type="primary", use_container_width=True, key="aud_btn_cmp")
+
+    if ejecutar_cmp:
+        with st.spinner(f"Conectando a Gmail y comparando (hasta {max_corr_aud} correos, {dias_aud} días)..."):
+            datos_cmp = comparar_gmail_vs_bd(max_correos=max_corr_aud, dias_atras=dias_aud)
+
+        for err in datos_cmp['errores']:
+            st.error(f"❌ {err}")
+
+        gmail_total = datos_cmp['gmail_total']
+        en_limbo = len(datos_cmp['en_limbo'])
+        bd_proc = len(datos_cmp['bd_procesados'])
+        bd_pend = len(datos_cmp['bd_pendientes'])
+
+        m1, m2, m3, m4 = st.columns(4)
+        m1.metric("📧 Gmail", gmail_total)
+        m2.metric("✅ BD Procesados", bd_proc)
+        m3.metric("💾 BD Pendientes", bd_pend)
+        m4.metric("🔴 En LIMBO", en_limbo, delta=f"-{en_limbo} sin gestionar" if en_limbo > 0 else None,
+                   delta_color="inverse" if en_limbo > 0 else "off")
+
+        if datos_cmp['en_limbo']:
+            st.error(f"⚠️ **{en_limbo} correos están en LIMBO** — en Gmail pero no en `emails_procesados` ni `emails_pendientes`.")
+            st.markdown(f"##### 📋 Correos en LIMBO ({en_limbo})")
+
+            for i, h in enumerate(datos_cmp['en_limbo']):
+                asunto = (h.get('asunto', '') or '')[:70]
+                remitente = (h.get('remitente', '') or '')[:50]
+                fecha = (h.get('fecha', '') or '')[:25]
+                mid = h.get('message_id', '?')[:60]
+
+                col_info_l, col_acc_l = st.columns([4, 2])
+                with col_info_l:
+                    st.markdown(f"""
+                    <div style="border-left:3px solid #EF4444;padding:8px 12px;margin-bottom:4px;background:rgba(239,68,68,0.05);border-radius:0 6px 6px 0;">
+                        <div style="color:#EF4444;font-weight:600;font-size:0.9em;">📧 {asunto}</div>
+                        <div style="color:#9CA3AF;font-size:0.8em;">👤 {remitente} · {fecha}</div>
+                        <div style="color:#6B7280;font-size:0.7em;">ID: {mid}</div>
+                    </div>
+                    """, unsafe_allow_html=True)
+                with col_acc_l:
+                    c_desc_l, c_pend_l = st.columns(2)
+                    with c_desc_l:
+                        if st.button("🗑️", key=f"aud_desc_{i}", help="Descartar", use_container_width=True):
+                            _marcar_procesado(h['message_id'], accion="descartado")
+                            st.toast(f"🗑️ Descartado: {asunto[:30]}")
+                            st.rerun()
+                    with c_pend_l:
+                        if st.button("💾", key=f"aud_pend_{i}", help="Guardar como pendiente", use_container_width=True):
+                            _guardar_correo_pendiente({
+                                'message_id': h['message_id'],
+                                'remitente': h.get('remitente', ''),
+                                'remitente_nombre': '',
+                                'asunto': h.get('asunto', ''),
+                                'fecha': h.get('fecha', ''),
+                                'cuerpo_corto': '',
+                                'adjuntos': [],
+                                'leido': False,
+                            })
+                            st.toast(f"💾 Guardado como pendiente: {asunto[:30]}")
+                            st.rerun()
+
+            # Acciones masivas
+            st.markdown("---")
+            col_mas1, col_mas2 = st.columns(2)
+            with col_mas1:
+                if st.button("💾 Guardar TODOS como pendientes", type="secondary", use_container_width=True, key="aud_guardar_todos"):
+                    guardados = 0
+                    for h in datos_cmp['en_limbo']:
+                        try:
+                            _guardar_correo_pendiente({
+                                'message_id': h['message_id'],
+                                'remitente': h.get('remitente', ''),
+                                'remitente_nombre': '',
+                                'asunto': h.get('asunto', ''),
+                                'fecha': h.get('fecha', ''),
+                                'cuerpo_corto': '',
+                                'adjuntos': [],
+                                'leido': False,
+                            })
+                            guardados += 1
+                        except Exception:
+                            pass
+                    st.success(f"✅ {guardados} correos guardados como pendientes.")
+                    st.rerun()
+            with col_mas2:
+                if st.button("🗑️ Descartar TODOS los limbo", type="secondary", use_container_width=True, key="aud_desc_todos"):
+                    descartados = 0
+                    for h in datos_cmp['en_limbo']:
+                        try:
+                            _marcar_procesado(h['message_id'], accion="descartado")
+                            descartados += 1
+                        except Exception:
+                            pass
+                    st.success(f"🗑️ {descartados} correos descartados.")
+                    st.rerun()
+        else:
+            st.success("✅ **Sin correos en limbo.** Todos los correos de Gmail están en la base de datos.")
+
+        # ── En BD pero no en Gmail ──
+        if datos_cmp['en_bd_no_gmail']:
+            st.markdown(f"##### 👻 En BD pero NO en Gmail ({len(datos_cmp['en_bd_no_gmail'])})")
+            st.caption("Estos message_ids están en la BD pero Gmail ya no los tiene (eliminados o movidos).")
+            for mid in datos_cmp['en_bd_no_gmail'][:20]:
+                st.caption(f"📧 {mid[:80]}")
+
+        # ── Tabla completa ──
+        if datos_cmp['gmail_headers']:
+            with st.expander(f"📋 Ver todos los {len(datos_cmp['gmail_headers'])} correos escaneados", expanded=False):
+                for h in datos_cmp['gmail_headers']:
+                    icon = "✅" if h['en_procesados'] else "💾" if h['en_pendientes'] else "⚠️"
+                    txt = "Procesado" if h['en_procesados'] else "Pendiente" if h['en_pendientes'] else "LIMBO"
+                    color = "#10B981" if h['en_procesados'] else "#3B82F6" if h['en_pendientes'] else "#EF4444"
+                    st.markdown(f'<div style="border-left:2px solid {color};padding:4px 10px;margin-bottom:3px;font-size:0.85em;">{icon} <b>{txt}</b> | {(h.get("asunto",""))[:50]} | 👤 {(h.get("remitente",""))[:30]}</div>', unsafe_allow_html=True)
+
+        st.markdown("---")
 
     # ── Tabla detallada de procesados ──
     procesados = datos['procesados']
@@ -1044,8 +1183,8 @@ def render_auditoria_correos():
             st.warning(f"📧 {msg_id} — Acción: {accion} — Fecha: {fecha}")
 
     # ── Si no hay nada ──
-    if not procesados and not ordenes_correo:
-        st.info("📭 No hay registros de correos procesados en la base de datos. Los correos se procesan cuando haces clic en 'Revisar Correo' en la pestaña de Correo.")
+    if not procesados and not ordenes_correo and not ejecutar_cmp:
+        st.info("📭 No hay registros de correos procesados en la base de datos. Usa **Escanear Gmail vs BD** arriba para comparar directamente con Gmail.")
 
 
 def _diagnosticar_gmail():
@@ -1679,10 +1818,10 @@ password = "xxxx xxxx xxxx xxxx"
                     pass
                 st.stop()
 
-            # Paso 6: Descargar contenido COMPLETO (BATCH — una sola llamada IMAP)
-            st.markdown(f"**6️⃣ Descargando {len(ids)} correos con contenido completo...**")
+            # Paso 6: Descargar HEADERS en batch (ultra rápido, sin adjuntos)
+            st.markdown(f"**6️⃣ Descargando {len(ids)} headers (rápido)...**")
             status_text = st.empty()
-            status_text.caption("Descargando correos de Gmail...")
+            status_text.caption("Descargando headers de Gmail...")
             resultados = []
             errores = 0
 
@@ -1690,73 +1829,19 @@ password = "xxxx xxxx xxxx xxxx"
             ids_str = ",".join(mid.decode() if isinstance(mid, bytes) else str(mid) for mid in ids)
 
             try:
-                mail.socket().settimeout(60)
-                status, datos = mail.fetch(ids_str, "(RFC822)")
+                mail.socket().settimeout(30)
+                status, datos_raw = mail.fetch(ids_str, "(BODY[HEADER.FIELDS (FROM SUBJECT DATE MESSAGE-ID)])")
             except socket.timeout:
-                st.error("❌ Timeout descargando correos (60s). Intenta con menos días o menos correos.")
-                status, datos = "TIMEOUT", None
+                st.error("❌ Timeout descargando headers (30s). Intenta con menos días o menos correos.")
+                status, datos_raw = "TIMEOUT", None
             except Exception as e:
                 st.error(f"❌ Error en fetch batch: `{type(e).__name__}`: {e}")
-                status, datos = "ERROR", None
+                status, datos_raw = "ERROR", None
 
-            if status == "OK" and datos:
-                status_text.caption("Procesando contenido...")
-                # datos es lista de tuplas: [(b'fetch ... (RFC822 {nbytes}', bytes_del_mensaje), ...]
-                for item in datos:
-                    try:
-                        if not isinstance(item, tuple) or len(item) < 2:
-                            continue
-                        raw_bytes = item[1]
-                        if not isinstance(raw_bytes, bytes) or len(raw_bytes) < 50:
-                            continue
-
-                        msg = email.message_from_bytes(raw_bytes)
-
-                        # Extraer headers
-                        asunto = _decodificar_header(msg.get("Subject", ""))
-                        remitente_raw = _decodificar_header(msg.get("From", ""))
-                        fecha_raw = msg.get("Date", "")
-                        message_id = (msg.get("Message-ID") or "").strip()
-                        if not message_id:
-                            continue
-
-                        remitente = remitente_raw
-                        remitente_nombre = ""
-                        match = re.match(r'^"?([^"<]*)"?\s*<([^>]+)>', remitente_raw)
-                        if match:
-                            remitente_nombre = match.group(1).strip()
-                            remitente = match.group(2).strip()
-                        elif "@" in remitente_raw:
-                            remitente = remitente_raw.strip()
-
-                        # Extraer contenido completo
-                        cuerpo = _extraer_texto_plano(msg)
-                        html_raw = _extraer_html_raw(msg)
-                        adjuntos = _extraer_adjuntos(msg)
-                        imagenes_inline = _extraer_imagenes_inline(msg)
-
-                        correo_data = {
-                            'message_id': message_id,
-                            'imap_id': '',
-                            'remitente': remitente,
-                            'remitente_nombre': remitente_nombre,
-                            'asunto': asunto or '(Sin asunto)',
-                            'fecha': _parsear_fecha(fecha_raw),
-                            'cuerpo': cuerpo[:5000],
-                            'cuerpo_corto': cuerpo[:200],
-                            'html_raw': html_raw,
-                            'adjuntos': adjuntos,
-                            'imagenes_inline': imagenes_inline,
-                            'tiene_adjuntos': len(adjuntos) > 0,
-                            'tiene_html': bool(html_raw),
-                            'tiene_imagenes': len(imagenes_inline) > 0,
-                            'leido': False,
-                            'contenido_cargado': True,
-                        }
-                        resultados.append(correo_data)
-                    except Exception as e:
-                        errores += 1
-                        print(f"⚠️ Error procesando correo: {type(e).__name__}: {e}")
+            if status == "OK" and datos_raw:
+                status_text.caption("Procesando headers...")
+                resultados = _parsear_correos_batch(datos_raw)
+                errores = len(ids) - len(resultados)
             else:
                 errores = len(ids)
                 print(f"⚠️ Fetch batch falló: status={status}")
@@ -1768,7 +1853,23 @@ password = "xxxx xxxx xxxx xxxx"
             except Exception:
                 pass
 
+            # Marcar como NO cargados (solo headers, contenido bajo demanda)
+            for r in resultados:
+                r['contenido_cargado'] = False
+
+            # Fusionar con correos ya guardados en session_state (no perder los ya descargados)
+            existentes = {c['message_id']: c for c in st.session_state.get('_correos_pendientes', []) if c.get('contenido_cargado')}
+            for r in resultados:
+                if r['message_id'] in existentes:
+                    # Preservar contenido ya cargado
+                    r.update(existentes[r['message_id']])
+                    r['contenido_cargado'] = True
+
             st.session_state['_correos_pendientes'] = resultados
+
+            # Guardar en tabla de pendientes para persistencia
+            for correo_data in resultados:
+                _guardar_correo_pendiente(correo_data)
 
             if resultados:
                 st.success(f"✅ {len(resultados)} correo(s) descargado(s)")
@@ -1776,6 +1877,7 @@ password = "xxxx xxxx xxxx xxxx"
                     st.warning(f"⚠️ {errores} correo(s) con timeout/error (omitidos)")
                 for r in resultados[:3]:
                     st.caption(f"📧 {r['asunto'][:60]} — 👤 {r['remitente'][:40]}")
+                st.caption("💡 **Tip:** Haz clic en 'Ver contenido' en cada correo para cargar el contenido completo bajo demanda.")
             else:
                 st.error(f"❌ 0 correos descargados. {errores} errores. La conexión puede estar inestable.")
                 st.info("💡 Intenta de nuevo — si persiste, puede ser un problema de red con el servidor de Gmail.")
