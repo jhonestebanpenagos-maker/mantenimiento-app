@@ -438,7 +438,7 @@ def _fetch_con_timeout(mail, msg_id, params, timeout=IMAP_TIMEOUT):
     """Fetch con timeout por operación para evitar cuelgues."""
     import socket
     try:
-        socket.setdefaulttimeout(timeout)
+        mail.socket().settimeout(timeout)
         return mail.fetch(msg_id, params)
     except socket.timeout:
         print(f"⚠️ Timeout fetching msg {msg_id} ({timeout}s)")
@@ -450,9 +450,9 @@ def _fetch_con_timeout(mail, msg_id, params, timeout=IMAP_TIMEOUT):
 
 def descargar_correos_nuevos(max_correos=20, dias_atras=7):
     """
-    Descarga correos nuevos de Gmail vía IMAP.
-    Usa descarga en 2 fases: headers primero (rápido), luego contenido completo.
-    Retorna lista de dicts con la info de cada correo.
+    Descarga SOLO HEADERS de correos nuevos (ultra rápido, sin adjuntos).
+    El contenido completo se carga bajo demanda con cargar_contenido_correo().
+    Retorna lista de dicts con metadata básica.
     """
     import socket
 
@@ -461,7 +461,7 @@ def descargar_correos_nuevos(max_correos=20, dias_atras=7):
         return []
 
     try:
-        mail.select("INBOX")
+        mail.select("INBOX", readonly=True)
 
         desde = datetime.now() - timedelta(days=dias_atras)
         fecha_desde = desde.strftime("%d-%b-%Y")
@@ -479,21 +479,18 @@ def descargar_correos_nuevos(max_correos=20, dias_atras=7):
         ids.reverse()
 
         resultados = []
-        errores = 0
+        total = len(ids)
 
         for i, msg_id in enumerate(ids):
             try:
-                socket.setdefaulttimeout(IMAP_TIMEOUT)
-
-                # FASE 1: Headers solamente (muy rápido)
+                # Solo headers — nunca descarga adjuntos
+                mail.socket().settimeout(10)
                 status, datos = mail.fetch(msg_id, "(BODY[HEADER.FIELDS (FROM SUBJECT DATE MESSAGE-ID)])")
                 if status != "OK" or not datos or not datos[0]:
-                    errores += 1
                     continue
 
                 header_bytes = datos[0][1] if isinstance(datos[0], tuple) else datos[0]
                 if not isinstance(header_bytes, bytes):
-                    errores += 1
                     continue
 
                 msg_header = email.message_from_bytes(header_bytes)
@@ -512,70 +509,38 @@ def descargar_correos_nuevos(max_correos=20, dias_atras=7):
                 elif "@" in remitente_raw:
                     remitente = remitente_raw.strip()
 
-                # FASE 2: Contenido completo con timeout
-                status2, datos2 = _fetch_con_timeout(mail, msg_id, "(RFC822)")
-                if status2 in ("TIMEOUT", "ERROR") or not datos2 or not datos2[0]:
-                    # Guardar con datos parciales (solo headers)
-                    correo_parcial = {
-                        'message_id': message_id,
-                        'remitente': remitente,
-                        'remitente_nombre': remitente_nombre,
-                        'asunto': asunto or '(Sin asunto)',
-                        'fecha': _parsear_fecha(fecha_raw),
-                        'cuerpo': '[Timeout descargando contenido]',
-                        'cuerpo_corto': '[Timeout - solo headers disponibles]',
-                        'html_raw': '',
-                        'adjuntos': [],
-                        'imagenes_inline': {},
-                        'tiene_adjuntos': False,
-                        'tiene_html': False,
-                        'tiene_imagenes': False,
-                        'leido': False,
-                    }
-                    resultados.append(correo_parcial)
-                    _guardar_correo_pendiente(correo_parcial)
-                    errores += 1
-                    continue
-
-                msg = email.message_from_bytes(datos2[0][1])
-                cuerpo = _extraer_texto_plano(msg)
-                html_raw = _extraer_html_raw(msg)
-                adjuntos = _extraer_adjuntos(msg)
-                imagenes_inline = _extraer_imagenes_inline(msg)
-
-                status_flags, datos_flags = mail.fetch(msg_id, "(FLAGS)")
-                leido = b'\\Seen' in (datos_flags[0] if datos_flags and datos_flags[0] else b'')
+                # Flags
+                try:
+                    mail.socket().settimeout(5)
+                    status_flags, datos_flags = mail.fetch(msg_id, "(FLAGS)")
+                    leido = b'\\Seen' in (datos_flags[0] if datos_flags and datos_flags[0] else b'')
+                except Exception:
+                    leido = False
 
                 correo_data = {
                     'message_id': message_id,
+                    'imap_id': msg_id.decode() if isinstance(msg_id, bytes) else str(msg_id),
                     'remitente': remitente,
                     'remitente_nombre': remitente_nombre,
                     'asunto': asunto or '(Sin asunto)',
                     'fecha': _parsear_fecha(fecha_raw),
-                    'cuerpo': cuerpo[:5000],
-                    'cuerpo_corto': cuerpo[:200],
-                    'html_raw': html_raw,
-                    'adjuntos': adjuntos,
-                    'imagenes_inline': imagenes_inline,
-                    'tiene_adjuntos': len(adjuntos) > 0,
-                    'tiene_html': bool(html_raw),
-                    'tiene_imagenes': len(imagenes_inline) > 0,
+                    'cuerpo': '',
+                    'cuerpo_corto': '',
+                    'html_raw': '',
+                    'adjuntos': [],
+                    'imagenes_inline': {},
+                    'tiene_adjuntos': False,
+                    'tiene_html': False,
+                    'tiene_imagenes': False,
                     'leido': leido,
+                    'contenido_cargado': False,
                 }
                 resultados.append(correo_data)
                 _guardar_correo_pendiente(correo_data)
 
-            except socket.timeout:
-                errores += 1
-                print(f"⚠️ Timeout procesando correo {i+1}/{len(ids)}")
-                continue
             except Exception as e:
-                errores += 1
-                print(f"⚠️ Error procesando correo {i+1}: {e}")
+                print(f"⚠️ Error header {i+1}/{total}: {e}")
                 continue
-
-        if errores > 0:
-            st.warning(f"⚠️ {errores} correo(s) con timeout/error. Se guardaron con datos parciales.")
 
         return resultados
 
@@ -583,6 +548,76 @@ def descargar_correos_nuevos(max_correos=20, dias_atras=7):
         st.error(f"❌ Error descargando correos: `{type(e).__name__}`")
         st.code(str(e)[:500], language="text")
         return []
+    finally:
+        try:
+            mail.logout()
+        except Exception:
+            pass
+
+
+def cargar_contenido_correo(correo: dict) -> dict:
+    """
+    Carga el contenido completo de UN correo (cuerpo, HTML, adjuntos).
+    Se llama bajo demanda cuando el usuario hace clic en un correo.
+    Retorna el correo actualizado con el contenido.
+    """
+    import socket
+
+    imap_id = correo.get('imap_id')
+    if not imap_id:
+        correo['contenido_cargado'] = True
+        correo['cuerpo'] = '[No disponible - sin ID IMAP]'
+        return correo
+
+    mail = _conectar_imap()
+    if not mail:
+        correo['contenido_cargado'] = True
+        correo['cuerpo'] = '[Error conectando a Gmail]'
+        return correo
+
+    try:
+        mail.select("INBOX", readonly=True)
+        mail.socket().settimeout(IMAP_TIMEOUT)
+
+        status, datos = mail.fetch(imap_id.encode(), "(RFC822)")
+        if status != "OK" or not datos or not datos[0]:
+            correo['contenido_cargado'] = True
+            correo['cuerpo'] = '[Error descargando contenido]'
+            return correo
+
+        msg = email.message_from_bytes(datos[0][1])
+        cuerpo = _extraer_texto_plano(msg)
+        html_raw = _extraer_html_raw(msg)
+        adjuntos = _extraer_adjuntos(msg)
+        imagenes_inline = _extraer_imagenes_inline(msg)
+
+        correo['cuerpo'] = cuerpo[:5000]
+        correo['cuerpo_corto'] = cuerpo[:200]
+        correo['html_raw'] = html_raw
+        correo['adjuntos'] = adjuntos
+        correo['imagenes_inline'] = imagenes_inline
+        correo['tiene_adjuntos'] = len(adjuntos) > 0
+        correo['tiene_html'] = bool(html_raw)
+        correo['tiene_imagenes'] = len(imagenes_inline) > 0
+        correo['contenido_cargado'] = True
+
+        # Actualizar en session_state
+        pendientes = st.session_state.get('_correos_pendientes', [])
+        for c in pendientes:
+            if c['message_id'] == correo['message_id']:
+                c.update(correo)
+                break
+
+        return correo
+
+    except socket.timeout:
+        correo['contenido_cargado'] = True
+        correo['cuerpo'] = '[Timeout descargando contenido]'
+        return correo
+    except Exception as e:
+        correo['contenido_cargado'] = True
+        correo['cuerpo'] = f'[Error: {e}]'
+        return correo
     finally:
         try:
             mail.logout()
@@ -1515,9 +1550,13 @@ password = "xxxx xxxx xxxx xxxx"
     col_btn, col_info, col_cmp = st.columns([1, 2, 1])
     with col_btn:
         if st.button("🔄 Revisar Correo", type="primary", use_container_width=True):
-            with st.spinner("Conectando a Gmail y descargando correos (timeout: 30s por correo)..."):
+            with st.spinner("Conectando a Gmail... (solo descarga headers, es rápido)"):
                 correos = descargar_correos_nuevos(max_correos=20, dias_atras=7)
                 st.session_state['_correos_pendientes'] = correos
+                if correos:
+                    st.toast(f"✅ {len(correos)} correo(s) descargado(s)")
+                else:
+                    st.toast("📭 No se encontraron correos nuevos")
                 st.rerun()
 
     with col_info:
@@ -1633,33 +1672,47 @@ password = "xxxx xxxx xxxx xxxx"
                 👤 {remitente} {f'&nbsp;|&nbsp; 📎 {n_adjuntos} adjunto(s)' if n_adjuntos > 0 else ''}
             </div>
             <div style="color:#D1D5DB;font-size:0.85em;margin-top:6px;background:rgba(255,255,255,0.03);padding:6px 10px;border-radius:6px;">
-                {correo['cuerpo_corto'][:150]}{'...' if len(correos_pendientes[idx].get('cuerpo_corto', '')) > 150 else ''}
+                {correo.get('cuerpo_corto', '')[:150] if correo.get('cuerpo_corto') else '<i style="color:#6B7280;">Contenido no cargado — haz clic en "Ver contenido" para cargar</i>'}
             </div>
         </div>
         """, unsafe_allow_html=True)
 
         # ── Ver contenido completo + adjuntos ──
         with st.expander("📄 Ver contenido del correo", expanded=False):
-            # Tabs: Vista HTML / Texto plano
-            tiene_html = correo.get('tiene_html', False)
-            if tiene_html:
-                tab_html, tab_texto = st.tabs(["🌐 Vista original", "📝 Texto plano"])
+            # Si el contenido NO se ha cargado aún, mostrar botón de carga
+            if not correo.get('contenido_cargado', False):
+                st.info("📥 Este correo aún no tiene su contenido descargado (solo headers).")
+                if st.button(f"⬇️ Cargar contenido completo", key=f"btn_cargar_{idx}", type="primary", use_container_width=True):
+                    with st.spinner("Descargando contenido del correo..."):
+                        correo = cargar_contenido_correo(correo)
+                    st.rerun()
+            else:
+                # Contenido ya cargado — mostrar normalmente
+                tiene_html = correo.get('tiene_html', False)
+                if tiene_html:
+                    tab_html, tab_texto = st.tabs(["🌐 Vista original", "📝 Texto plano"])
 
-                with tab_html:
-                    import streamlit.components.v1 as components
-                    html_seguro = correo.get('html_raw', '')
-                    # Sanitizar: quitar scripts
-                    html_seguro = re.sub(r'<script[^>]*>.*?</script>', '', html_seguro, flags=re.DOTALL | re.IGNORECASE)
-                    html_seguro = re.sub(r'<iframe[^>]*>.*?</iframe>', '', html_seguro, flags=re.DOTALL | re.IGNORECASE)
-                    # Envolver en contenedor con fondo claro para visibilidad
-                    html_envuelto = f"""
-                    <div style="background:#ffffff;color:#1f2937;padding:16px;border-radius:8px;font-family:Arial,sans-serif;font-size:14px;line-height:1.6;overflow:auto;">
-                        {html_seguro}
-                    </div>
-                    """
-                    components.html(html_envuelto, height=500, scrolling=True)
+                    with tab_html:
+                        import streamlit.components.v1 as components
+                        html_seguro = correo.get('html_raw', '')
+                        html_seguro = re.sub(r'<script[^>]*>.*?</script>', '', html_seguro, flags=re.DOTALL | re.IGNORECASE)
+                        html_seguro = re.sub(r'<iframe[^>]*>.*?</iframe>', '', html_seguro, flags=re.DOTALL | re.IGNORECASE)
+                        html_envuelto = f"""
+                        <div style="background:#ffffff;color:#1f2937;padding:16px;border-radius:8px;font-family:Arial,sans-serif;font-size:14px;line-height:1.6;overflow:auto;">
+                            {html_seguro}
+                        </div>
+                        """
+                        components.html(html_envuelto, height=500, scrolling=True)
 
-                with tab_texto:
+                    with tab_texto:
+                        if correo.get('cuerpo'):
+                            st.text_area(
+                                "Contenido", value=correo['cuerpo'][:3000],
+                                height=200, disabled=True,
+                                key=f"correo_body_{idx}",
+                                label_visibility="collapsed"
+                            )
+                else:
                     if correo.get('cuerpo'):
                         st.text_area(
                             "Contenido", value=correo['cuerpo'][:3000],
@@ -1667,50 +1720,42 @@ password = "xxxx xxxx xxxx xxxx"
                             key=f"correo_body_{idx}",
                             label_visibility="collapsed"
                         )
-            else:
-                if correo.get('cuerpo'):
-                    st.text_area(
-                        "Contenido", value=correo['cuerpo'][:3000],
-                        height=200, disabled=True,
-                        key=f"correo_body_{idx}",
-                        label_visibility="collapsed"
-                    )
 
-            # Imágenes embebidas (inline)
-            imagenes = correo.get('imagenes_inline', {})
-            if imagenes:
-                st.markdown("**🖼️ Imágenes en el correo:**")
-                import base64
-                for cid, img in imagenes.items():
-                    try:
-                        img_bytes = base64.b64decode(img['datos_b64'])
-                        st.image(img_bytes, use_container_width=True)
-                    except Exception:
-                        st.caption(f"⚠️ No se pudo mostrar imagen inline ({img['tipo']})")
+                # Imágenes embebidas (inline)
+                imagenes = correo.get('imagenes_inline', {})
+                if imagenes:
+                    st.markdown("**🖼️ Imágenes en el correo:**")
+                    import base64
+                    for cid, img in imagenes.items():
+                        try:
+                            img_bytes = base64.b64decode(img['datos_b64'])
+                            st.image(img_bytes, use_container_width=True)
+                        except Exception:
+                            st.caption(f"⚠️ No se pudo mostrar imagen inline ({img['tipo']})")
 
-            # Adjuntos con botón de descarga
-            adjuntos = correo.get('adjuntos', [])
-            if adjuntos:
-                st.markdown(f"**📎 Adjuntos ({len(adjuntos)}):**")
-                for a_idx, att in enumerate(adjuntos):
-                    col_info, col_btn = st.columns([3, 1])
-                    with col_info:
-                        tamano_kb = att['tamano'] / 1024
-                        st.caption(f"📄 {att['nombre']} — {tamano_kb:.1f} KB ({att['tipo']})")
-                    with col_btn:
-                        if att.get('datos_b64'):
-                            import base64 as _b64
-                            datos_bytes = _b64.b64decode(att['datos_b64'])
-                            st.download_button(
-                                "⬇️ Descargar",
-                                data=datos_bytes,
-                                file_name=att['nombre'],
-                                mime=att['tipo'],
-                                key=f"dl_{idx}_{a_idx}",
-                                use_container_width=True,
-                            )
-                        else:
-                            st.caption("Sin datos")
+                # Adjuntos con botón de descarga
+                adjuntos = correo.get('adjuntos', [])
+                if adjuntos:
+                    st.markdown(f"**📎 Adjuntos ({len(adjuntos)}):**")
+                    for a_idx, att in enumerate(adjuntos):
+                        col_info, col_btn = st.columns([3, 1])
+                        with col_info:
+                            tamano_kb = att['tamano'] / 1024
+                            st.caption(f"📄 {att['nombre']} — {tamano_kb:.1f} KB ({att['tipo']})")
+                        with col_btn:
+                            if att.get('datos_b64'):
+                                import base64 as _b64
+                                datos_bytes = _b64.b64decode(att['datos_b64'])
+                                st.download_button(
+                                    "⬇️ Descargar",
+                                    data=datos_bytes,
+                                    file_name=att['nombre'],
+                                    mime=att['tipo'],
+                                    key=f"dl_{idx}_{a_idx}",
+                                    use_container_width=True,
+                                )
+                            else:
+                                st.caption("Sin datos")
 
         # ── Botones de acción directa ──
         col_crear, col_vincular, col_descartar, col_espacio = st.columns([2, 2, 2, 2])
