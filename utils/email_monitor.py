@@ -1550,14 +1550,202 @@ password = "xxxx xxxx xxxx xxxx"
     col_btn, col_info, col_cmp = st.columns([1, 2, 1])
     with col_btn:
         if st.button("🔄 Revisar Correo", type="primary", use_container_width=True):
-            with st.spinner("Conectando a Gmail... (solo descarga headers, es rápido)"):
-                correos = descargar_correos_nuevos(max_correos=20, dias_atras=7)
-                st.session_state['_correos_pendientes'] = correos
-                if correos:
-                    st.toast(f"✅ {len(correos)} correo(s) descargado(s)")
+            # Diagnóstico paso a paso
+            st.markdown("---")
+            st.markdown("#### 🩺 Diagnóstico en tiempo real")
+
+            # Paso 1: Credenciales
+            st.markdown("**1️⃣ Verificando credenciales...**")
+            correo_cfg, password_cfg = _obtener_credenciales()
+            if not correo_cfg:
+                st.error("❌ `correo` no configurado en [gmail] de secrets.toml")
+                st.stop()
+            if not password_cfg:
+                st.error("❌ `password` no configurado en [gmail] de secrets.toml")
+                st.stop()
+            st.success(f"✅ Credenciales OK: `{correo_cfg}`")
+
+            # Paso 2: Conexión IMAP
+            st.markdown("**2️⃣ Conectando a Gmail IMAP...**")
+            import socket
+            try:
+                socket.setdefaulttimeout(IMAP_TIMEOUT)
+                mail = imaplib.IMAP4_SSL(IMAP_SERVER, IMAP_PORT)
+                mail.socket().settimeout(IMAP_TIMEOUT)
+                st.success("✅ Conexión SSL establecida")
+            except Exception as e:
+                st.error(f"❌ No se pudo conectar: `{type(e).__name__}`: {e}")
+                st.stop()
+
+            # Paso 3: Login
+            st.markdown("**3️⃣ Autenticando...**")
+            try:
+                mail.login(correo_cfg, password_cfg)
+                st.success("✅ Login exitoso")
+            except Exception as e:
+                st.error(f"❌ Login falló: `{type(e).__name__}`: {str(e)[:300]}")
+                st.info("💡 Verifica que la contraseña de aplicación sea correcta")
+                try:
+                    mail.logout()
+                except Exception:
+                    pass
+                st.stop()
+
+            # Paso 4: Seleccionar INBOX
+            st.markdown("**4️⃣ Seleccionando INBOX...**")
+            try:
+                status_select, data_select = mail.select("INBOX", readonly=True)
+                if status_select == "OK":
+                    n_msgs = int(data_select[0]) if data_select and data_select[0] else 0
+                    st.success(f"✅ INBOX seleccionada — {n_msgs} mensajes totales")
                 else:
-                    st.toast("📭 No se encontraron correos nuevos")
-                st.rerun()
+                    st.error(f"❌ No se pudo seleccionar INBOX: {status_select}")
+                    mail.logout()
+                    st.stop()
+            except Exception as e:
+                st.error(f"❌ Error seleccionando INBOX: `{type(e).__name__}`: {e}")
+                try:
+                    mail.logout()
+                except Exception:
+                    pass
+                st.stop()
+
+            # Paso 5: Buscar correos
+            st.markdown("**5️⃣ Buscando correos (últimos 7 días)...**")
+            desde = datetime.now() - timedelta(days=7)
+            fecha_desde = desde.strftime("%d-%b-%Y")
+            try:
+                status_search, mensajes = mail.search(None, f'(SINCE "{fecha_desde}")')
+                if status_search != "OK":
+                    st.error(f"❌ Error en search: {status_search}")
+                    mail.logout()
+                    st.stop()
+
+                ids = mensajes[0].split()
+                if not ids:
+                    st.warning(f"⚠️ Search devolvió 0 resultados para SINCE {fecha_desde}")
+
+                    # Intentar búsqueda más amplia
+                    st.markdown("**5️⃣b Intentando búsqueda SINCE 30 días...**")
+                    desde30 = datetime.now() - timedelta(days=30)
+                    fecha30 = desde30.strftime("%d-%b-%Y")
+                    status30, mensajes30 = mail.search(None, f'(SINCE "{fecha30}")')
+                    ids30 = mensajes30[0].split() if status30 == "OK" and mensajes30[0] else []
+                    st.info(f"Búsqueda 30 días: {len(ids30)} resultados")
+
+                    if not ids30:
+                        # Intentar ALL
+                        st.markdown("**5️⃣c Intentando ALL...**")
+                        status_all, mensajes_all = mail.search(None, "ALL")
+                        ids_all = mensajes_all[0].split() if status_all == "OK" and mensajes_all[0] else []
+                        st.info(f"Búsqueda ALL: {len(ids_all)} resultados")
+
+                        if ids_all:
+                            st.warning(f"⚠️ Hay {len(ids_all)} correos en total, pero ninguno de los últimos 30 días. Último correo probablemente es antiguo.")
+                        else:
+                            st.error("❌ La bandeja está vacía o no se puede leer")
+                            mail.logout()
+                            st.stop()
+                    else:
+                        ids = ids30[-20:]
+                        ids.reverse()
+                else:
+                    st.success(f"✅ {len(ids)} correos encontrados")
+                    ids = ids[-20:]
+                    ids.reverse()
+
+            except Exception as e:
+                st.error(f"❌ Error en search: `{type(e).__name__}`: {e}")
+                try:
+                    mail.logout()
+                except Exception:
+                    pass
+                st.stop()
+
+            # Paso 6: Descargar headers
+            st.markdown(f"**6️⃣ Descargando headers de {len(ids)} correos...**")
+            progress = st.progress(0)
+            resultados = []
+
+            for i, msg_id in enumerate(ids):
+                try:
+                    mail.socket().settimeout(10)
+                    status, datos = mail.fetch(msg_id, "(BODY[HEADER.FIELDS (FROM SUBJECT DATE MESSAGE-ID)])")
+                    if status != "OK" or not datos or not datos[0]:
+                        continue
+
+                    header_bytes = datos[0][1] if isinstance(datos[0], tuple) else datos[0]
+                    if not isinstance(header_bytes, bytes):
+                        continue
+
+                    msg_header = email.message_from_bytes(header_bytes)
+                    asunto = _decodificar_header(msg_header.get("Subject", ""))
+                    remitente_raw = _decodificar_header(msg_header.get("From", ""))
+                    fecha_raw = msg_header.get("Date", "")
+                    message_id = (msg_header.get("Message-ID") or str(msg_id.decode())).strip()
+
+                    remitente = remitente_raw
+                    remitente_nombre = ""
+                    match = re.match(r'^"?([^"<]*)"?\s*<([^>]+)>', remitente_raw)
+                    if match:
+                        remitente_nombre = match.group(1).strip()
+                        remitente = match.group(2).strip()
+                    elif "@" in remitente_raw:
+                        remitente = remitente_raw.strip()
+
+                    try:
+                        mail.socket().settimeout(5)
+                        status_flags, datos_flags = mail.fetch(msg_id, "(FLAGS)")
+                        leido = b'\\Seen' in (datos_flags[0] if datos_flags and datos_flags[0] else b'')
+                    except Exception:
+                        leido = False
+
+                    correo_data = {
+                        'message_id': message_id,
+                        'imap_id': msg_id.decode() if isinstance(msg_id, bytes) else str(msg_id),
+                        'remitente': remitente,
+                        'remitente_nombre': remitente_nombre,
+                        'asunto': asunto or '(Sin asunto)',
+                        'fecha': _parsear_fecha(fecha_raw),
+                        'cuerpo': '',
+                        'cuerpo_corto': '',
+                        'html_raw': '',
+                        'adjuntos': [],
+                        'imagenes_inline': {},
+                        'tiene_adjuntos': False,
+                        'tiene_html': False,
+                        'tiene_imagenes': False,
+                        'leido': leido,
+                        'contenido_cargado': False,
+                    }
+                    resultados.append(correo_data)
+                    _guardar_correo_pendiente(correo_data)
+
+                except Exception as e:
+                    print(f"⚠️ Error header {i}: {e}")
+                    continue
+                finally:
+                    progress.progress((i + 1) / len(ids))
+
+            progress.empty()
+
+            try:
+                mail.logout()
+            except Exception:
+                pass
+
+            st.session_state['_correos_pendientes'] = resultados
+
+            if resultados:
+                st.success(f"✅ {len(resultados)} correo(s) descargado(s) correctamente")
+                st.markdown(f"**Primeros 3:**")
+                for r in resultados[:3]:
+                    st.caption(f"📧 {r['asunto'][:60]} — 👤 {r['remitente'][:40]}")
+            else:
+                st.error("❌ No se pudo descargar ningún correo a pesar de que la búsqueda encontró IDs.")
+
+            st.markdown("---")
+            st.rerun()
 
     with col_info:
         st.caption("Descarga correos de los últimos 7 días. Solo se muestran los no procesados.")
