@@ -14,13 +14,23 @@ def render():
     render_back_button()
     mostrar_notificaciones()
 
-    tab_crear, tab_gestionar = st.tabs(["CREAR USUARIO", "GESTIONAR USUARIOS"])
+    rol = st.session_state.get('rol', '')
+
+    if rol == 'Admin':
+        tab_crear, tab_gestionar, tab_herramientas = st.tabs(["CREAR USUARIO", "GESTIONAR USUARIOS", "🔧 HERRAMIENTAS"])
+    else:
+        tab_crear, tab_gestionar = st.tabs(["CREAR USUARIO", "GESTIONAR USUARIOS"])
+        tab_herramientas = None
 
     with tab_crear:
         _render_crear()
 
     with tab_gestionar:
         _render_gestionar()
+
+    if tab_herramientas is not None:
+        with tab_herramientas:
+            _render_herramientas()
 
 
 # ==============================================================================
@@ -157,3 +167,53 @@ def _render_gestionar():
                         agregar_notificacion('error', f'Error al eliminar: {e}')
     else:
         st.info("No se encontraron usuarios. Use la pestaña 'CREAR USUARIO'.")
+
+
+# ==============================================================================
+# 🔧 HERRAMIENTAS DE ADMIN
+# ==============================================================================
+def _render_herramientas():
+    st.subheader("Herramientas de Administración")
+
+    # ── Regenerar QRs ──
+    st.markdown("#### 🔄 Regenerar Códigos QR")
+    st.markdown("""
+    Regenera los QR de **todos** los activos con la URL actual del despliegue.
+    Útil cuando:
+    - La URL de la app cambió
+    - Los QRs existentes no funcionan
+    - Se migró a otro hosting
+    """)
+
+    from utils.qr import BASE_URL_APP
+    st.info(f"🌐 **URL actual:** `{BASE_URL_APP}`")
+
+    if st.button("🔄 REGENERAR TODOS LOS QRs", type="primary", use_container_width=True, key="btn_regenerar_qrs"):
+        from utils.qr import regenerar_todos_los_qrs
+        with st.spinner("Regenerando QRs... Esto puede tomar un momento."):
+            exitosos, fallidos, total = regenerar_todos_los_qrs()
+        if fallidos == 0:
+            st.success(f"✅ {exitosos}/{total} QRs regenerados correctamente.")
+            registrar_accion_critica("REGENERAR_QRS", st.session_state.get('usuario', '?'),
+                                     f"Regenerados: {exitosos}/{total}")
+        else:
+            st.warning(f"⚠️ {exitosos}/{total} exitosos, {fallidos} fallidos.")
+            registrar_accion_critica("REGENERAR_QRS", st.session_state.get('usuario', '?'),
+                                     f"Exitosos: {exitosos}, Fallidos: {fallidos}, Total: {total}")
+
+    st.markdown("---")
+
+    # ── Info del sistema ──
+    st.markdown("#### ℹ️ Información del Sistema")
+    try:
+        from utils.db import supabase
+        n_activos = supabase.table("activos").select("id", count="exact").execute().count or 0
+        n_ordenes = supabase.table("ordenes").select("id", count="exact").execute().count or 0
+        n_usuarios = supabase.table("usuarios").select("id", count="exact").execute().count or 0
+
+        c1, c2, c3 = st.columns(3)
+        c1.metric("📦 Activos", n_activos)
+        c2.metric("🛠️ Órdenes", n_ordenes)
+        c3.metric("👤 Usuarios", n_usuarios)
+    except Exception as e:
+        st.warning(f"No se pudo cargar la info: {e}")
