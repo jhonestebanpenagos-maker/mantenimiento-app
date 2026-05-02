@@ -3,7 +3,12 @@ import time
 import uuid
 from datetime import datetime, timedelta
 from utils.db import supabase
-from utils.helpers import hashear_password, verificar_password, migrar_password_si_sha256, agregar_notificacion, registrar_login, error_amigable
+from utils.helpers import (
+    hashear_password, verificar_password, migrar_password_si_sha256,
+    agregar_notificacion, registrar_login, error_amigable,
+    verificar_bloqueo_login, registrar_intento_fallido, limpiar_intentos_login,
+    LOGIN_MAX_INTENTOS, LOGIN_BLOQUEO_MINUTOS,
+)
 
 # Duración máxima de sesión (horas)
 SESSION_MAX_HOURS = 8
@@ -50,8 +55,6 @@ def init_session_state():
         'session_token': None,
         'session_created_at': None,
         'sla_alertas_count': 0,
-        'login_intentos': 0,
-        'login_bloqueado': None,
     }
     for key, default in defaults.items():
         if key not in st.session_state:
@@ -139,26 +142,30 @@ def show_login():
             submitted = st.form_submit_button("ACCEDER AL SISTEMA", type="primary", use_container_width=True)
 
             if submitted:
-                MAX_INTENTOS = 3
-                BLOQUEO_MINUTOS = 5
+                # ── Rate limiting persistente (server-side en Supabase) ──
+                documento_limpio = (documento or "").strip()
+                if not documento_limpio:
+                    st.error("Ingrese su documento de identidad.")
+                    st.stop()
 
-                bloqueo = st.session_state.get('login_bloqueado')
-                if bloqueo:
-                    segundos_restantes = (bloqueo - datetime.now()).total_seconds()
-                    if segundos_restantes > 0:
-                        minutos = int(segundos_restantes // 60)
-                        segundos = int(segundos_restantes % 60)
+                bloqueado, intentos_actuales, bloqueado_hasta = verificar_bloqueo_login(documento_limpio)
+
+                if bloqueado:
+                    try:
+                        restante = datetime.fromisoformat(bloqueado_hasta) - datetime.now()
+                        segundos_totales = max(0, int(restante.total_seconds()))
+                        minutos = segundos_totales // 60
+                        segundos = segundos_totales % 60
                         st.error(f"🔒 Cuenta bloqueada. Intenta en {minutos}m {segundos}s.")
-                        st.stop()
-                    else:
-                        st.session_state['login_intentos'] = 0
-                        st.session_state['login_bloqueado'] = None
+                    except Exception:
+                        st.error("🔒 Cuenta bloqueada por demasiados intentos. Intenta más tarde.")
+                    st.stop()
 
                 with st.spinner("Conectando y validando credenciales..."):
                     try:
                         # Buscar usuario SOLO por documento (no por hash)
                         response = supabase.table("usuarios").select("*") \
-                            .eq("documento", documento) \
+                            .eq("documento", documento_limpio) \
                             .execute()
 
                         if response.data:
@@ -168,45 +175,42 @@ def show_login():
                             # Verificar contraseña con soporte dual (bcrypt / SHA-256 legacy)
                             if verificar_password(password, hash_almacenado):
                                 # Migración automática si el hash es SHA-256
-                                migrar_password_si_sha256(documento, password, hash_almacenado)
+                                migrar_password_si_sha256(documento_limpio, password, hash_almacenado)
 
-                                registrar_login(documento, exito=True, motivo="Credenciales válidas")
+                                registrar_login(documento_limpio, exito=True, motivo="Credenciales válidas")
+                                limpiar_intentos_login(documento_limpio)
 
-                                st.session_state['login_intentos'] = 0
-                                st.session_state['login_bloqueado'] = None
                                 st.session_state['usuario'] = user['nombre']
                                 st.session_state['rol'] = user['rol']
-                                st.session_state['user_doc'] = documento
+                                st.session_state['user_doc'] = documento_limpio
                                 st.session_state['session_created_at'] = datetime.now().isoformat()
                                 st.session_state['session_token'] = str(uuid.uuid4())
                                 st.rerun()
                             else:
-                                registrar_login(documento, exito=False, motivo="Contraseña incorrecta")
-                                _manejar_intento_fallido(MAX_INTENTOS, BLOQUEO_MINUTOS)
+                                registrar_login(documento_limpio, exito=False, motivo="Contraseña incorrecta")
+                                registrar_intento_fallido(documento_limpio)
+                                # Re-verificar para mostrar estado actualizado
+                                _, intentos_actualizados, _ = verificar_bloqueo_login(documento_limpio)
+                                restantes = LOGIN_MAX_INTENTOS - intentos_actualizados
+                                if restantes <= 0:
+                                    st.error(f"🔒 Demasiados intentos. Cuenta bloqueada por {LOGIN_BLOQUEO_MINUTOS} minutos.")
+                                else:
+                                    st.error(f"❌ Usuario o contraseña incorrectos. Te quedan {restantes} intento(s).")
                         else:
                             # Usuario no existe — igual registramos el intento
-                            # (usar documento en lugar de "desconocido" para no revelar si existe)
-                            registrar_login(documento, exito=False, motivo="Credenciales inválidas")
-                            _manejar_intento_fallido(MAX_INTENTOS, BLOQUEO_MINUTOS)
+                            # (usar documento para no revelar si existe o no)
+                            registrar_login(documento_limpio, exito=False, motivo="Credenciales inválidas")
+                            registrar_intento_fallido(documento_limpio)
+                            _, intentos_actualizados, _ = verificar_bloqueo_login(documento_limpio)
+                            restantes = LOGIN_MAX_INTENTOS - intentos_actualizados
+                            if restantes <= 0:
+                                st.error(f"🔒 Demasiados intentos. Cuenta bloqueada por {LOGIN_BLOQUEO_MINUTOS} minutos.")
+                            else:
+                                st.error(f"❌ Usuario o contraseña incorrectos. Te quedan {restantes} intento(s).")
                     except Exception as e:
-                        registrar_login(documento, exito=False, motivo=f"Error: {type(e).__name__}")
+                        registrar_login(documento_limpio, exito=False, motivo=f"Error: {type(e).__name__}")
                         error_amigable(e, "iniciar sesión")
     st.stop()
-
-
-def _manejar_intento_fallido(MAX_INTENTOS, BLOQUEO_MINUTOS):
-    """Maneja un intento de login fallido (bloqueo por intentos)."""
-    st.session_state['login_intentos'] += 1
-    intentos_restantes = MAX_INTENTOS - st.session_state['login_intentos']
-    if st.session_state['login_intentos'] >= MAX_INTENTOS:
-        st.session_state['login_bloqueado'] = (
-            datetime.now() + timedelta(minutes=BLOQUEO_MINUTOS)
-        )
-        registrar_login("SISTEMA", exito=False, motivo=f"Cuenta bloqueada por {BLOQUEO_MINUTOS} min")
-        st.error(f"🔒 Demasiados intentos. Cuenta bloqueada por {BLOQUEO_MINUTOS} minutos.")
-    else:
-        # Mensaje genérico — NO revelar si el usuario existe o no
-        st.error(f"❌ Usuario o contraseña incorrectos. Te quedan {intentos_restantes} intento(s).")
 
 
 # ==============================================================================

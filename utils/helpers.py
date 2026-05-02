@@ -7,7 +7,7 @@ import json
 import logging
 import bcrypt
 import hashlib
-from datetime import datetime
+from datetime import datetime, timedelta
 
 
 # ==============================================================================
@@ -306,6 +306,73 @@ def _es_sha256(hash_str: str) -> bool:
     if not hash_str or len(hash_str) != 64:
         return False
     return all(c in '0123456789abcdef' for c in hash_str.lower())
+
+
+# ==============================================================================
+# 🔒 RATE LIMITING PERSISTENTE (server-side en Supabase)
+# ==============================================================================
+
+LOGIN_MAX_INTENTOS = 3
+LOGIN_BLOQUEO_MINUTOS = 5
+
+
+def verificar_bloqueo_login(documento: str) -> tuple[bool, int, str | None]:
+    """
+    Verifica si un documento está bloqueado por intentos fallidos.
+    Retorna (está_bloqueado, intentos_actuales, bloqueado_hasta_iso).
+    """
+    try:
+        res = supabase.table("login_attempts").select("*") \
+            .eq("documento", documento).execute()
+        if not res.data:
+            return False, 0, None
+        registro = res.data[0]
+        bloqueado_hasta = registro.get('bloqueado_hasta')
+        if bloqueado_hasta:
+            if datetime.fromisoformat(str(bloqueado_hasta)) > datetime.now():
+                return True, registro.get('intentos', 0), bloqueado_hasta
+        return False, registro.get('intentos', 0), None
+    except Exception as e:
+        print(f"Error verificando bloqueo login: {e}")
+        return False, 0, None  # No bloquear si falla la tabla
+
+
+def registrar_intento_fallido(documento: str):
+    """Registra un intento fallido. Bloquea si supera el máximo."""
+    try:
+        res = supabase.table("login_attempts").select("*") \
+            .eq("documento", documento).execute()
+
+        if res.data:
+            intentos = res.data[0].get('intentos', 0) + 1
+            bloqueado_hasta = None
+            if intentos >= LOGIN_MAX_INTENTOS:
+                bloqueado_hasta = (
+                    datetime.now() + timedelta(minutes=LOGIN_BLOQUEO_MINUTOS)
+                ).isoformat()
+            supabase.table("login_attempts").update({
+                "intentos": intentos,
+                "bloqueado_hasta": bloqueado_hasta,
+                "ultimo_intento": datetime.now().isoformat()
+            }).eq("documento", documento).execute()
+        else:
+            supabase.table("login_attempts").insert({
+                "documento": documento,
+                "intentos": 1,
+                "bloqueado_hasta": None,
+                "ultimo_intento": datetime.now().isoformat()
+            }).execute()
+    except Exception as e:
+        print(f"Error registrando intento fallido: {e}")
+
+
+def limpiar_intentos_login(documento: str):
+    """Limpia los intentos tras un login exitoso."""
+    try:
+        supabase.table("login_attempts").delete() \
+            .eq("documento", documento).execute()
+    except Exception as e:
+        print(f"Error limpiando intentos login: {e}")
 
 
 # ==============================================================================
