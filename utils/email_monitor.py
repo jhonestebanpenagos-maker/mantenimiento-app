@@ -1358,8 +1358,6 @@ def _render_selector_imagenes(correo_idx: int, correo: dict):
         st.info(f"ℹ️ {n_descartadas} imagen(es) serán descartadas. Se subirán {n_final} imagen(es) al vincular/crear la orden.")
     else:
         st.success(f"✅ Todas las {n_total} imágenes serán incluidas.")
-    else:
-        st.success(f"✅ Todas las {n_total} imágenes serán incluidas.")
 
 
 # ==============================================================================
