@@ -10,7 +10,6 @@ from utils.db import supabase
 def iniciar_sesion(orden_id: int, usuario: str) -> bool:
     """Registra el inicio de una sesión de trabajo."""
     try:
-        # Verificar que no haya una sesión activa
         if sesion_activa(orden_id):
             st.warning("⚠️ Ya hay una sesión de trabajo activa en esta orden.")
             return False
@@ -32,7 +31,6 @@ def iniciar_sesion(orden_id: int, usuario: str) -> bool:
 def detener_sesion(orden_id: int, usuario: str, comentario: str = "") -> bool:
     """Registra el fin de una sesión de trabajo y calcula la duración."""
     try:
-        # Buscar último [INICIO] sin [FIN] correspondiente
         res = supabase.table("bitacora").select("*") \
             .eq("orden_id", int(orden_id)) \
             .like("mensaje", "%[⏱️ INICIO]%") \
@@ -47,7 +45,6 @@ def detener_sesion(orden_id: int, usuario: str, comentario: str = "") -> bool:
         inicio_ts = datetime.fromisoformat(inicio_registro['fecha'].replace('Z', '+00:00'))
         ahora = datetime.now()
 
-        # Calcular duración
         duracion = ahora - inicio_ts
         horas = duracion.total_seconds() / 3600
         horas_fmt = f"{int(horas)}h {int((horas % 1) * 60)}m"
@@ -71,10 +68,21 @@ def detener_sesion(orden_id: int, usuario: str, comentario: str = "") -> bool:
         return False
 
 
-def sesion_activa(orden_id: int) -> bool:
-    """Verifica si hay una sesión de trabajo activa (inicio sin fin)."""
+def sesion_activa(orden_id: int, registros: list = None) -> bool:
+    """Verifica si hay una sesión de trabajo activa (inicio sin fin).
+    Si se proveen registros, filtra en memoria sin hacer queries."""
     try:
-        # Obtener los últimos registros de inicio y fin
+        if registros is not None:
+            inicios = [r for r in registros if '[⏱️ INICIO]' in (r.get('mensaje') or '')]
+            fines = [r for r in registros if '[⏱️ FIN]' in (r.get('mensaje') or '')]
+            if not inicios:
+                return False
+            if not fines:
+                return True
+            inicios.sort(key=lambda x: x['fecha'], reverse=True)
+            fines.sort(key=lambda x: x['fecha'], reverse=True)
+            return inicios[0]['fecha'] > fines[0]['fecha']
+
         res_inicio = supabase.table("bitacora").select("id, fecha") \
             .eq("orden_id", int(orden_id)) \
             .like("mensaje", "%[⏱️ INICIO]%") \
@@ -88,12 +96,11 @@ def sesion_activa(orden_id: int) -> bool:
             .limit(1).execute()
 
         if not res_inicio.data:
-            return False  # Nunca ha iniciado
+            return False
 
         if not res_fin.data:
-            return True  # Hay inicio pero no fin
+            return True
 
-        # Comparar timestamps
         ts_inicio = res_inicio.data[0]['fecha']
         ts_fin = res_fin.data[0]['fecha']
         return ts_inicio > ts_fin
@@ -101,9 +108,17 @@ def sesion_activa(orden_id: int) -> bool:
         return False
 
 
-def obtener_tiempo_inicio(orden_id: int) -> datetime | None:
-    """Retorna el timestamp del inicio de la sesión activa."""
+def obtener_tiempo_inicio(orden_id: int, registros: list = None) -> datetime | None:
+    """Retorna el timestamp del inicio de la sesión activa.
+    Si se proveen registros, filtra en memoria."""
     try:
+        if registros is not None:
+            inicios = [r for r in registros if '[⏱️ INICIO]' in (r.get('mensaje') or '')]
+            if not inicios:
+                return None
+            inicios.sort(key=lambda x: x['fecha'], reverse=True)
+            return datetime.fromisoformat(inicios[0]['fecha'].replace('Z', '+00:00'))
+
         res = supabase.table("bitacora").select("fecha") \
             .eq("orden_id", int(orden_id)) \
             .like("mensaje", "%[⏱️ INICIO]%") \
@@ -116,66 +131,75 @@ def obtener_tiempo_inicio(orden_id: int) -> datetime | None:
     return None
 
 
-def calcular_total_horas(orden_id: int) -> float:
-    """Calcula el total de horas trabajadas en una orden (sesiones completas)."""
+def calcular_total_horas(orden_id: int, registros: list = None) -> float:
+    """Calcula el total de horas trabajadas en una orden (sesiones completas).
+    Si se proveen registros, filtra en memoria."""
     try:
-        res = supabase.table("bitacora").select("mensaje") \
-            .eq("orden_id", int(orden_id)) \
-            .like("mensaje", "%[⏱️ FIN]%") \
-            .execute()
+        import re
+        if registros is not None:
+            fin_registros = [r for r in registros if '[⏱️ FIN]' in (r.get('mensaje') or '')]
+        else:
+            res = supabase.table("bitacora").select("mensaje") \
+                .eq("orden_id", int(orden_id)) \
+                .like("mensaje", "%[⏱️ FIN]%") \
+                .execute()
+            fin_registros = res.data if res.data else []
 
         total_horas = 0.0
-        if res.data:
-            import re
-            for reg in res.data:
-                match = re.search(r'Duración:\s*(\d+)h\s*(\d+)m', reg['mensaje'])
-                if match:
-                    h = int(match.group(1))
-                    m = int(match.group(2))
-                    total_horas += h + (m / 60)
+        for reg in fin_registros:
+            match = re.search(r'Duración:\s*(\d+)h\s*(\d+)m', reg['mensaje'])
+            if match:
+                h = int(match.group(1))
+                m = int(match.group(2))
+                total_horas += h + (m / 60)
         return round(total_horas, 2)
     except Exception:
         return 0.0
 
 
-def obtener_resumen_sesiones(orden_id: int) -> list[dict]:
-    """Retorna un resumen de todas las sesiones de trabajo de una orden."""
+def obtener_resumen_sesiones(orden_id: int, registros: list = None) -> list[dict]:
+    """Retorna un resumen de todas las sesiones de trabajo de una orden.
+    Si se proveen registros, filtra en memoria."""
     try:
-        res = supabase.table("bitacora").select("*") \
-            .eq("orden_id", int(orden_id)) \
-            .or_("mensaje.ilike.%[⏱️ INICIO]%,mensaje.ilike.%[⏱️ FIN]%") \
-            .order("fecha") \
-            .execute()
+        import re
+        if registros is not None:
+            sesion_regs = [r for r in registros
+                          if '[⏱️ INICIO]' in (r.get('mensaje') or '') or '[⏱️ FIN]' in (r.get('mensaje') or '')]
+            sesion_regs.sort(key=lambda x: x['fecha'])
+        else:
+            res = supabase.table("bitacora").select("*") \
+                .eq("orden_id", int(orden_id)) \
+                .or_("mensaje.ilike.%[⏱️ INICIO]%,mensaje.ilike.%[⏱️ FIN]%") \
+                .order("fecha") \
+                .execute()
+            sesion_regs = res.data if res.data else []
 
         sesiones = []
         sesion_actual = None
 
-        if res.data:
-            for reg in res.data:
-                if "[⏱️ INICIO]" in reg['mensaje']:
-                    sesion_actual = {
-                        "inicio": reg['fecha'],
-                        "usuario": reg.get('usuario_text', '?'),
-                        "bitacora_inicio_id": reg['id']
-                    }
-                elif "[⏱️ FIN]" in reg['mensaje'] and sesion_actual:
-                    import re
-                    match = re.search(r'Duración:\s*(\d+)h\s*(\d+)m', reg['mensaje'])
-                    duracion_str = f"{match.group(1)}h {match.group(2)}m" if match else "N/A"
+        for reg in sesion_regs:
+            if "[⏱️ INICIO]" in reg['mensaje']:
+                sesion_actual = {
+                    "inicio": reg['fecha'],
+                    "usuario": reg.get('usuario_text', '?'),
+                    "bitacora_inicio_id": reg['id']
+                }
+            elif "[⏱️ FIN]" in reg['mensaje'] and sesion_actual:
+                match = re.search(r'Duración:\s*(\d+)h\s*(\d+)m', reg['mensaje'])
+                duracion_str = f"{match.group(1)}h {match.group(2)}m" if match else "N/A"
 
-                    nota_match = re.search(r'Nota:\s*(.+)$', reg['mensaje'])
-                    nota = nota_match.group(1) if nota_match else ""
+                nota_match = re.search(r'Nota:\s*(.+)$', reg['mensaje'])
+                nota = nota_match.group(1) if nota_match else ""
 
-                    sesion_actual.update({
-                        "fin": reg['fecha'],
-                        "duracion": duracion_str,
-                        "nota": nota,
-                        "bitacora_fin_id": reg['id']
-                    })
-                    sesiones.append(sesion_actual)
-                    sesion_actual = None
+                sesion_actual.update({
+                    "fin": reg['fecha'],
+                    "duracion": duracion_str,
+                    "nota": nota,
+                    "bitacora_fin_id": reg['id']
+                })
+                sesiones.append(sesion_actual)
+                sesion_actual = None
 
-        # Si quedó una sesión sin cerrar
         if sesion_actual:
             sesion_actual["fin"] = None
             sesion_actual["duracion"] = "⏱️ En curso..."
@@ -188,19 +212,19 @@ def obtener_resumen_sesiones(orden_id: int) -> list[dict]:
         return []
 
 
-def render_time_tracker(orden_id: int, usuario: str):
-    """Renderiza el widget de time tracking para una orden."""
+def render_time_tracker(orden_id: int, usuario: str, registros: list = None):
+    """Renderiza el widget de time tracking para una orden.
+    Si se proveen registros (pre-filtrados por orden_id), evita queries individuales."""
     st.markdown("##### ⏱️ Control de Tiempo")
 
-    activa = sesion_activa(orden_id)
-    total_horas = calcular_total_horas(orden_id)
-    sesiones = obtener_resumen_sesiones(orden_id)
+    activa = sesion_activa(orden_id, registros)
+    total_horas = calcular_total_horas(orden_id, registros)
+    sesiones = obtener_resumen_sesiones(orden_id, registros)
 
-    # Indicador de estado
     c_estado, c_total = st.columns(2)
     with c_estado:
         if activa:
-            inicio_ts = obtener_tiempo_inicio(orden_id)
+            inicio_ts = obtener_tiempo_inicio(orden_id, registros)
             if inicio_ts:
                 transcurrido = datetime.now() - inicio_ts
                 h_trans = int(transcurrido.total_seconds() // 3600)
@@ -228,7 +252,6 @@ def render_time_tracker(orden_id: int, usuario: str):
         </div>
         """, unsafe_allow_html=True)
 
-    # Botones de control
     c_btn1, c_btn2 = st.columns(2)
     with c_btn1:
         if not activa:
@@ -243,7 +266,6 @@ def render_time_tracker(orden_id: int, usuario: str):
                     detener_sesion(orden_id, usuario, nota)
                     st.rerun()
 
-    # Historial de sesiones
     if sesiones:
         st.markdown("---")
         st.markdown("**📜 Historial de Sesiones**")

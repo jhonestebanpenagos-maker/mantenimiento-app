@@ -14,6 +14,23 @@ from utils.time_tracking import render_time_tracker
 from utils.costos import render_costos
 from utils.firmas import render_firmas_cierre
 
+
+# =============================================================================
+# 🔄 PRE-FETCH DE BITÁCORA — UNA sola query para una orden
+# =============================================================================
+def _prefetch_bitacora_orden(orden_id: int) -> list:
+    """Carga TODOS los registros de bitacora para UNA orden en UNA query."""
+    try:
+        res = supabase.table("bitacora").select("*") \
+            .eq("orden_id", int(orden_id)) \
+            .order("fecha", desc=True) \
+            .execute()
+        return res.data if res.data else []
+    except Exception as e:
+        print(f"Error pre-fetch bitacora orden {orden_id}: {e}")
+        return []
+
+
 def render_gestion_global(df_act, df_users, df_ordenes):
     st.markdown("### 🎛️ Control Central de Órdenes")
 
@@ -26,7 +43,6 @@ def render_gestion_global(df_act, df_users, df_ordenes):
 
     col_filtros = st.columns(3)
 
-    # Leer filtro desde dashboard si fue seteado
     _filtro_estado = st.session_state.pop('_filtro_estado_ots', None)
     _filtro_tecnico = st.session_state.pop('_filtro_tecnico', None)
     if _filtro_estado and _filtro_estado != "Todas":
@@ -36,7 +52,6 @@ def render_gestion_global(df_act, df_users, df_ordenes):
     else:
         filtro_estado = col_filtros[0].selectbox("Filtrar Estado", ["Todas", "Abierta", "Por Validar", "Concluida", "Cancelada"], index=0)
 
-    # Filtro por técnico (viene del semáforo del dashboard)
     if _filtro_tecnico and not df_users.empty:
         tech_match = df_users[df_users['id'].astype(str) == str(_filtro_tecnico)]
         if not tech_match.empty:
@@ -112,9 +127,6 @@ def render_gestion_global(df_act, df_users, df_ordenes):
 
         render_paginacion("gestion_ordenes_bottom", st.session_state.gestion_pagina, total_pag, total)
 
-        # ══════════════════════════════════════════════════════════════════
-        # 📄 DESCARGA MASIVA DE REPORTE PDF
-        # ══════════════════════════════════════════════════════════════════
         st.markdown("---")
         st.markdown("#### 📄 Exportar Reporte PDF")
 
@@ -135,12 +147,10 @@ def render_gestion_global(df_act, df_users, df_ordenes):
 
                 with st.spinner("Generando reporte PDF... Esto puede tomar unos segundos."):
                     try:
-                        # Obtener TODAS las órdenes que coincidan con los filtros activos
                         ordenes_para_pdf = []
                         if filtro_ot_externo:
                             ordenes_para_pdf = df_display.to_dict('records')
                         else:
-                            # Consultar todas las que coincidan con filtro de estado
                             q = supabase.table("ordenes").select("*")
                             if filtro_estado != "Todas":
                                 q = q.eq("estado", filtro_estado)
@@ -184,9 +194,6 @@ def _render_orden_detalle(id_orden_selec, orden_actual, df_display, idx_tabla, d
     with col_izq:
         st.markdown(f"#### ✏️ Gestionar Orden #{id_orden_selec}")
 
-        # ══════════════════════════════════════════════════════════════════
-        # 📄 PDF INDIVIDUAL (disponible para TODAS las órdenes, no solo cerradas)
-        # ══════════════════════════════════════════════════════════════════
         try:
             pdf_data = generar_pdf_orden(orden_actual,
                                           df_display.iloc[idx_tabla]['Activo Nombre'],
@@ -202,13 +209,11 @@ def _render_orden_detalle(id_orden_selec, orden_actual, df_display, idx_tabla, d
 
         if correo_msg_id:
             try:
-                bit_check = supabase.table("bitacora").select("id") \
-                    .eq("orden_id", int(id_orden_selec)) \
-                    .not_.is_("archivo_url", "null") \
-                    .neq("archivo_url", "") \
-                    .execute()
-                tiene_adjuntos = len(bit_check.data or []) > 0
+                # Pre-fetch bitacora para reutilizar en toda la vista
+                registros_orden = _prefetch_bitacora_orden(int(id_orden_selec))
+                tiene_adjuntos = any((r.get('archivo_url') or '') != '' for r in registros_orden)
             except Exception:
+                registros_orden = []
                 tiene_adjuntos = False
 
             if not tiene_adjuntos:
@@ -293,6 +298,7 @@ def _render_orden_detalle(id_orden_selec, orden_actual, df_display, idx_tabla, d
 
 
 def _render_bitacora(id_orden_selec):
+    """Renderiza bitácora con UNA sola query pre-fetched para todos los widgets."""
     st.markdown("#### 📜 Bitácora y Adjuntos")
 
     try:
@@ -304,6 +310,12 @@ def _render_bitacora(id_orden_selec):
     usuario = st.session_state.get('usuario', '')
     rol = st.session_state.get('rol', '')
 
+    # ══════════════════════════════════════════════════════════════════
+    # 🔥 UNA SOLA QUERY — reemplaza ~10 queries individuales
+    # ══════════════════════════════════════════════════════════════════
+    registros_orden = _prefetch_bitacora_orden(oid)
+
+    # Obtener estado de la orden desde los registros o hacer query ligera
     estado_orden = "Abierta"
     try:
         res_estado = supabase.table("ordenes").select("estado").eq("id", oid).execute()
@@ -312,25 +324,21 @@ def _render_bitacora(id_orden_selec):
     except Exception:
         pass
 
-    render_time_tracker(id_orden_selec, usuario)
-    render_costos(id_orden_selec, usuario)
-    render_firmas_cierre(id_orden_selec, usuario, rol, estado_orden)
+    # Pasar registros pre-fetched a cada widget (evita N queries)
+    render_time_tracker(id_orden_selec, usuario, registros_orden)
+    render_costos(id_orden_selec, usuario, registros_orden)
+    render_firmas_cierre(id_orden_selec, usuario, rol, estado_orden, registros_orden)
 
     st.markdown("---")
     st.caption("Historial de avances y archivos cargados.")
     with st.container(border=True):
         try:
-            bitacora_res = supabase.table("bitacora").select("*") \
-                .eq("orden_id", id_orden_selec).order("fecha", desc=True).execute()
-            if bitacora_res.data:
-                for b in bitacora_res.data:
+            if registros_orden:
+                for b in registros_orden:
                     fecha_fmt = b['fecha'][:10] + " " + b['fecha'][11:16]
                     usuario_log = b.get('usuario_text', 'Sistema')
                     url = b.get('archivo_url')
 
-                    # ════════════════════════════════════════════════════════
-                    # 📄 VISOR DE PDF INLINE + LINKS DE DESCARGA
-                    # ════════════════════════════════════════════════════════
                     adjunto_html = ""
                     if url:
                         ul = url.lower()
@@ -345,7 +353,6 @@ def _render_bitacora(id_orden_selec):
                         else:
                             adjunto_html = f"""<br><a href="{url}" target="_blank" style="color:#F59E0B;font-weight:bold;">📎 Ver Archivo</a>"""
 
-                    # Escapar HTML en mensaje y usuario para evitar inyección
                     mensaje_seguro = html_mod.escape(b['mensaje']).replace('\n', '<br>')
                     usuario_seguro = html_mod.escape(usuario_log)
 
@@ -362,9 +369,9 @@ def _render_bitacora(id_orden_selec):
             else:
                 st.info("No hay registros en la bitácora para esta orden.")
 
-            # Visor inline para PDFs (fuera de columnas para evitar conflictos)
+            # Visor inline para PDFs
             try:
-                pdf_adjuntos = [b for b in (bitacora_res.data or []) if (b.get('archivo_url') or '').lower().endswith('.pdf')]
+                pdf_adjuntos = [b for b in registros_orden if (b.get('archivo_url') or '').lower().endswith('.pdf')]
                 for pa in pdf_adjuntos:
                     with st.expander(f"👁️ Ver PDF — {pa.get('usuario_text', '?')} ({pa['fecha'][:10]})", expanded=False):
                         render_pdf_viewer(pa['archivo_url'], titulo=f"Adjunto de {pa.get('usuario_text', '?')}")
@@ -375,12 +382,11 @@ def _render_bitacora(id_orden_selec):
             st.error("⚠️ No se pudo cargar la bitácora de esta orden.")
 
     # ══════════════════════════════════════════════════════════════════
-    # 🔄 MIGRAR CORREOS ANTIGUOS (FORMATO VIEJO → COMPACTO)
+    # 🔄 MIGRAR CORREOS ANTIGUOS — usar registros ya pre-fetched
     # ══════════════════════════════════════════════════════════════════
     try:
-        bit_check = supabase.table("bitacora").select("*").eq("orden_id", oid).execute()
         entradas_antiguas = []
-        for b in (bit_check.data or []):
+        for b in registros_orden:
             usuario = b.get('usuario_text', '') or ''
             mensaje = b.get('mensaje', '') or ''
             if (usuario.startswith('CORREO (')
@@ -411,7 +417,6 @@ def _render_bitacora(id_orden_selec):
         st.markdown("---")
         st.markdown("#### 📧 Vincular correo del buzón")
 
-        # Verificar si hay correos pendientes en session_state
         correos_pendientes = st.session_state.get('_correos_pendientes', [])
         from utils.email_monitor import _obtener_procesados
         procesados = _obtener_procesados()
@@ -422,7 +427,6 @@ def _render_bitacora(id_orden_selec):
         else:
             st.caption(f"Hay {len(correos_no_vinculados)} correo(s) disponible(s) en el buzón.")
 
-            # Buscador de correos
             texto_busq = st.text_input(
                 "🔍 Buscar correo",
                 placeholder="Asunto o remitente...",
@@ -430,7 +434,6 @@ def _render_bitacora(id_orden_selec):
                 label_visibility="collapsed",
             )
 
-            # Filtrar correos por búsqueda
             correos_filtrados = correos_no_vinculados
             if texto_busq.strip():
                 q = texto_busq.strip().lower()
@@ -444,7 +447,6 @@ def _render_bitacora(id_orden_selec):
             if not correos_filtrados:
                 st.info("No se encontraron correos con ese criterio.")
             else:
-                # Mostrar selector de correo
                 opciones_correo = []
                 opciones_correo_map = {}
                 for c in correos_filtrados:
@@ -471,7 +473,6 @@ def _render_bitacora(id_orden_selec):
                         with st.spinner(f"Vinculando correo a OT #{oid}..."):
                             exito = vincular_correo_a_orden(correo_sel, oid)
                         if exito:
-                            # Quitar de la lista local
                             pendientes = st.session_state.get('_correos_pendientes', [])
                             st.session_state['_correos_pendientes'] = [
                                 c for c in pendientes if c['message_id'] != correo_sel['message_id']
@@ -482,7 +483,6 @@ def _render_bitacora(id_orden_selec):
                             st.error("❌ No se pudo vincular el correo.")
 
                 with col_info:
-                    # Mostrar preview del correo seleccionado
                     correo_preview = opciones_correo_map[correo_sel_label]
                     st.caption(f"👤 {correo_preview.get('remitente_nombre') or correo_preview.get('remitente', '?')}")
                     st.caption(f"📝 {correo_preview.get('cuerpo_corto', '')[:120]}{'...' if len(correo_preview.get('cuerpo_corto', '')) > 120 else ''}")

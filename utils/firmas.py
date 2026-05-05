@@ -9,10 +9,7 @@ from utils.db import supabase
 
 
 def registrar_firma(orden_id: int, usuario: str, tipo_firma: str, documento: str, observacion: str = "") -> bool:
-    """
-    Registra una firma digital en la bitácora.
-    tipo_firma: 'tecnico' (cierre de trabajo) o 'supervisor' (aprobación/validación)
-    """
+    """Registra una firma digital en la bitácora."""
     try:
         label = "👷 FIRMA TÉCNICO" if tipo_firma == "tecnico" else "👔 FIRMA SUPERVISOR"
         msg = f"[✍️ {label}] Confirmado por: {usuario} (Doc: {documento})"
@@ -32,52 +29,81 @@ def registrar_firma(orden_id: int, usuario: str, tipo_firma: str, documento: str
         return False
 
 
-def obtener_firmas(orden_id: int) -> dict:
-    """
-    Obtiene las firmas registradas para una orden.
-    Retorna dict con info de firma de técnico y supervisor.
-    """
+def obtener_firmas(orden_id: int, registros: list = None) -> dict:
+    """Obtiene las firmas registradas para una orden.
+    Si se proveen registros, filtra en memoria sin hacer queries."""
     resultado = {
         "tecnico": None,
         "supervisor": None
     }
 
     try:
-        res = supabase.table("bitacora").select("*") \
-            .eq("orden_id", int(orden_id)) \
-            .like("mensaje", "%FIRMA TECNICO%") \
-            .order("fecha", desc=True) \
-            .limit(1).execute()
+        if registros is not None:
+            firma_tec_regs = [r for r in registros if 'FIRMA TECNICO' in (r.get('mensaje') or '').upper()
+                             or 'FIRMA TÉCNICO' in (r.get('mensaje') or '').upper()]
+            firma_sup_regs = [r for r in registros if 'FIRMA SUPERVISOR' in (r.get('mensaje') or '').upper()]
 
-        if res.data:
-            reg = res.data[0]
-            msg = reg['mensaje']
-            match = re.search(r'Confirmado por:\s*(.+?)\s*\(Doc:\s*(.+?)\)', msg)
-            resultado["tecnico"] = {
-                "usuario": match.group(1).strip() if match else reg.get('usuario_text', '?'),
-                "documento": match.group(2).strip() if match else '?',
-                "fecha": reg['fecha'],
-                "bitacora_id": reg['id']
-            }
+            if firma_tec_regs:
+                firma_tec_regs.sort(key=lambda x: x['fecha'], reverse=True)
+                reg = firma_tec_regs[0]
+                msg = reg['mensaje']
+                match = re.search(r'Confirmado por:\s*(.+?)\s*\(Doc:\s*(.+?)\)', msg)
+                resultado["tecnico"] = {
+                    "usuario": match.group(1).strip() if match else reg.get('usuario_text', '?'),
+                    "documento": match.group(2).strip() if match else '?',
+                    "fecha": reg['fecha'],
+                    "bitacora_id": reg['id']
+                }
 
-        res2 = supabase.table("bitacora").select("*") \
-            .eq("orden_id", int(orden_id)) \
-            .like("mensaje", "%FIRMA SUPERVISOR%") \
-            .order("fecha", desc=True) \
-            .limit(1).execute()
+            if firma_sup_regs:
+                firma_sup_regs.sort(key=lambda x: x['fecha'], reverse=True)
+                reg = firma_sup_regs[0]
+                msg = reg['mensaje']
+                match = re.search(r'Confirmado por:\s*(.+?)\s*\(Doc:\s*(.+?)\)', msg)
+                obs_match = re.search(r'Obs:\s*(.+?)$', msg)
+                resultado["supervisor"] = {
+                    "usuario": match.group(1).strip() if match else reg.get('usuario_text', '?'),
+                    "documento": match.group(2).strip() if match else '?',
+                    "fecha": reg['fecha'],
+                    "observacion": obs_match.group(1).strip() if obs_match else "",
+                    "bitacora_id": reg['id']
+                }
+        else:
+            res = supabase.table("bitacora").select("*") \
+                .eq("orden_id", int(orden_id)) \
+                .like("mensaje", "%FIRMA TECNICO%") \
+                .order("fecha", desc=True) \
+                .limit(1).execute()
 
-        if res2.data:
-            reg = res2.data[0]
-            msg = reg['mensaje']
-            match = re.search(r'Confirmado por:\s*(.+?)\s*\(Doc:\s*(.+?)\)', msg)
-            obs_match = re.search(r'Obs:\s*(.+?)$', msg)
-            resultado["supervisor"] = {
-                "usuario": match.group(1).strip() if match else reg.get('usuario_text', '?'),
-                "documento": match.group(2).strip() if match else '?',
-                "fecha": reg['fecha'],
-                "observacion": obs_match.group(1).strip() if obs_match else "",
-                "bitacora_id": reg['id']
-            }
+            if res.data:
+                reg = res.data[0]
+                msg = reg['mensaje']
+                match = re.search(r'Confirmado por:\s*(.+?)\s*\(Doc:\s*(.+?)\)', msg)
+                resultado["tecnico"] = {
+                    "usuario": match.group(1).strip() if match else reg.get('usuario_text', '?'),
+                    "documento": match.group(2).strip() if match else '?',
+                    "fecha": reg['fecha'],
+                    "bitacora_id": reg['id']
+                }
+
+            res2 = supabase.table("bitacora").select("*") \
+                .eq("orden_id", int(orden_id)) \
+                .like("mensaje", "%FIRMA SUPERVISOR%") \
+                .order("fecha", desc=True) \
+                .limit(1).execute()
+
+            if res2.data:
+                reg = res2.data[0]
+                msg = reg['mensaje']
+                match = re.search(r'Confirmado por:\s*(.+?)\s*\(Doc:\s*(.+?)\)', msg)
+                obs_match = re.search(r'Obs:\s*(.+?)$', msg)
+                resultado["supervisor"] = {
+                    "usuario": match.group(1).strip() if match else reg.get('usuario_text', '?'),
+                    "documento": match.group(2).strip() if match else '?',
+                    "fecha": reg['fecha'],
+                    "observacion": obs_match.group(1).strip() if obs_match else "",
+                    "bitacora_id": reg['id']
+                }
     except Exception as e:
         print(f"Error obtener_firmas: {e}")
 
@@ -98,23 +124,17 @@ def _es_admin_o_programador(rol: str) -> bool:
     return rol in ["Admin", "Programador"]
 
 
-def render_firmas_cierre(orden_id: int, usuario: str, rol: str, estado_orden: str):
-    """
-    Renderiza el widget de firmas para una orden.
-    
-    Flujo según rol:
-    - Admin/Programador: firma como técnico → orden se cierra DIRECTAMENTE (sin firma supervisor)
-    - Técnico: firma como técnico → orden pasa a "Por Validar" → Admin/Programador firma como supervisor
-    """
+def render_firmas_cierre(orden_id: int, usuario: str, rol: str, estado_orden: str, registros: list = None):
+    """Renderiza el widget de firmas para una orden.
+    Si se proveen registros (pre-filtrados por orden_id), evita queries individuales."""
     st.markdown("##### ✍️ Firmas de Cierre")
 
-    firmas = obtener_firmas(orden_id)
+    firmas = obtener_firmas(orden_id, registros)
     firma_tecnico = firmas["tecnico"]
     firma_supervisor = firmas["supervisor"]
 
     es_admin = _es_admin_o_programador(rol)
 
-    # ── Estado visual de las firmas ──
     col_tec, col_sup = st.columns(2)
 
     with col_tec:
@@ -139,7 +159,6 @@ def render_firmas_cierre(orden_id: int, usuario: str, rol: str, estado_orden: st
             """, unsafe_allow_html=True)
 
     with col_sup:
-        # Solo mostrar firma de supervisor si NO es admin (admin no necesita supervisor)
         if es_admin:
             st.markdown(f"""
             <div style="background:rgba(107,114,128,0.05);border:1px solid #374151;border-radius:10px;padding:14px;text-align:center;">
@@ -169,13 +188,10 @@ def render_firmas_cierre(orden_id: int, usuario: str, rol: str, estado_orden: st
             </div>
             """, unsafe_allow_html=True)
 
-    # ── Botones de firma según rol y estado ──
     st.markdown("")
 
-    # Firma del técnico (cuando la orden está abierta)
     if estado_orden == "Abierta" and not firma_tecnico:
         if rol in ["Tecnico", "Admin", "Programador"]:
-            # Texto del botón según rol
             if es_admin:
                 label_boton = "✍️ FIRMAR Y CERRAR ORDEN (Admin)"
                 ayuda = "Como Admin, tu firma cierra la orden directamente."
@@ -206,8 +222,6 @@ def render_firmas_cierre(orden_id: int, usuario: str, rol: str, estado_orden: st
                         else:
                             if registrar_firma(orden_id, usuario, "tecnico", doc_confirm, observacion):
                                 from utils.db import db_update, db_insert
-                                # Admin/Programador: cierra la orden directamente
-                                # Técnico: pasa a "Por Validar"
                                 if es_admin:
                                     db_update("ordenes", {
                                         "estado": "Concluida",
@@ -227,7 +241,6 @@ def render_firmas_cierre(orden_id: int, usuario: str, rol: str, estado_orden: st
                                     st.toast("✅ Firma registrada. Orden enviada a validación del supervisor.")
                                 st.rerun()
 
-    # Firma del supervisor (cuando está por validar) — solo si NO es admin
     if not es_admin and estado_orden == "Por Validar" and not firma_supervisor:
         if rol in ["Admin", "Programador"]:
             if st.toggle("✍️ Firmar como Supervisor (Aprobar trabajo)", key=f"toggle_firma_sup_{orden_id}"):
@@ -263,7 +276,6 @@ def render_firmas_cierre(orden_id: int, usuario: str, rol: str, estado_orden: st
                                 st.toast("✅ Firma de supervisor registrada. Orden aprobada.")
                                 st.rerun()
 
-    # ── Progreso de firmas ──
     st.markdown("---")
     if es_admin:
         n_firmas = 1 if firma_tecnico else 0

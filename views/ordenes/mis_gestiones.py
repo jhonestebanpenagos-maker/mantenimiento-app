@@ -25,13 +25,40 @@ def _generar_pdf_cached(orden_id, nombre_activo, tecnico_nombre, descripcion,
                         activo_id, tecnico_asignado):
     """Genera PDF de forma cacheada. Solo se ejecuta al hacer clic en descargar."""
     from pdf_utils import generar_pdf_orden
-    # Reconstruir el dict-like row esperado por generar_pdf_orden
     row = {
         'id': orden_id, 'descripcion': descripcion, 'criticidad': criticidad,
         'tipo_mantenimiento': tipo_mantenimiento, 'fecha_creacion': fecha_creacion,
         'estado': estado, 'activo_id': activo_id, 'tecnico_asignado': tecnico_asignado,
     }
     return generar_pdf_orden(row, nombre_activo, tecnico_nombre)
+
+
+# =============================================================================
+# 🔄 PRE-FETCH DE BITÁCORA — UNA sola query para todas las órdenes visibles
+# =============================================================================
+def _prefetch_bitacora(orden_ids: list) -> dict:
+    """Carga TODOS los registros de bitacora para las órdenes dadas en UNA query.
+    Retorna dict[orden_id] -> list[registro]."""
+    if not orden_ids:
+        return {}
+    try:
+        # Supabase .in_() acepta listas
+        res = supabase.table("bitacora").select("*") \
+            .in_("orden_id", [int(oid) for oid in orden_ids]) \
+            .order("fecha", desc=True) \
+            .execute()
+        registros = res.data if res.data else []
+        # Agrupar por orden_id
+        by_orden = {}
+        for r in registros:
+            oid = r['orden_id']
+            if oid not in by_orden:
+                by_orden[oid] = []
+            by_orden[oid].append(r)
+        return by_orden
+    except Exception as e:
+        print(f"Error pre-fetch bitacora: {e}")
+        return {}
 
 
 def render_mis_gestiones(df_act, df_users, df_ordenes):
@@ -79,13 +106,23 @@ def render_mis_gestiones(df_act, df_users, df_ordenes):
         if mis_gestiones.empty:
             st.toast("🎉 No tienes gestiones administrativas pendientes.")
         else:
+            # ═══════════════════════════════════════════════════════════
+            # 🔥 PRE-FETCH: UNA sola query para TODAS las órdenes visibles
+            # En vez de ~10 queries × N órdenes, hacemos 1 query total
+            # ═══════════════════════════════════════════════════════════
+            orden_ids = [int(row['id']) for _, row in mis_gestiones.iterrows()]
+            bitacora_por_orden = _prefetch_bitacora(orden_ids)
+
             for idx, row in mis_gestiones.iterrows():
                 nombre_activo = df_act[df_act['id'] == row['activo_id']].iloc[0]['nombre'] if not df_act.empty else "Activo"
-                _render_orden_gestion(row, nombre_activo, df_users, usuario)
+                registros_orden = bitacora_por_orden.get(int(row['id']), [])
+                _render_orden_gestion(row, nombre_activo, df_users, usuario, registros_orden)
 
 
 
-def _render_orden_gestion(row, nombre_activo, df_users, usuario):
+def _render_orden_gestion(row, nombre_activo, df_users, usuario, registros_orden=None):
+    """Renderiza una orden individual.
+    registros_orden: pre-fetched bitacora records para esta orden (evita N queries)."""
     with st.expander(f"📂 {nombre_activo} | {row['descripcion'][:50]}... (ID: {row['id']})", expanded=False):
         color_borde = "#3B82F6"
         if row['criticidad'] == 'Alta': color_borde = "#F59E0B"
@@ -140,12 +177,19 @@ def _render_orden_gestion(row, nombre_activo, df_users, usuario):
         correo_msg_id = row.get('correo_message_id') if 'correo_message_id' in row.index else None
         if correo_msg_id:
             try:
-                bit_check = supabase.table("bitacora").select("id") \
-                    .eq("orden_id", int(row['id'])) \
-                    .not_.is_("archivo_url", "null") \
-                    .neq("archivo_url", "") \
-                    .execute()
-                tiene_adjuntos = len(bit_check.data or []) > 0
+                # Usar registros pre-fetched si están disponibles
+                if registros_orden is not None:
+                    tiene_adjuntos = any(
+                        (r.get('archivo_url') or '') != ''
+                        for r in registros_orden
+                    )
+                else:
+                    bit_check = supabase.table("bitacora").select("id") \
+                        .eq("orden_id", int(row['id'])) \
+                        .not_.is_("archivo_url", "null") \
+                        .neq("archivo_url", "") \
+                        .execute()
+                    tiene_adjuntos = len(bit_check.data or []) > 0
             except Exception:
                 tiene_adjuntos = False
 
@@ -164,33 +208,42 @@ def _render_orden_gestion(row, nombre_activo, df_users, usuario):
                             st.error("❌ No se pudieron subir los adjuntos.")
 
         if row['estado'] != 'Concluida':
-            render_time_tracker(row['id'], usuario)
-            render_costos(row['id'], usuario)
-            render_firmas_cierre(row['id'], usuario, st.session_state.get('rol', ''), row['estado'])
+            # Pasar registros pre-fetched a cada widget
+            render_time_tracker(row['id'], usuario, registros_orden)
+            render_costos(row['id'], usuario, registros_orden)
+            render_firmas_cierre(row['id'], usuario, st.session_state.get('rol', ''), row['estado'], registros_orden)
             st.markdown("---")
 
+        # ══════════════════════════════════════════════════════════════════
+        # 📜 HISTORIAL — usar registros pre-fetched en vez de query individual
+        # ══════════════════════════════════════════════════════════════════
         st.markdown("##### 📜 Historial de Gestión")
         try:
-            bitacora = supabase.table("bitacora").select("*") \
-                .eq("orden_id", row['id']).order("fecha", desc=True).execute()
-            if bitacora.data:
-                for b in bitacora.data:
+            if registros_orden is not None:
+                # Filtrar registros que NO son de sistema (time tracking, costos, firmas)
+                historial = [r for r in registros_orden
+                            if not any(tag in (r.get('mensaje') or '') for tag in
+                                      ['[⏱️', '[💰 COSTO]', '[✍️'])]
+            else:
+                bitacora = supabase.table("bitacora").select("*") \
+                    .eq("orden_id", row['id']).order("fecha", desc=True).execute()
+                historial = bitacora.data if bitacora.data else []
+
+            if historial:
+                for b in historial:
                     c_info, c_actions = st.columns([5, 1])
                     with c_info:
                         fecha_fmt = b['fecha'][:10] + " " + b['fecha'][11:16]
                         usuario_log = b.get('usuario_text', 'Usuario')
                         url = b['archivo_url']
 
-                        # HTML del adjunto con visor para PDFs
                         adjunto_html = ""
-
                         if url:
                             ul = url.lower()
                             if ul.endswith(('.jpg', '.jpeg', '.png', '.webp')):
                                 adjunto_html = f"""<br><a href="{url}" target="_blank" style="color:#10B981;font-weight:bold;">🖼️ Ver Imagen</a>"""
                             elif ul.endswith('.pdf'):
                                 adjunto_html = f"""<br><a href="{url}" target="_blank" style="color:#EF4444;font-weight:bold;">📄 Ver PDF</a>"""
-
                             elif ul.endswith(('.xls', '.xlsx')):
                                 adjunto_html = f"""<br><a href="{url}" target="_blank" style="color:#16A34A;font-weight:bold;">📊 Ver Excel</a>"""
                             elif ul.endswith('.msg'):
@@ -198,7 +251,6 @@ def _render_orden_gestion(row, nombre_activo, df_users, usuario):
                             else:
                                 adjunto_html = f"""<br><a href="{url}" target="_blank" style="color:#F59E0B;font-weight:bold;">📎 Ver Archivo</a>"""
 
-                        # Escapar HTML en mensaje y usuario
                         mensaje_seguro = html_mod.escape(b['mensaje']).replace('\n', '<br>')
                         usuario_seguro = html_mod.escape(usuario_log)
 
@@ -222,9 +274,9 @@ def _render_orden_gestion(row, nombre_activo, df_users, usuario):
             else:
                 st.caption("No hay avances registrados aún.")
 
-            # Visor inline para PDFs (fuera de columnas para evitar conflictos)
+            # Visor inline para PDFs
             try:
-                pdf_adjuntos = [b for b in (bitacora.data or []) if (b.get('archivo_url') or '').lower().endswith('.pdf')]
+                pdf_adjuntos = [b for b in (historial or []) if (b.get('archivo_url') or '').lower().endswith('.pdf')]
                 for pa in pdf_adjuntos:
                     with st.expander(f"👁️ Ver PDF adjunto — {pa.get('usuario_text', '?')} ({pa['fecha'][:10]})", expanded=False):
                         render_pdf_viewer(pa['archivo_url'], titulo=f"Adjunto de {pa.get('usuario_text', '?')}")
@@ -237,7 +289,7 @@ def _render_orden_gestion(row, nombre_activo, df_users, usuario):
         # ── Migrar correos antiguos a formato compacto ──
         try:
             entradas_antiguas = []
-            for b in (bitacora.data or []):
+            for b in (historial or []):
                 usuario = b.get('usuario_text', '') or ''
                 mensaje = b.get('mensaje', '') or ''
                 if (usuario.startswith('CORREO (')

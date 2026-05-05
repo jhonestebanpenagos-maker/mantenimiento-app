@@ -9,10 +9,7 @@ from utils.db import supabase
 
 
 def registrar_costo(orden_id: int, usuario: str, tipo: str, concepto: str, monto: float) -> bool:
-    """
-    Registra un costo en la bitácora de la orden.
-    tipos: 'mano_obra', 'repuesto', 'servicio_externo', 'material', 'otro'
-    """
+    """Registra un costo en la bitácora de la orden."""
     try:
         tipos_labels = {
             "mano_obra": "👷 Mano de Obra",
@@ -37,11 +34,9 @@ def registrar_costo(orden_id: int, usuario: str, tipo: str, concepto: str, monto
         return False
 
 
-def calcular_costos(orden_id: int) -> dict:
-    """
-    Calcula el desglose de costos de una orden desde la bitácora.
-    Retorna dict con totales por tipo y total general.
-    """
+def calcular_costos(orden_id: int, registros: list = None) -> dict:
+    """Calcula el desglose de costos de una orden desde la bitácora.
+    Si se proveen registros, filtra en memoria sin hacer queries."""
     resultado = {
         "mano_obra": 0.0,
         "repuesto": 0.0,
@@ -53,18 +48,18 @@ def calcular_costos(orden_id: int) -> dict:
     }
 
     try:
-        res = supabase.table("bitacora").select("*") \
-            .eq("orden_id", int(orden_id)) \
-            .like("mensaje", "%[💰 COSTO]%") \
-            .order("fecha") \
-            .execute()
+        if registros is not None:
+            costo_regs = [r for r in registros if '[💰 COSTO]' in (r.get('mensaje') or '')]
+        else:
+            res = supabase.table("bitacora").select("*") \
+                .eq("orden_id", int(orden_id)) \
+                .like("mensaje", "%[💰 COSTO]%") \
+                .order("fecha") \
+                .execute()
+            costo_regs = res.data if res.data else []
 
-        if not res.data:
-            return resultado
-
-        for reg in res.data:
+        for reg in costo_regs:
             msg = reg['mensaje']
-            # Parsear: [💰 COSTO] Tipo: Concepto — $Monto
             match = re.search(r'\[💰 COSTO\]\s*(.+?):\s*(.+?)\s*—\s*\$?([\d,.]+)', msg)
             if match:
                 tipo_label = match.group(1).strip()
@@ -75,7 +70,6 @@ def calcular_costos(orden_id: int) -> dict:
                 except ValueError:
                     monto = 0.0
 
-                # Mapear label a clave
                 tipo_key = "otro"
                 if "Mano de Obra" in tipo_label:
                     tipo_key = "mano_obra"
@@ -113,13 +107,13 @@ def eliminar_costo(bitacora_id: int) -> bool:
         return False
 
 
-def render_costos(orden_id: int, usuario: str):
-    """Renderiza el widget de costos para una orden."""
+def render_costos(orden_id: int, usuario: str, registros: list = None):
+    """Renderiza el widget de costos para una orden.
+    Si se proveen registros (pre-filtrados por orden_id), evita queries individuales."""
     st.markdown("##### 💰 Registro de Costos")
 
-    costos = calcular_costos(orden_id)
+    costos = calcular_costos(orden_id, registros)
 
-    # Resumen visual
     c_mo, c_rep, c_ext, c_tot = st.columns(4)
     with c_mo:
         st.metric("👷 Mano de Obra", f"${costos['mano_obra']:,.0f}")
@@ -130,7 +124,6 @@ def render_costos(orden_id: int, usuario: str):
     with c_tot:
         st.metric("💰 TOTAL", f"${costos['total']:,.0f}")
 
-    # Formulario para agregar costo
     if st.toggle("➕ Registrar Costo", key=f"toggle_costo_{orden_id}"):
         with st.form(f"form_costo_{orden_id}", clear_on_submit=True):
             c_t, c_c, c_m = st.columns(3)
@@ -154,7 +147,6 @@ def render_costos(orden_id: int, usuario: str):
                         st.toast("✅ Costo registrado.")
                         st.rerun()
 
-    # Tabla de costos registrados
     if costos['registros']:
         st.markdown("---")
         st.markdown("**📜 Desglose de Costos**")
