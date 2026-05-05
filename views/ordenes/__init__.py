@@ -22,23 +22,51 @@ from .interceptor import render_interceptor
 from utils.email_monitor import render_buzon_correo, render_auditoria_correos
 
 
+# =============================================================================
+# 🗂️ MAPA DE DEPENDENCIAS POR TAB
+# =============================================================================
+# Define qué tablas necesita cada tab para evitar cargar todo siempre.
+_TAB_DEPS = {
+    "mis_gestiones": ["activos", "usuarios", "ordenes"],
+    "kanban":        ["activos", "usuarios", "ordenes", "solicitudes"],
+    "crear":         ["activos", "usuarios", "ordenes"],
+    "preventivos":   ["activos", "usuarios"],
+    "buzon":         ["activos", "usuarios", "ordenes", "solicitudes"],
+    "calidad":       ["activos", "usuarios"],
+    "gestion":       ["activos", "usuarios", "ordenes"],
+    "correo":        [],
+    "auditoria":     [],
+}
+
+
+def _load_tables_for_tab(tab_activa):
+    """Carga solo las tablas que el tab activo necesita."""
+    needed = _TAB_DEPS.get(tab_activa, [])
+    data = {}
+    for table in needed:
+        data[table] = run_query(table)
+    # Llenar con DataFrames vacíos para tablas no cargadas
+    data.setdefault("activos", pd.DataFrame())
+    data.setdefault("usuarios", pd.DataFrame())
+    data.setdefault("ordenes", pd.DataFrame())
+    data.setdefault("solicitudes", pd.DataFrame())
+    return data
+
+
 def render():
     st.title("GESTIÓN DE MANTENIMIENTO")
     mostrar_notificaciones()
-
-    df_act = run_query("activos")
-    df_users = run_query("usuarios")
-    df_ordenes = run_query("ordenes")
-    df_solicitudes_all = run_query("solicitudes")
-    df_solicitudes = df_solicitudes_all[df_solicitudes_all['estado'] == 'Pendiente'] if not df_solicitudes_all.empty else df_solicitudes_all
 
     if not supabase:
         st.error("Sin conexión a base de datos.")
         return
 
-    # Interceptor
+    # Interceptor — necesita datos completos para navegación directa
     jump = st.session_state.get('jump_target')
     if jump:
+        df_act = run_query("activos")
+        df_users = run_query("usuarios")
+        df_ordenes = run_query("ordenes")
         if jump in ("orden", "preventivo"):
             render_interceptor(df_act, df_users, df_ordenes)
             return
@@ -98,6 +126,14 @@ def render():
                 st.rerun()
 
     st.markdown("<div style='margin-top:8px;'></div>", unsafe_allow_html=True)
+
+    # ── Cargar SOLO las tablas que el tab activo necesita ──
+    tab_data = _load_tables_for_tab(tab_activa)
+    df_act = tab_data["activos"]
+    df_users = tab_data["usuarios"]
+    df_ordenes = tab_data["ordenes"]
+    df_solicitudes_all = tab_data["solicitudes"]
+    df_solicitudes = df_solicitudes_all[df_solicitudes_all['estado'] == 'Pendiente'] if not df_solicitudes_all.empty else df_solicitudes_all
 
     # ── Renderizar contenido según tab activo ──
     if tab_activa == 'mis_gestiones':

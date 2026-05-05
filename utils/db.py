@@ -1,14 +1,14 @@
-# ==============================================================================
-# utils/db.py — COMPLETO CON INVALIDACIÓN
-# ==============================================================================
+# =============================================================================
+# utils/db.py — COMPLETO CON INVALIDACIÓN + FILTRADO OPTIMIZADO
+# =============================================================================
 import streamlit as st
 import pandas as pd
 from supabase import create_client, Client
 
 
-# ==============================================================================
+# =============================================================================
 # 🔌 CONEXIÓN A SUPABASE
-# ==============================================================================
+# =============================================================================
 @st.cache_resource
 def init_supabase():
     try:
@@ -27,9 +27,9 @@ def init_supabase():
 supabase = init_supabase()
 
 
-# ==============================================================================
+# =============================================================================
 # 📦 CACHÉ DE LECTURA
-# ==============================================================================
+# =============================================================================
 @st.cache_data(ttl=300, show_spinner=False)
 def _run_query_cached(table_name, filters_tuple, order_by, limit):
     """Consulta genérica cacheada. TTL largo porque se invalida al escribir."""
@@ -56,12 +56,42 @@ def run_query(table_name, filters=None, order_by="id", limit=5000):
     return pd.DataFrame(_run_query_cached(table_name, filters_tuple, order_by, limit))
 
 
-# ==============================================================================
+# =============================================================================
+# 🔍 CONSULTA CON FILTRADO SERVIDOR (OPTIMIZACIÓN)
+# =============================================================================
+@st.cache_data(ttl=300, show_spinner=False)
+def _run_query_filtered_cached(table_name, select_fields, filters_tuple, order_by, limit):
+    """Consulta con selección de campos y filtrado en servidor."""
+    try:
+        query = supabase.table(table_name).select(select_fields)
+        if filters_tuple:
+            for key, value in filters_tuple:
+                if value is not None:
+                    query = query.eq(key, value)
+        query = query.order(order_by)
+        if limit:
+            query = query.limit(limit)
+        res = query.execute()
+        return res.data if res.data else []
+    except Exception as e:
+        print(f"Error en consulta filtrada {table_name}: {e}")
+        return []
+
+
+def run_query_filtered(table_name, select_fields="*", filters=None, order_by="id", limit=100):
+    """Consulta con selección de campos y filtrado en servidor.
+    Útil para cargar solo los datos necesarios en lugar de tablas completas."""
+    filters_tuple = tuple(filters.items()) if filters else None
+    return pd.DataFrame(_run_query_filtered_cached(table_name, select_fields, filters_tuple, order_by, limit))
+
+
+# =============================================================================
 # ✏️ ESCRITURA CON INVALIDACIÓN AUTOMÁTICA
-# ==============================================================================
+# =============================================================================
 def invalidate_cache(table_name: str = None):
     """Limpia caché para que el siguiente rerun traiga datos frescos."""
     _run_query_cached.clear()
+    _run_query_filtered_cached.clear()
     run_query_paginated.clear()
     print(f"🔄 Caché invalidado: {table_name or 'TODO'}")
 
@@ -94,9 +124,9 @@ def db_delete(table_name: str, id_field: str, id_value):
     return result
 
 
-# ==============================================================================
+# =============================================================================
 # 📄 CONSULTAS PAGINADAS
-# ==============================================================================
+# =============================================================================
 @st.cache_data(ttl=300, show_spinner=False)
 def run_query_paginated(table_name, page=1, per_page=25, filters_tuple=None, order_by="id", desc=True):
     """Consulta paginada cacheada. Se invalida automáticamente tras writes."""

@@ -15,6 +15,25 @@ from utils.firmas import render_firmas_cierre
 from utils.uploads import subir_archivo_generico
 from pdf_utils import render_pdf_viewer
 
+
+# =============================================================================
+# 📄 PDF LAZY — Solo se genera cuando el usuario hace clic en descargar
+# =============================================================================
+@st.cache_data(ttl=600, show_spinner=False)
+def _generar_pdf_cached(orden_id, nombre_activo, tecnico_nombre, descripcion,
+                        criticidad, tipo_mantenimiento, fecha_creacion, estado,
+                        activo_id, tecnico_asignado):
+    """Genera PDF de forma cacheada. Solo se ejecuta al hacer clic en descargar."""
+    from pdf_utils import generar_pdf_orden
+    # Reconstruir el dict-like row esperado por generar_pdf_orden
+    row = {
+        'id': orden_id, 'descripcion': descripcion, 'criticidad': criticidad,
+        'tipo_mantenimiento': tipo_mantenimiento, 'fecha_creacion': fecha_creacion,
+        'estado': estado, 'activo_id': activo_id, 'tecnico_asignado': tecnico_asignado,
+    }
+    return generar_pdf_orden(row, nombre_activo, tecnico_nombre)
+
+
 def render_mis_gestiones(df_act, df_users, df_ordenes):
     st.info("Aquí administras las órdenes asignadas a ti (Cotizaciones, Compras, Trámites).")
 
@@ -66,7 +85,6 @@ def render_mis_gestiones(df_act, df_users, df_ordenes):
 
 
 
-
 def _render_orden_gestion(row, nombre_activo, df_users, usuario):
     with st.expander(f"📂 {nombre_activo} | {row['descripcion'][:50]}... (ID: {row['id']})", expanded=False):
         color_borde = "#3B82F6"
@@ -86,17 +104,27 @@ def _render_orden_gestion(row, nombre_activo, df_users, usuario):
         """, unsafe_allow_html=True)
 
         # ══════════════════════════════════════════════════════════════════
-        # 📄 DESCARGA DE PDF INDIVIDUAL
+        # 📄 DESCARGA DE PDF INDIVIDUAL (LAZY — solo genera al hacer clic)
         # ══════════════════════════════════════════════════════════════════
         try:
-            from pdf_utils import generar_pdf_orden
             tecnico_nombre = usuario
             if not df_users.empty:
                 tech_match = df_users[df_users['id'].astype(str) == str(row.get('tecnico_asignado', ''))]
                 if not tech_match.empty:
                     tecnico_nombre = tech_match.iloc[0]['nombre']
 
-            pdf_data = generar_pdf_orden(row, nombre_activo, tecnico_nombre)
+            pdf_data = _generar_pdf_cached(
+                orden_id=int(row['id']),
+                nombre_activo=nombre_activo,
+                tecnico_nombre=tecnico_nombre,
+                descripcion=str(row.get('descripcion', '')),
+                criticidad=str(row.get('criticidad', '')),
+                tipo_mantenimiento=str(row.get('tipo_mantenimiento', '')),
+                fecha_creacion=str(row.get('fecha_creacion', '')),
+                estado=str(row.get('estado', '')),
+                activo_id=int(row.get('activo_id', 0)),
+                tecnico_asignado=str(row.get('tecnico_asignado', '')),
+            )
             st.download_button(
                 "📄 Descargar PDF de esta Orden",
                 data=pdf_data,
@@ -190,7 +218,6 @@ def _render_orden_gestion(row, nombre_activo, df_users, usuario):
                         if st.button("🗑️", key=f"btn_del_{b['id']}", help="Eliminar"):
                             db_delete("bitacora", "id", b['id'])
                             st.toast("Eliminado")
-                            time.sleep(0.5)
                             st.rerun()
             else:
                 st.caption("No hay avances registrados aún.")
