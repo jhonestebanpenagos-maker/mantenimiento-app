@@ -1271,6 +1271,10 @@ def _render_selector_imagenes(correo_idx: int, correo: dict):
         'desconocido': 'Sin clasificar',
     }
 
+    # Version counter: increments on bulk actions to force checkbox widget recreation
+    version_key = f'_img_ver_{correo_idx}_{message_id}'
+    version = st.session_state.get(version_key, 0)
+
     n_total = len(imagenes)
     n_seleccionadas = sum(1 for v in seleccion.values() if v)
     n_tracking = sum(1 for c in clasificaciones.values() if c == 'tracking')
@@ -1284,34 +1288,38 @@ def _render_selector_imagenes(correo_idx: int, correo: dict):
     </div>
     """, unsafe_allow_html=True)
 
-    # Botones de acción masiva
+    # Botones de acción masiva — increment version to force checkbox recreation
     col_todas, col_ninguna, col_solo_contenido, col_invertir = st.columns(4)
     with col_todas:
         if st.button("✅ Todas", key=f"img_all_{correo_idx}", use_container_width=True):
             for cid in imagenes:
                 seleccion[cid] = True
             _guardar_seleccion_imagenes(correo_idx, message_id, seleccion)
+            st.session_state[version_key] = version + 1
             st.rerun()
     with col_ninguna:
         if st.button("❌ Ninguna", key=f"img_none_{correo_idx}", use_container_width=True):
             for cid in imagenes:
                 seleccion[cid] = False
             _guardar_seleccion_imagenes(correo_idx, message_id, seleccion)
+            st.session_state[version_key] = version + 1
             st.rerun()
     with col_solo_contenido:
         if st.button("📸 Solo contenido", key=f"img_content_{correo_idx}", use_container_width=True):
             for cid, cat in clasificaciones.items():
                 seleccion[cid] = (cat == 'contenido')
             _guardar_seleccion_imagenes(correo_idx, message_id, seleccion)
+            st.session_state[version_key] = version + 1
             st.rerun()
     with col_invertir:
         if st.button("🔄 Invertir", key=f"img_inv_{correo_idx}", use_container_width=True):
             for cid in imagenes:
                 seleccion[cid] = not seleccion.get(cid, False)
             _guardar_seleccion_imagenes(correo_idx, message_id, seleccion)
+            st.session_state[version_key] = version + 1
             st.rerun()
 
-    # Mostrar cada imagen con checkbox
+    # Mostrar cada imagen con checkbox — use version in key so bulk actions recreate widgets
     cids = list(imagenes.keys())
     cols_per_row = 3
     for row_start in range(0, len(cids), cols_per_row):
@@ -1332,11 +1340,11 @@ def _render_selector_imagenes(correo_idx: int, correo: dict):
                 except Exception:
                     st.caption("⚠️ No se pudo mostrar")
 
-                # Checkbox para seleccionar
+                # Checkbox with version in key — forces recreation after bulk actions
                 checked = st.checkbox(
                     f"{icono} {label_cat} ({tamano_kb:.0f}KB)",
                     value=seleccion.get(cid, True),
-                    key=f"img_chk_{correo_idx}_{cid}",
+                    key=f"img_chk_{correo_idx}_v{version}_{cid}",
                 )
                 seleccion[cid] = checked
 
@@ -1348,6 +1356,8 @@ def _render_selector_imagenes(correo_idx: int, correo: dict):
     n_descartadas = n_total - n_final
     if n_descartadas > 0:
         st.info(f"ℹ️ {n_descartadas} imagen(es) serán descartadas. Se subirán {n_final} imagen(es) al vincular/crear la orden.")
+    else:
+        st.success(f"✅ Todas las {n_total} imágenes serán incluidas.")
     else:
         st.success(f"✅ Todas las {n_total} imágenes serán incluidas.")
 
