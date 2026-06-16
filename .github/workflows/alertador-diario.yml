@@ -1,0 +1,41 @@
+# .github/workflows/alertador-diario.yml
+# Alerta diaria sobre solicitudes y correos sin gestionar >48h
+# Se ejecuta todos los días a las 8:00 AM hora Colombia (UTC-5)
+
+name: 🔔 Alertador Diario ORIÓN
+
+on:
+  # Ejecución diaria a las 13:00 UTC = 8:00 AM Colombia
+  schedule:
+    - cron: '0 13 * * *'
+
+  # Permitir ejecución manual desde GitHub
+  workflow_dispatch:
+
+jobs:
+  alertar:
+    name: Revisar y alertar items sin gestionar
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: 📥 Checkout
+        uses: actions/checkout@v4
+
+      - name: 🐍 Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: 📦 Instalar dependencias
+        run: |
+          pip install supabase requests
+
+      - name: 🔔 Ejecutar alertador
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+          TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+          GMAIL_CORREO: ${{ secrets.GMAIL_CORREO }}
+          GMAIL_PASSWORD: ${{ secrets.GMAIL_PASSWORD }}
+        run: python .github/scripts/alertador_diario.py
