@@ -287,7 +287,11 @@ def construir_mensaje(solicitudes, correos):
     lineas.append("")
     lineas.append("━" * 30)
     lineas.append("👉 *Gestiona en ORIÓN:*")
-    lineas.append("https://mantenimiento-app-fv9et6lbtpzrpbgjecqjfe.streamlit.app")
+    lineas.append("")
+    if solicitudes:
+        lineas.append("📥 *Solicitudes:* https://mantenimiento-app-fv9et6lbtpzrpbgjecqjfe.streamlit.app?go=buzon")
+    if correos:
+        lineas.append("📧 *Correos:* https://mantenimiento-app-fv9et6lbtpzrpbgjecqjfe.streamlit.app?go=correo")
 
     return "\n".join(lineas)
 

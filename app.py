@@ -121,6 +121,22 @@ if not check_login():
     st.stop()
 
 # ==============================================================================
+# 🔗 NAVEGACIÓN DIRECTA POR URL (para alertas)
+# ==============================================================================
+# Soporte para ?go=buzon y ?go=correo desde alertas de Telegram
+_go = query_params.get("go")
+if _go == "buzon":
+    st.session_state.current_page = "Ordenes de Trabajo"
+    st.session_state['_ordenes_tab_activa'] = "buzon"
+    st.query_params.clear()
+    st.rerun()
+elif _go == "correo":
+    st.session_state.current_page = "Ordenes de Trabajo"
+    st.session_state['_ordenes_tab_activa'] = "correo"
+    st.query_params.clear()
+    st.rerun()
+
+# ==============================================================================
 # 🚀 DASHBOARD PRIVADO
 # ==============================================================================
 rol = st.session_state['rol']
