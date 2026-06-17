@@ -116,6 +116,26 @@ def _html_a_texto(html):
     return texto.strip()
 
 
+def _extraer_html_raw(msg):
+    """Extrae el HTML original del correo (si existe) para renderizarlo en iframe."""
+    if msg.is_multipart():
+        for parte in msg.walk():
+            ctype = parte.get_content_type()
+            disposition = str(parte.get("Content-Disposition", ""))
+            if ctype == "text/html" and "attachment" not in disposition:
+                payload = parte.get_payload(decode=True)
+                if payload:
+                    charset = parte.get_content_charset() or 'utf-8'
+                    return payload.decode(charset, errors='replace')
+    else:
+        if msg.get_content_type() == "text/html":
+            payload = msg.get_payload(decode=True)
+            if payload:
+                charset = msg.get_content_charset() or 'utf-8'
+                return payload.decode(charset, errors='replace')
+    return ""
+
+
 def _extraer_adjuntos(msg):
     adjuntos = []
     if msg.is_multipart():
@@ -436,6 +456,7 @@ def descargar_correo_por_id(message_id):
 
         fecha = _parsear_fecha(msg.get("Date", ""))
         cuerpo = _extraer_texto_plano(msg)
+        html_raw = _extraer_html_raw(msg)
         adjuntos = _extraer_adjuntos(msg)
 
         # Obtener Message-ID real (confirmar)
@@ -449,6 +470,7 @@ def descargar_correo_por_id(message_id):
             'fecha': fecha,
             'cuerpo': cuerpo,
             'cuerpo_corto': cuerpo[:500] if cuerpo else '',
+            'html_raw': html_raw,
             'adjuntos': adjuntos,
             'n_adjuntos': len(adjuntos),
             'leido': True,
@@ -634,7 +656,8 @@ def _descartar_correo(message_id):
 # 🖼️ RENDERIZADO: VISTA PREVIA INLINE
 # =============================================================================
 def _render_preview_correo(correo, idx):
-    """Renderiza la vista previa de un correo descargado."""
+    """Renderiza la vista previa de un correo descargado.
+    Replica el estilo del módulo Correo original."""
     asunto = correo.get('asunto', 'Sin asunto')
     remitente = correo.get('remitente', '')
     remitente_nombre = correo.get('remitente_nombre', '')
@@ -644,43 +667,80 @@ def _render_preview_correo(correo, idx):
 
     remitente_display = remitente_nombre if remitente_nombre else remitente
 
+    # ── Cabecera del correo ──
     st.markdown(f"""
     <div style="background:rgba(59,130,246,0.08);border:1px solid rgba(59,130,246,0.2);border-radius:8px;padding:16px;margin:8px 0;">
-        <div style="display:flex;justify-content:space-between;align-items:start;">
-            <div>
-                <div style="font-size:1.1rem;font-weight:600;color:#E5E7EB;">📧 {asunto}</div>
-                <div style="color:#9CA3AF;font-size:0.9rem;margin-top:4px;">
-                    👤 {remitente_display} &nbsp;·&nbsp; 📅 {fecha}
-                    {" &nbsp;·&nbsp; 📎 " + str(n_adj) + " adjunto(s)" if n_adj > 0 else ""}
-                </div>
-            </div>
+        <div style="font-size:1.1rem;font-weight:600;color:#E5E7EB;">📧 {asunto}</div>
+        <div style="color:#9CA3AF;font-size:0.9rem;margin-top:4px;">
+            👤 {remitente_display} &nbsp;·&nbsp; 📅 {fecha}
+            {" &nbsp;·&nbsp; 📎 " + str(n_adj) + " adjunto(s)" if n_adj > 0 else ""}
         </div>
     </div>
     """, unsafe_allow_html=True)
 
-    # Cuerpo expandible
-    if cuerpo:
-        with st.expander("📄 Ver contenido del correo", expanded=False):
+    # ── Contenido del correo (igual que módulo Correo) ──
+    html_raw = correo.get('html_raw', '')
+    tiene_html = bool(html_raw and html_raw.strip())
+
+    if tiene_html:
+        tab_html, tab_texto = st.tabs(["🌐 Vista original", "📝 Texto plano"])
+        with tab_html:
+            import streamlit.components.v1 as components
+            import re as _re
+            html_seguro = _re.sub(r'<script[^>]*>.*?</script>', '', html_raw, flags=_re.DOTALL | _re.IGNORECASE)
+            html_seguro = _re.sub(r'<iframe[^>]*>.*?</iframe>', '', html_seguro, flags=_re.DOTALL | _re.IGNORECASE)
+            components.html(
+                f'<div style="background:#fff;color:#1f2937;padding:16px;border-radius:8px;font-family:Arial,sans-serif;font-size:14px;line-height:1.6;overflow:auto;">{html_seguro}</div>',
+                height=500,
+                scrolling=True
+            )
+        with tab_texto:
+            if cuerpo:
+                st.text_area(
+                    "Contenido",
+                    value=cuerpo[:3000],
+                    height=250,
+                    disabled=True,
+                    key=f"preview_cuerpo_{idx}",
+                    label_visibility="collapsed",
+                )
+            else:
+                st.info("Sin versión en texto plano.")
+    else:
+        if cuerpo:
             st.text_area(
                 "Contenido",
                 value=cuerpo[:3000],
-                height=200,
+                height=250,
                 disabled=True,
                 key=f"preview_cuerpo_{idx}",
                 label_visibility="collapsed",
             )
-    else:
-        st.caption("⚠️ Contenido no disponible (solo headers)")
+        else:
+            st.warning("⚠️ Contenido no disponible (solo headers).")
 
-    # Adjuntos
+    # ── Adjuntos con descarga (igual que módulo Correo) ──
     adjuntos = correo.get('adjuntos', [])
     if adjuntos:
-        with st.expander(f"📎 Adjuntos ({len(adjuntos)})", expanded=False):
-            for att in adjuntos:
-                nombre = att.get('nombre', '?')
-                tamano = att.get('tamano', 0)
-                tamano_str = f"{tamano / 1024:.1f} KB" if tamano < 1024 * 1024 else f"{tamano / (1024 * 1024):.1f} MB"
-                st.caption(f"📄 {nombre} ({tamano_str})")
+        st.markdown(f"**📎 Adjuntos ({len(adjuntos)}):**")
+        for a_idx, att in enumerate(adjuntos):
+            nombre = att.get('nombre', '?')
+            tamano = att.get('tamano', 0)
+            tamano_str = f"{tamano / 1024:.1f} KB" if tamano < 1024 * 1024 else f"{tamano / (1024 * 1024):.1f} MB"
+            col_info, col_btn = st.columns([3, 1])
+            with col_info:
+                st.caption(f"📄 {nombre} — {tamano_str} ({att.get('tipo', '?')})")
+            with col_btn:
+                if att.get('datos_b64'):
+                    import base64 as _b64
+                    st.download_button(
+                        "⬇️ Descargar",
+                        data=_b64.b64decode(att['datos_b64']),
+                        file_name=nombre,
+                        mime=att.get('tipo', 'application/octet-stream'),
+                        key=f"dl_audit_{idx}_{a_idx}",
+                        use_container_width=True
+                    )
 
 
 # =============================================================================
@@ -708,30 +768,27 @@ def _render_card_limbo(correo_cache, idx, df_ordenes=None):
         """, unsafe_allow_html=True)
 
     with col_acc:
+        # Botones con texto visible (no solo emoji) — el tooltip no se ve en tema oscuro
         btn_cols = st.columns(4)
 
-        # 1. Vista previa
         with btn_cols[0]:
-            if st.button("👁️", key=f"prev_{state_key}", help="Vista previa", use_container_width=True):
+            if st.button("👁️ Ver", key=f"prev_{state_key}", use_container_width=True):
                 st.session_state[f"_preview_active_{state_key}"] = not st.session_state.get(f"_preview_active_{state_key}", False)
                 st.rerun()
 
-        # 2. Crear OT
         with btn_cols[1]:
-            if st.button("➕", key=f"crear_{state_key}", help="Crear Orden de Trabajo", use_container_width=True):
+            if st.button("➕ OT", key=f"crear_{state_key}", use_container_width=True):
                 st.session_state[f"_crear_active_{state_key}"] = True
                 st.session_state[f"_preview_active_{state_key}"] = False
                 st.rerun()
 
-        # 3. Vincular
         with btn_cols[2]:
-            if st.button("🔗", key=f"vinc_{state_key}", help="Vincular a OT existente", use_container_width=True):
+            if st.button("🔗 Vincular", key=f"vinc_{state_key}", use_container_width=True):
                 st.session_state[f"_vincular_active_{state_key}"] = not st.session_state.get(f"_vincular_active_{state_key}", False)
                 st.rerun()
 
-        # 4. Descartar
         with btn_cols[3]:
-            if st.button("🗑️", key=f"desc_{state_key}", help="Descartar", use_container_width=True):
+            if st.button("🗑️", key=f"desc_{state_key}", use_container_width=True):
                 if _descartar_correo(message_id):
                     st.toast(f"🗑️ Descartado: {asunto[:30]}")
                     st.rerun()
