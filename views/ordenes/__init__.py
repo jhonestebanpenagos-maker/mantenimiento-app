@@ -19,8 +19,7 @@ from .preventivos import render_preventivos
 from .buzon import render_buzon
 from .mis_gestiones import render_mis_gestiones
 from .interceptor import render_interceptor
-from utils.email_monitor import render_buzon_correo
-from utils.email_audit import render_auditoria_correos
+from utils.email_unified import render_buzon_correo, render_auditoria_correos
 
 
 # =============================================================================
