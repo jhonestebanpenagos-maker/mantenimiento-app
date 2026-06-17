@@ -75,6 +75,9 @@ def _cargar_correos_unificado(sin_frescos=False):
     # ── 1. Obtener IDs ya procesados (consulta fresca) ──
     procesados_ids = monitor._obtener_procesados()
     print(f"📧 _cargar_correos_unificado: {len(procesados_ids)} procesados en BD")
+    if procesados_ids:
+        for ejemplo in list(procesados_ids)[:3]:
+            print(f"   → Ejemplo procesado: [{ejemplo}]")
 
     # ── 2. Cargar desde emails_pendientes ──
     pendientes_guardados = []
@@ -172,7 +175,12 @@ def _cargar_correos_unificado(sin_frescos=False):
     # ── 6. Ordenar por fecha (más reciente primero) ──
     unificados.sort(key=lambda c: _normalizar_fecha(c.get('fecha', '')), reverse=True)
 
-    print(f"📧 Correos unificados: {len(unificados)} pendientes de {len(unificados) + len(procesados_ids)} totales")
+    print(f"📧 Resultado: {len(unificados)} pendientes")
+    print(f"   Fuentes: {len(pendientes_guardados)} pendientes, {len(todos_cache)} cache, {len(frescos)} frescos")
+    print(f"   Procesados en BD: {len(procesados_ids)}")
+    if unificados:
+        for ejemplo in unificados[:3]:
+            print(f"   → Ejemplo pendiente: [{ejemplo['message_id'][:50]}] fuente={ejemplo.get('fuente')}")
 
     return unificados, procesados_ids
 
