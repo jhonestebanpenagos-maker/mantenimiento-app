@@ -16,6 +16,7 @@ import streamlit as st
 import re
 import base64
 from datetime import datetime
+from email.utils import parsedate_to_datetime
 
 
 # =============================================================================
@@ -33,6 +34,30 @@ def _mod_audit():
 # =============================================================================
 # 📬 CARGA UNIFICADA DE CORREOS
 # =============================================================================
+# =============================================================================
+# 📅 PARSER DE FECHAS ROBUSTO
+# =============================================================================
+def _normalizar_fecha(fecha_str):
+    """Convierte cualquier formato de fecha a ISO 8601 para ordenamiento."""
+    if not fecha_str:
+        return ''
+    fecha_str = str(fecha_str).strip()
+    # Si ya es ISO (empieza con dígito)
+    if fecha_str and fecha_str[0].isdigit():
+        return fecha_str[:19]
+    # RFC 2822 ("Mon, 3 Jun 2026 10:30:00 -0500")
+    try:
+        dt = parsedate_to_datetime(fecha_str)
+        return dt.strftime('%Y-%m-%dT%H:%M:%S')
+    except Exception:
+        pass
+    # Fltimo intento: extraer fecha con regex
+    m = re.search(r'(\d{4})[\-/](\d{1,2})[\-/](\d{1,2})', fecha_str)
+    if m:
+        return f"{m.group(1)}-{int(m.group(2)):02d}-{int(m.group(3)):02d}"
+    return fecha_str[:19]
+
+
 def _cargar_correos_unificado(sin_frescos=False):
     """
     Carga TODOS los correos pendientes de gestionar desde 3 fuentes:
@@ -98,7 +123,7 @@ def _cargar_correos_unificado(sin_frescos=False):
             'asunto': c.get('asunto', ''),
             'remitente': c.get('remitente', ''),
             'remitente_nombre': c.get('remitente_nombre', ''),
-            'fecha': c.get('fecha_correo', '') or c.get('fecha', ''),
+            'fecha': _normalizar_fecha(c.get('fecha_correo', '') or c.get('fecha', '')),
             'cuerpo_corto': c.get('cuerpo_corto', ''),
             'cuerpo': c.get('cuerpo', ''),
             'adjuntos': [],
@@ -120,7 +145,7 @@ def _cargar_correos_unificado(sin_frescos=False):
             'asunto': c.get('asunto', ''),
             'remitente': c.get('remitente', ''),
             'remitente_nombre': '',
-            'fecha': c.get('fecha_correo', ''),
+            'fecha': _normalizar_fecha(c.get('fecha_correo', '')),
             'cuerpo_corto': c.get('cuerpo_corto', ''),
             'cuerpo': '',
             'adjuntos': [],
@@ -144,12 +169,7 @@ def _cargar_correos_unificado(sin_frescos=False):
         vistos.add(mid)
 
     # ── 6. Ordenar por fecha (más reciente primero) ──
-    def _fecha_sort_key(c):
-        f = c.get('fecha', '') or ''
-        # Normalizar: tomar primeros 19 chars como ISO-ish
-        return f[:19] if f else ''
-
-    unificados.sort(key=_fecha_sort_key, reverse=True)
+    unificados.sort(key=lambda c: _normalizar_fecha(c.get('fecha', '')), reverse=True)
 
     return unificados, procesados_ids
 
@@ -509,7 +529,7 @@ password = "xxxx xxxx xxxx xxxx"
             filtrados = [c for c in filtrados if filtro_asunto.lower() in (c.get('asunto', '') or '').lower()]
 
     # Ordenar por fecha (más reciente primero)
-    filtrados.sort(key=lambda c: (c.get('fecha', '') or '')[:19], reverse=True)
+    filtrados.sort(key=lambda c: _normalizar_fecha(c.get('fecha', '')), reverse=True)
 
     # ── Métricas ──
     m1, m2, m3 = st.columns(3)

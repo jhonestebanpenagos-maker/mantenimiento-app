@@ -345,7 +345,8 @@ def escanear_gmail_rapido(max_correos=200, dias_atras=90, forzar_completo=False)
 
                     asunto = _decodificar_header(msg_h.get("Subject", ""))
                     remitente = _decodificar_header(msg_h.get("From", ""))
-                    fecha = msg_h.get("Date", "")
+                    fecha_raw = msg_h.get("Date", "")
+                    fecha = _parsear_fecha(fecha_raw)
 
                     # Verificar si ya existe en caché o tablas originales
                     en_cache = mid in ids_cacheados
