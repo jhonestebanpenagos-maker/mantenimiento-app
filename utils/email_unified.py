@@ -143,6 +143,14 @@ def _cargar_correos_unificado(sin_frescos=False):
         unificados.append(c)
         vistos.add(mid)
 
+    # ── 6. Ordenar por fecha (más reciente primero) ──
+    def _fecha_sort_key(c):
+        f = c.get('fecha', '') or ''
+        # Normalizar: tomar primeros 19 chars como ISO-ish
+        return f[:19] if f else ''
+
+    unificados.sort(key=_fecha_sort_key, reverse=True)
+
     return unificados, procesados_ids
 
 
@@ -499,6 +507,9 @@ password = "xxxx xxxx xxxx xxxx"
             filtrados = [c for c in filtrados if filtro_asunto.lower() not in (c.get('asunto', '') or '').lower()]
         else:
             filtrados = [c for c in filtrados if filtro_asunto.lower() in (c.get('asunto', '') or '').lower()]
+
+    # Ordenar por fecha (más reciente primero)
+    filtrados.sort(key=lambda c: (c.get('fecha', '') or '')[:19], reverse=True)
 
     # ── Métricas ──
     m1, m2, m3 = st.columns(3)
