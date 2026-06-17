@@ -72,8 +72,9 @@ def _cargar_correos_unificado(sin_frescos=False):
     audit = _mod_audit()
     from utils.db import supabase
 
-    # ── 1. Obtener IDs ya procesados ──
+    # ── 1. Obtener IDs ya procesados (consulta fresca) ──
     procesados_ids = monitor._obtener_procesados()
+    print(f"📧 _cargar_correos_unificado: {len(procesados_ids)} procesados en BD")
 
     # ── 2. Cargar desde emails_pendientes ──
     pendientes_guardados = []
@@ -82,23 +83,16 @@ def _cargar_correos_unificado(sin_frescos=False):
     except Exception as e:
         print(f"⚠️ Error cargando pendientes: {e}")
 
-    # ── 3. Cargar desde email_scan_cache (limbo) ──
-    cache_limbo = []
+    # ── 3. Cargar desde email_scan_cache ──
+    todos_cache = []
     try:
         if supabase:
             res_cache = supabase.table("email_scan_cache").select("*").execute()
             todos_cache = res_cache.data or []
-            # Filtrar: solo los que NO están en procesados (chequeo real, no el flag)
-            cache_limbo = [
-                c for c in todos_cache
-                if c['message_id'].strip() not in procesados_ids
-                and not c.get('en_pendientes')
-            ]
     except Exception as e:
         print(f"⚠️ Error cargando caché: {e}")
 
-    # ── 4. Cargar frescos de Gmail (últimos 2 días) ──
-    # Solo si no se pidió sin_frescos (para evitar doble conexión IMAP)
+    # ── 4. Cargar frescos de Gmail (solo si no es sync) ──
     frescos = []
     if not sin_frescos:
         cfg = st.secrets.get("gmail", {})
@@ -108,16 +102,19 @@ def _cargar_correos_unificado(sin_frescos=False):
             except Exception as e:
                 print(f"⚠️ Error descargando frescos: {e}")
 
-    # ── 5. Unificar y deduplicar ──
+    # ── 5. Unificar con FILTRO TRIPLE contra procesados ──
     vistos = set()
     unificados = []
 
-    # Prioridad 1: Pendientes guardados (ya tienen más datos)
+    def _esta_procesado(mid):
+        """Verifica si un correo ya fue procesado (chequeo contra BD)."""
+        return mid in procesados_ids
+
+    # Fuente 1: Pendientes guardados
     for c in pendientes_guardados:
         mid = (c.get('message_id') or '').strip()
-        if not mid or mid in procesados_ids or mid in vistos:
+        if not mid or mid in vistos or _esta_procesado(mid):
             continue
-        # Normalizar formato
         correo = {
             'message_id': mid,
             'asunto': c.get('asunto', ''),
@@ -135,10 +132,14 @@ def _cargar_correos_unificado(sin_frescos=False):
         unificados.append(correo)
         vistos.add(mid)
 
-    # Prioridad 2: Cache limbo (headers solamente)
-    for c in cache_limbo:
+    # Fuente 2: Cache (excluyendo los que están en pendientes Y los procesados)
+    ids_pendientes = {c.get('message_id', '').strip() for c in pendientes_guardados if c.get('message_id')}
+    for c in todos_cache:
         mid = (c.get('message_id') or '').strip()
-        if not mid or mid in procesados_ids or mid in vistos:
+        if not mid or mid in vistos or _esta_procesado(mid):
+            continue
+        # Si está marcado como pendiente en la caché, saltarlo (ya viene de pendientes)
+        if c.get('en_pendientes') and mid in ids_pendientes:
             continue
         correo = {
             'message_id': mid,
@@ -157,10 +158,10 @@ def _cargar_correos_unificado(sin_frescos=False):
         unificados.append(correo)
         vistos.add(mid)
 
-    # Prioridad 3: Frescos de Gmail (no vistos aún)
+    # Fuente 3: Frescos de Gmail
     for c in frescos:
         mid = (c.get('message_id') or '').strip()
-        if not mid or mid in procesados_ids or mid in vistos:
+        if not mid or mid in vistos or _esta_procesado(mid):
             continue
         c['fuente'] = 'gmail'
         if 'contenido_cargado' not in c:
@@ -170,6 +171,8 @@ def _cargar_correos_unificado(sin_frescos=False):
 
     # ── 6. Ordenar por fecha (más reciente primero) ──
     unificados.sort(key=lambda c: _normalizar_fecha(c.get('fecha', '')), reverse=True)
+
+    print(f"📧 Correos unificados: {len(unificados)} pendientes de {len(unificados) + len(procesados_ids)} totales")
 
     return unificados, procesados_ids
 
