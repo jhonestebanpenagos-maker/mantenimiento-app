@@ -523,6 +523,21 @@ password = "xxxx xxxx xxxx xxxx"
     for i in range(inicio, fin):
         _render_card_correo(filtrados[i], i, df_act, df_users, df_ordenes)
 
+    # ── Paginación inferior ──
+    if total_paginas > 1:
+        st.markdown("---")
+        col_pag4, col_pag5, col_pag6 = st.columns([1, 2, 1])
+        with col_pag4:
+            if st.button("⬅️ Anterior", disabled=(pagina <= 1), key="uc_pag_ant_bot"):
+                st.session_state['_uc_pagina'] = pagina - 1
+                st.rerun()
+        with col_pag5:
+            st.caption(f"Página {pagina} de {total_paginas}")
+        with col_pag6:
+            if st.button("Siguiente ➡️", disabled=(pagina >= total_paginas), key="uc_pag_sig_bot"):
+                st.session_state['_uc_pagina'] = pagina + 1
+                st.rerun()
+
     st.markdown("---")
 
     # ══════════════════════════════════════════════════════════════
