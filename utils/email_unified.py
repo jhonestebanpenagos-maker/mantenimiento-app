@@ -516,79 +516,70 @@ password = "xxxx xxxx xxxx xxxx"
     for i in range(inicio, fin):
         _render_card_correo(filtrados[i], i, df_act, df_users, df_ordenes)
 
-
-# =============================================================================
-# 🔍 RENDERIZADO: AUDITORÍA (pestaña de supervisión)
-# =============================================================================
-def render_auditoria_correos():
-    """
-    Auditoría de correos — vista de supervisión.
-    Mantiene el escaneo rápido con caché + historial de procesados.
-    Los correos pendientes se gestionan desde la pestaña 📧 Correo.
-    """
-    audit = _mod_audit()
-    monitor = _mod_monitor()
-    from utils.db import supabase
-
-    st.markdown("### 🔍 Auditoría de Correos")
-    st.caption("Supervisión del estado de correos: escaneo, caché, y estadísticas.")
-
-    # ══════════════════════════════════════════════════════════════
-    # SECCIÓN 1: ESCANEO RÁPIDO
-    # ══════════════════════════════════════════════════════════════
-    st.markdown("#### 📡 Escaneo de Gmail")
-    st.caption("Escanea headers y actualiza la caché. Los correos nuevos aparecen en la pestaña 📧 Correo.")
-
-    col_cfg1, col_cfg2, col_cfg3 = st.columns([1, 1, 1])
-    with col_cfg1:
-        max_corr = st.number_input("Máx. correos", min_value=20, max_value=1000, value=200, step=50, key="aud_max_corr")
-    with col_cfg2:
-        dias = st.number_input("Días hacia atrás", min_value=7, max_value=365, value=90, step=7, key="aud_dias")
-    with col_cfg3:
-        st.markdown("<br>", unsafe_allow_html=True)
-        forzar = st.checkbox("Forzar re-escaneo completo", key="aud_forzar")
-
-    col_scan, col_cache = st.columns([1, 2])
-    with col_scan:
-        if st.button("📡 Escanear Gmail", type="primary", use_container_width=True, key="aud_btn_scan"):
-            with st.spinner(f"Escaneando ({max_corr} correos, {dias} días)..."):
-                resultado = audit.escanear_gmail_rapido(max_correos=max_corr, dias_atras=dias, forzar_completo=forzar)
-            st.session_state['_auditoria_scan_result'] = resultado
-            # También actualizar la lista de correos pendientes
-            correos, procesados = _cargar_correos_unificado()
-            st.session_state['_correos_pendientes'] = correos
-            st.rerun()
-
-    with col_cache:
-        cache_total = 0
-        if supabase:
-            try:
-                res_cache = supabase.table("email_scan_cache").select("message_id", count="exact").execute()
-                cache_total = res_cache.count or 0
-            except Exception:
-                pass
-        if cache_total > 0:
-            st.caption(f"💾 Caché: {cache_total} headers almacenados")
-        else:
-            st.caption("💡 Sin caché aún. Ejecuta un escaneo para empezar.")
-
-    # Resultado del último escaneo
-    scan_result = st.session_state.get('_auditoria_scan_result')
-    if scan_result:
-        for err in scan_result.get('errores', []):
-            st.error(f"❌ {err}")
-
-        sr1, sr2, sr3, sr4 = st.columns(4)
-        sr1.metric("📧 En Gmail", scan_result.get('total_gmail', 0))
-        sr2.metric("🆕 Nuevos", scan_result.get('nuevos', 0))
-        sr3.metric("💾 Ya en caché", scan_result.get('ya_en_cache', 0))
-        sr4.metric("💾 Caché total", scan_result.get('cache_total', 0))
-
     st.markdown("---")
 
     # ══════════════════════════════════════════════════════════════
-    # SECCIÓN 2: RESUMEN DE BASE DE DATOS
+    # SECCIÓN: AUDITORÍA Y HERRAMIENTAS (expandible)
     # ══════════════════════════════════════════════════════════════
+    _render_seccion_auditoria()
+
+
+# =============================================================================
+# 🔍 SECCIÓN DE AUDITORÍA (incrustada en la vista de correo)
+# =============================================================================
+def _render_seccion_auditoria():
+    """Sección de auditoría y herramientas de supervisión, integrada al final de Correo."""
+    audit = _mod_audit()
+    from utils.db import supabase
+
+    # ── Escaneo avanzado ──
+    with st.expander("📡 Escaneo avanzado de Gmail", expanded=False):
+        st.caption("Escanea headers de Gmail y actualiza la caché. Úsalo cuando necesites buscar correos más antiguos.")
+
+        col_cfg1, col_cfg2, col_cfg3 = st.columns([1, 1, 1])
+        with col_cfg1:
+            max_corr = st.number_input("Máx. correos", min_value=20, max_value=1000, value=200, step=50, key="aud_max_corr")
+        with col_cfg2:
+            dias = st.number_input("Días hacia atrás", min_value=7, max_value=365, value=90, step=7, key="aud_dias")
+        with col_cfg3:
+            st.markdown("<br>", unsafe_allow_html=True)
+            forzar = st.checkbox("Forzar re-escaneo completo", key="aud_forzar")
+
+        col_scan, col_cache = st.columns([1, 2])
+        with col_scan:
+            if st.button("📡 Escanear Gmail", type="primary", use_container_width=True, key="aud_btn_scan"):
+                with st.spinner(f"Escaneando ({max_corr} correos, {dias} días)..."):
+                    resultado = audit.escanear_gmail_rapido(max_correos=max_corr, dias_atras=dias, forzar_completo=forzar)
+                st.session_state['_auditoria_scan_result'] = resultado
+                # Actualizar la lista de correos pendientes
+                correos, procesados = _cargar_correos_unificado()
+                st.session_state['_correos_pendientes'] = correos
+                st.rerun()
+
+        with col_cache:
+            cache_total = 0
+            if supabase:
+                try:
+                    res_cache = supabase.table("email_scan_cache").select("message_id", count="exact").execute()
+                    cache_total = res_cache.count or 0
+                except Exception:
+                    pass
+            if cache_total > 0:
+                st.caption(f"💾 Caché: {cache_total} headers almacenados")
+            else:
+                st.caption("💡 Sin caché aún. Ejecuta un escaneo para empezar.")
+
+        scan_result = st.session_state.get('_auditoria_scan_result')
+        if scan_result:
+            for err in scan_result.get('errores', []):
+                st.error(f"❌ {err}")
+            sr1, sr2, sr3, sr4 = st.columns(4)
+            sr1.metric("📧 En Gmail", scan_result.get('total_gmail', 0))
+            sr2.metric("🆕 Nuevos", scan_result.get('nuevos', 0))
+            sr3.metric("💾 Ya en caché", scan_result.get('ya_en_cache', 0))
+            sr4.metric("💾 Caché total", scan_result.get('cache_total', 0))
+
+    # ── Resumen de BD ──
     with st.expander("📊 Resumen de Base de Datos", expanded=False):
         if supabase:
             try:
@@ -614,7 +605,6 @@ def render_auditoria_correos():
             if acciones:
                 st.caption("Por acción: " + " · ".join(f"{k}: {v}" for k, v in acciones.items()))
 
-            # Órdenes desde correo
             try:
                 res_ord = supabase.table("ordenes").select("*").eq("origen", "correo").order("id", desc=True).limit(20).execute()
                 ordenes_correo = res_ord.data or []
@@ -642,11 +632,7 @@ def render_auditoria_correos():
         else:
             st.warning("Sin conexión a base de datos.")
 
-    st.markdown("---")
-
-    # ══════════════════════════════════════════════════════════════
-    # SECCIÓN 3: HISTORIAL
-    # ══════════════════════════════════════════════════════════════
+    # ── Historial ──
     if supabase:
         try:
             res_hist = supabase.table("emails_procesados").select("*").order("fecha_procesado", desc=True).limit(50).execute()
@@ -678,3 +664,11 @@ def render_auditoria_correos():
                         f'{icono} <b>{accion.upper()}</b> {orden_txt} | {msg_id} | {fecha}</div>',
                         unsafe_allow_html=True
                     )
+
+
+# =============================================================================
+# 🔍 render_auditoria_correos — REDIRECT (backward compat)
+# =============================================================================
+def render_auditoria_correos():
+    """Redirige a render_buzon_correo (funcionalidad unificada)."""
+    render_buzon_correo()

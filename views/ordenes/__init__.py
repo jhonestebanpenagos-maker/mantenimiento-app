@@ -101,7 +101,6 @@ def render():
         ("buzon",   "📥", "Buzón"),
         ("calidad", "🧐", "Calidad"),
         ("correo",  "📧", "Correo"),
-        ("auditoria", "🔍", "Auditoría"),
         ("gestion", "🎛️", "Global"),
     ]
 
