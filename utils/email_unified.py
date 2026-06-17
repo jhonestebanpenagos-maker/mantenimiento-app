@@ -33,7 +33,7 @@ def _mod_audit():
 # =============================================================================
 # 📬 CARGA UNIFICADA DE CORREOS
 # =============================================================================
-def _cargar_correos_unificado():
+def _cargar_correos_unificado(sin_frescos=False):
     """
     Carga TODOS los correos pendientes de gestionar desde 3 fuentes:
     1. emails_pendientes (guardados previamente)
@@ -73,13 +73,15 @@ def _cargar_correos_unificado():
         print(f"⚠️ Error cargando caché: {e}")
 
     # ── 4. Cargar frescos de Gmail (últimos 2 días) ──
+    # Solo si no se pidió sin_frescos (para evitar doble conexión IMAP)
     frescos = []
-    cfg = st.secrets.get("gmail", {})
-    if cfg.get("correo"):
-        try:
-            frescos = monitor.descargar_correos_nuevos(max_correos=50, dias_atras=2)
-        except Exception as e:
-            print(f"⚠️ Error descargando frescos: {e}")
+    if not sin_frescos:
+        cfg = st.secrets.get("gmail", {})
+        if cfg.get("correo"):
+            try:
+                frescos = monitor.descargar_correos_nuevos(max_correos=50, dias_atras=2)
+            except Exception as e:
+                print(f"⚠️ Error descargando frescos: {e}")
 
     # ── 5. Unificar y deduplicar ──
     vistos = set()
@@ -154,15 +156,22 @@ def _sync_gmail_completo(max_correos=200, dias_atras=90):
     """
     audit = _mod_audit()
 
-    with st.spinner("📡 Escaneando Gmail y sincronizando..."):
-        resultado_scan = audit.escanear_gmail_rapido(
-            max_correos=max_correos,
-            dias_atras=dias_atras,
-            forzar_completo=False
-        )
+    try:
+        with st.spinner("📡 Escaneando Gmail y sincronizando..."):
+            resultado_scan = audit.escanear_gmail_rapido(
+                max_correos=max_correos,
+                dias_atras=dias_atras,
+                forzar_completo=False
+            )
+    except Exception as e:
+        resultado_scan = {'total_gmail': 0, 'nuevos': 0, 'ya_en_cache': 0, 'en_limbo': [], 'errores': [f"Error escaneando: {e}"], 'cache_total': 0}
 
-    # Después del escaneo, cargar todo unificado
-    correos, procesados = _cargar_correos_unificado()
+    # Cargar correos unificados (sin conexión IMAP adicional)
+    try:
+        correos, procesados = _cargar_correos_unificado(sin_frescos=True)
+    except Exception as e:
+        correos, procesados = [], set()
+        resultado_scan['errores'].append(f"Error cargando correos: {e}")
 
     return correos, procesados, resultado_scan
 
@@ -432,6 +441,9 @@ password = "xxxx xxxx xxxx xxxx"
             correos, procesados, scan_result = _sync_gmail_completo()
             st.session_state['_correos_pendientes'] = correos
             st.session_state['_sync_result'] = scan_result
+            # Mostrar errores inmediatamente
+            for err in scan_result.get('errores', []):
+                st.error(f"❌ {err}")
             st.rerun()
 
     with col_info:
@@ -447,9 +459,13 @@ password = "xxxx xxxx xxxx xxxx"
     # ── Cargar correos si no están en session state ──
     correos = st.session_state.get('_correos_pendientes', None)
     if correos is None:
-        with st.spinner("Cargando correos..."):
-            correos, procesados = _cargar_correos_unificado()
-            st.session_state['_correos_pendientes'] = correos
+        try:
+            with st.spinner("Cargando correos..."):
+                correos, procesados = _cargar_correos_unificado(sin_frescos=True)
+                st.session_state['_correos_pendientes'] = correos
+        except Exception as e:
+            st.error(f"❌ Error cargando correos: {e}")
+            correos = []
 
     # ── Filtrar solo los realmente pendientes ──
     monitor = _mod_monitor()
