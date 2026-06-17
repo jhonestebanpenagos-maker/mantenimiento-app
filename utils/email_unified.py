@@ -63,10 +63,11 @@ def _cargar_correos_unificado():
         if supabase:
             res_cache = supabase.table("email_scan_cache").select("*").execute()
             todos_cache = res_cache.data or []
+            # Filtrar: solo los que NO están en procesados (chequeo real, no el flag)
             cache_limbo = [
                 c for c in todos_cache
-                if not c.get('en_procesados') and not c.get('en_pendientes')
-                and c['message_id'].strip() not in procesados_ids
+                if c['message_id'].strip() not in procesados_ids
+                and not c.get('en_pendientes')
             ]
     except Exception as e:
         print(f"⚠️ Error cargando caché: {e}")
@@ -287,7 +288,9 @@ def _render_card_correo(correo, idx, df_act, df_users, df_ordenes):
     if descartar_clicked:
         monitor._marcar_procesado(message_id, accion="descartado")
         _eliminar_de_pendientes(message_id)
-        # Actualizar caché
+        # Eliminar de emails_pendientes en BD para que no reaparezca
+        monitor._eliminar_pendiente(message_id)
+        # Actualizar caché para que el flag en_procesados = TRUE
         audit._cache_actualizar_estado(message_id, en_procesados=True)
         st.toast(f"🗑️ Descartado: {correo['asunto'][:40]}")
         st.rerun()
@@ -298,8 +301,11 @@ def _render_card_correo(correo, idx, df_act, df_users, df_ordenes):
 
     if st.session_state.get(f'_uvincular_ot_{idx}', False):
         monitor.render_selector_ordenes_para_vincular(idx, correo, df_ordenes, df_act)
-        # Después de vincular, actualizar caché
-        audit._cache_actualizar_estado(message_id, en_procesados=True)
+        # Verificar si ya fue vinculado (procesado)
+        if message_id in monitor._obtener_procesados():
+            _eliminar_de_pendientes(message_id)
+            monitor._eliminar_pendiente(message_id)
+            audit._cache_actualizar_estado(message_id, en_procesados=True)
 
     if crear_clicked:
         st.session_state[f'_ucrear_ot_{idx}'] = True
@@ -366,6 +372,7 @@ def _render_card_correo(correo, idx, df_act, df_users, df_ordenes):
 
                                 monitor._marcar_procesado(message_id, orden_id=nuevo_id, accion="orden")
                                 _eliminar_de_pendientes(message_id)
+                                monitor._eliminar_pendiente(message_id)
                                 audit._cache_actualizar_estado(message_id, en_procesados=True)
                                 st.session_state.pop(f'_ucrear_ot_{idx}', None)
                                 st.success(f"✅ Orden #{nuevo_id} creada desde correo.")
