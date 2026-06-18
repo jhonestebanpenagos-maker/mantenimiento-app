@@ -1,7 +1,7 @@
 import streamlit as st
 import pandas as pd
 from utils.db import supabase
-from utils.helpers import navegar_a
+from utils.helpers import navegar_a, registrar_acceso
 from utils.nav_button import render_back_button
 
 
@@ -66,25 +66,6 @@ def _render_ultimos_accesos():
             icono = {"activo": "🔧", "orden": "🛠️", "repuesto": "🔩"}.get(item['tipo'], "📋")
             if st.button(f"{icono} {item['nombre'][:20]}", key=f"ultimo_{i}", use_container_width=True):
                 _navegar_a_item(item)
-
-
-def _registrar_acceso(tipo, item_id, nombre):
-    """Registra un acceso rápido para la lista de últimos visitados."""
-    if 'ultimos_accesos' not in st.session_state:
-        st.session_state.ultimos_accesos = []
-
-    # Evitar duplicados
-    st.session_state.ultimos_accesos = [
-        a for a in st.session_state.ultimos_accesos
-        if not (a['tipo'] == tipo and a['id'] == item_id)
-    ]
-
-    st.session_state.ultimos_accesos.insert(0, {
-        'tipo': tipo, 'id': item_id, 'nombre': nombre
-    })
-
-    # Máximo 10
-    st.session_state.ultimos_accesos = st.session_state.ultimos_accesos[:10]
 
 
 def _navegar_a_item(item):
@@ -155,10 +136,10 @@ def _buscar_activos(query):
                     st.caption(f"📍 {a.get('area', 'N/A')} / {a.get('ubicacion', 'N/A')}")
                     st.caption(f"🔧 {a.get('categoria', 'N/A')}")
                     if st.button("📋 Ver ficha completa", key=f"search_act_{a['id']}", type="primary"):
-                        _registrar_acceso('activo', a['id'], a['nombre'])
+                        registrar_acceso('activo', a['id'], a['nombre'])
                         navegar_a("Inventario Activos", jump_target="activo", jump_id=a['id'])
                     if st.button("🛠️ Ver sus órdenes", key=f"search_act_ord_{a['id']}", type="secondary"):
-                        _registrar_acceso('activo', a['id'], a['nombre'])
+                        registrar_acceso('activo', a['id'], a['nombre'])
                         navegar_a("Ordenes de Trabajo", jump_target="ordenes_por_activo", jump_id=a['id'])
         else:
             st.caption("Sin resultados")
@@ -192,7 +173,7 @@ def _buscar_ordenes(query):
                     st.caption(f"Tipo: {o.get('tipo_mantenimiento', 'N/A')}")
                     st.caption(f"Fecha: {o.get('fecha_creacion', '')[:10]}")
                     if st.button("⚙️ Gestionar", key=f"search_ot_{o['id']}", type="primary"):
-                        _registrar_acceso('orden', o['id'], f"OT #{o['id']}")
+                        registrar_acceso('orden', o['id'], f"OT #{o['id']}")
                         navegar_a("Ordenes de Trabajo", jump_target="orden", jump_id=o['id'])
         else:
             st.caption("Sin resultados")
@@ -226,7 +207,7 @@ def _buscar_repuestos(query):
                     st.caption(f"Ref: {r.get('referencia', 'N/A')} | Cat: {r.get('categoria', 'N/A')}")
                     st.caption(f"Stock: {stock} / mín: {minimo}")
                     if st.button("📦 Ver en inventario", key=f"search_rep_{r['id']}", type="primary"):
-                        _registrar_acceso('repuesto', r['id'], r['nombre'])
+                        registrar_acceso('repuesto', r['id'], r['nombre'])
                         navegar_a("Repuestos", jump_target="repuesto", jump_id=r['id'])
         else:
             st.caption("Sin resultados")

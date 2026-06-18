@@ -7,7 +7,7 @@ import html as html_module
 from datetime import datetime
 from PIL import Image
 from utils.db import supabase, run_query, render_paginacion, db_insert, db_update, db_delete, invalidate_cache
-from utils.helpers import mostrar_notificaciones, agregar_notificacion, registrar_accion_critica, error_amigable
+from utils.helpers import mostrar_notificaciones, agregar_notificacion, registrar_accion_critica, error_amigable, registrar_acceso
 from utils.uploads import subir_imagen, mostrar_imagen_cloudinary
 from utils.helpers import navegar_a
 from utils.nav_button import render_back_button
@@ -364,7 +364,10 @@ def _render_jerarquia(df_act):
 # ==============================================================================
 def _render_ficha_activo(activo):
     """Renderiza la vista detalle de un activo con sus órdenes relacionadas."""
-    nombre = html_module.escape(str(activo.get('nombre', 'Sin nombre')))
+    # Registrar acceso
+    registrar_acceso("activo", activo["id"], activo.get("nombre", "Sin nombre"))
+
+    nombre = html_module.escape(str(activo.get("nombre", "Sin nombre")))
     st.title(f"🔧 {nombre}")
 
     # Breadcrumb
