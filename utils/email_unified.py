@@ -72,12 +72,13 @@ def _cargar_correos_unificado(sin_frescos=False):
     audit = _mod_audit()
     from utils.db import supabase
 
-    # ── 1. Obtener IDs ya procesados (consulta fresca) ──
+    # ── 1. Obtener IDs ya procesados (consulta fresca + locales) ──
     procesados_ids = monitor._obtener_procesados()
-    print(f"📧 _cargar_correos_unificado: {len(procesados_ids)} procesados en BD")
-    if procesados_ids:
-        for ejemplo in list(procesados_ids)[:3]:
-            print(f"   → Ejemplo procesado: [{ejemplo}]")
+    # Complementar con procesados locales (session state) para compensar
+    # el delay de consistencia del cliente Supabase
+    procesados_locales = st.session_state.get('_recentemente_procesados', set())
+    procesados_ids = procesados_ids | procesados_locales
+    print(f"📧 _cargar_correos_unificado: {len(procesados_ids)} procesados ({len(procesados_locales)} locales)")
 
     # ── 2. Cargar desde emails_pendientes ──
     pendientes_guardados = []
@@ -343,12 +344,12 @@ def _render_card_correo(correo, idx, df_act, df_users, df_ordenes):
         _eliminar_de_pendientes(message_id)
         monitor._eliminar_pendiente(message_id)
         audit._cache_actualizar_estado(message_id, en_procesados=True)
-        # Verificar que se guardó
-        verificacion = monitor._obtener_procesados()
-        if message_id.strip() in verificacion:
-            print(f"✅ DESCARTADO OK: [{message_id[:50]}] está en emails_procesados")
-        else:
-            print(f"❌ ERROR: [{message_id[:50]}] NO está en emails_procesados después de guardar")
+        # Agregar a procesados locales (session state) para compensar
+        # el delay de consistencia del cliente Supabase
+        procesados_local = st.session_state.get('_recentemente_procesados', set())
+        procesados_local.add(message_id.strip())
+        st.session_state['_recentemente_procesados'] = procesados_local
+        print(f"✅ DESCARTADO: [{message_id[:50]}] agregado a procesados locales ({len(procesados_local)} total)")
         st.toast(f"🗑️ Descartado: {correo['asunto'][:40]}")
         st.rerun()
 
@@ -363,6 +364,9 @@ def _render_card_correo(correo, idx, df_act, df_users, df_ordenes):
             _eliminar_de_pendientes(message_id)
             monitor._eliminar_pendiente(message_id)
             audit._cache_actualizar_estado(message_id, en_procesados=True)
+            procesados_local = st.session_state.get('_recentemente_procesados', set())
+            procesados_local.add(message_id.strip())
+            st.session_state['_recentemente_procesados'] = procesados_local
 
     if crear_clicked:
         st.session_state[f'_ucrear_ot_{idx}'] = True
@@ -431,6 +435,9 @@ def _render_card_correo(correo, idx, df_act, df_users, df_ordenes):
                                 _eliminar_de_pendientes(message_id)
                                 monitor._eliminar_pendiente(message_id)
                                 audit._cache_actualizar_estado(message_id, en_procesados=True)
+                                procesados_local = st.session_state.get('_recentemente_procesados', set())
+                                procesados_local.add(message_id.strip())
+                                st.session_state['_recentemente_procesados'] = procesados_local
                                 st.session_state.pop(f'_ucrear_ot_{idx}', None)
                                 st.success(f"✅ Orden #{nuevo_id} creada desde correo.")
                                 st.rerun()
@@ -518,6 +525,8 @@ password = "xxxx xxxx xxxx xxxx"
     # ── Filtrar solo los realmente pendientes ──
     monitor = _mod_monitor()
     procesados_ids = monitor._obtener_procesados()
+    procesados_locales = st.session_state.get('_recentemente_procesados', set())
+    procesados_ids = procesados_ids | procesados_locales
     correos_pendientes = [c for c in correos if c['message_id'] not in procesados_ids]
 
     if not correos_pendientes:
