@@ -178,9 +178,13 @@ def _cargar_correos_unificado(sin_frescos=False):
     print(f"📧 Resultado: {len(unificados)} pendientes")
     print(f"   Fuentes: {len(pendientes_guardados)} pendientes, {len(todos_cache)} cache, {len(frescos)} frescos")
     print(f"   Procesados en BD: {len(procesados_ids)}")
-    if unificados:
-        for ejemplo in unificados[:3]:
-            print(f"   → Ejemplo pendiente: [{ejemplo['message_id'][:50]}] fuente={ejemplo.get('fuente')}")
+    # Verificar intersección entre cache y procesados
+    cache_ids = {c.get('message_id', '').strip() for c in todos_cache if c.get('message_id')}
+    en_ambos = cache_ids & procesados_ids
+    print(f"   Cache que YA está en procesados (deberían ser excluidos): {len(en_ambos)}")
+    if en_ambos:
+        for ejemplo in list(en_ambos)[:3]:
+            print(f"   → Ejemplo excluido: [{ejemplo[:60]}]")
 
     return unificados, procesados_ids
 
@@ -334,12 +338,17 @@ def _render_card_correo(correo, idx, df_act, df_users, df_ordenes):
         descartar_clicked = st.button("🗑️ Descartar", key=f"ubtn_descartar_{idx}", use_container_width=True)
 
     if descartar_clicked:
+        print(f"🗑️ DESCARTANDO: message_id=[{message_id}]")
         monitor._marcar_procesado(message_id, accion="descartado")
         _eliminar_de_pendientes(message_id)
-        # Eliminar de emails_pendientes en BD para que no reaparezca
         monitor._eliminar_pendiente(message_id)
-        # Actualizar caché para que el flag en_procesados = TRUE
         audit._cache_actualizar_estado(message_id, en_procesados=True)
+        # Verificar que se guardó
+        verificacion = monitor._obtener_procesados()
+        if message_id.strip() in verificacion:
+            print(f"✅ DESCARTADO OK: [{message_id[:50]}] está en emails_procesados")
+        else:
+            print(f"❌ ERROR: [{message_id[:50]}] NO está en emails_procesados después de guardar")
         st.toast(f"🗑️ Descartado: {correo['asunto'][:40]}")
         st.rerun()
 
