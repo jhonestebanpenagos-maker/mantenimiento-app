@@ -647,15 +647,23 @@ password = "xxxx xxxx xxxx xxxx"
     # ── Paginación inferior ──
     if total_paginas > 1:
         st.markdown("---")
-        col_pag4, col_pag5, col_pag6 = st.columns([1, 2, 1])
-        with col_pag4:
-            if st.button("⬅️ Anterior", disabled=(pagina <= 1), key="uc_pag_ant_bot"):
+        c_info_b, c_prev_b, c_pg_b, c_next_b = st.columns([2, 1, 1, 1])
+        with c_info_b:
+            st.caption(f"📄 Página {pagina} de {total_paginas}")
+        with c_prev_b:
+            if st.button("◀", disabled=(pagina <= 1), key="uc_pag_ant_bot", use_container_width=True):
                 st.session_state['_uc_pagina'] = pagina - 1
                 st.rerun()
-        with col_pag5:
-            st.caption(f"Página {pagina} de {total_paginas}")
-        with col_pag6:
-            if st.button("Siguiente ➡️", disabled=(pagina >= total_paginas), key="uc_pag_sig_bot"):
+        with c_pg_b:
+            nueva_pag_bot = st.number_input(
+                "Página", min_value=1, max_value=total_paginas, value=pagina,
+                key="uc_num_bot", label_visibility="collapsed"
+            )
+            if nueva_pag_bot != pagina:
+                st.session_state['_uc_pagina'] = nueva_pag_bot
+                st.rerun()
+        with c_next_b:
+            if st.button("▶", disabled=(pagina >= total_paginas), key="uc_pag_sig_bot", use_container_width=True):
                 st.session_state['_uc_pagina'] = pagina + 1
                 st.rerun()
 
