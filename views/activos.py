@@ -282,11 +282,26 @@ def _render_ficha_activo(activo):
 
     with col_datos:
         with st.container(border=True):
-            c1, c2, c3, c4 = st.columns(4)
-            c1.metric("ID", f"#{activo['id']}")
-            c2.metric("Categoría", str(activo.get('categoria', 'N/A')))
-            c3.metric("Área", str(activo.get('area', 'N/A')))
-            c4.metric("Ubicación Detalle", str(activo.get('ubicacion', 'N/A')))
+            # Usamos 2 columnas en lugar de 4 y texto estándar para que no se corte en pantallas pequeñas
+            c1, c2 = st.columns(2)
+            
+            with c1:
+                st.caption("🆔 ID del Equipo")
+                st.markdown(f"#### #{activo['id']}")
+                
+                st.markdown("<br>", unsafe_allow_html=True)
+                
+                st.caption("🏢 Área Asignada")
+                st.markdown(f"**{activo.get('area', 'N/A')}**")
+                
+            with c2:
+                st.caption("🔧 Categoría")
+                st.markdown(f"**{activo.get('categoria', 'N/A')}**")
+                
+                st.markdown("<br>", unsafe_allow_html=True)
+                
+                st.caption("📍 Ubicación Específica")
+                st.markdown(f"**{activo.get('ubicacion', 'N/A')}**")
 
         detalles = activo.get('detalles')
         if detalles and isinstance(detalles, dict) and len(detalles) > 0:
