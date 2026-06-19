@@ -42,18 +42,20 @@ def _normalizar_fecha(fecha_str):
 # =============================================================================
 # 📬 CARGA UNIFICADA DE CORREOS
 # =============================================================================
-@st.cache_data(ttl=300, show_spinner=False)
-def _cargar_correos_unificado_cached(sin_frescos=False, last_sync_ts=0):
+def _cargar_correos_unificado(sin_frescos=False):
     """
-    Versión cacheada de la carga unificada. 
-    Se usa last_sync_ts para invalidar manualmente cuando se presiona 'Sincronizar'.
+    Carga TODOS los correos pendientes de gestionar desde 3 fuentes:
+    1. emails_pendientes (guardados previamente)
+    2. email_scan_cache (escaneados como limbo)
+    3. Gmail frescos (últimos 2 días, headers solamente)
     """
     monitor = _mod_monitor()
     from utils.db import supabase
 
-    # ── 1. Obtener IDs ya procesados (BD) ──
-    # Nota: Los locales se filtran fuera del cache para ser inmediatos
-    procesados_ids_db = monitor._obtener_procesados()
+    # ── 1. Obtener IDs ya procesados (BD + Session State) ──
+    procesados_ids = monitor._obtener_procesados()
+    procesados_locales = st.session_state.get('_recentemente_procesados', set())
+    procesados_ids = procesados_ids | procesados_locales
 
     # ── 2. Cargar desde emails_pendientes ──
     pendientes_guardados = []
@@ -83,7 +85,7 @@ def _cargar_correos_unificado_cached(sin_frescos=False, last_sync_ts=0):
     unificados = []
 
     def _esta_procesado(mid):
-        return mid.strip() in procesados_ids_db
+        return mid.strip() in procesados_ids
 
     # Fuente 1: Pendientes
     for c in pendientes_guardados:
@@ -142,20 +144,7 @@ def _cargar_correos_unificado_cached(sin_frescos=False, last_sync_ts=0):
         vistos.add(mid)
 
     unificados.sort(key=lambda c: _normalizar_fecha(c.get('fecha', '')), reverse=True)
-    return unificados, procesados_ids_db
-
-def _cargar_correos_unificado(sin_frescos=False):
-    """Wrapper no cacheado que aplica filtros de sesión inmediatos."""
-    last_sync = st.session_state.get('_last_email_sync_ts', 0)
-    unificados, procesados_db = _cargar_correos_unificado_cached(sin_frescos, last_sync)
-    
-    # Aplicar máscara de sesión (procesados recientemente)
-    procesados_locales = st.session_state.get('_recentemente_procesados', set())
-    todos_procesados = procesados_db | procesados_locales
-    
-    pendientes = [c for c in unificados if c['message_id'].strip() not in todos_procesados]
-    return pendientes, todos_procesados
-
+    return unificados, procesados_ids
 
 # =============================================================================
 # 🔄 SYNC COMPLETO
@@ -293,7 +282,6 @@ def render_buzon_correo():
     
     col_sync, col_info = st.columns([1, 2])
     if col_sync.button("🔄 Sincronizar Gmail", type="primary", use_container_width=True):
-        st.session_state._last_email_sync_ts = time.time()
         correos, _, scan = _sync_gmail_completo()
         st.session_state._correos_pendientes = correos
         st.session_state._sync_result = scan
