@@ -22,7 +22,7 @@ def init_cloudinary():
         st.error("⚠️ No se pudo configurar el servicio de imágenes. Contacte al administrador.")
 
 # ==============================================================================
-# 🎨 SISTEMA DE TEMAS (Optimizado para la Nube)
+# 🎨 SISTEMA DE TEMAS (Vinculado a Base de Datos)
 # ==============================================================================
 TEMAS_DISPONIBLES = {
     "default": {
@@ -38,16 +38,45 @@ TEMAS_DISPONIBLES = {
 }
 
 def obtener_tema_actual() -> str:
-    """Obtiene el tema guardado en la sesión activa del usuario."""
-    if 'tema_seleccionado' not in st.session_state:
-        st.session_state['tema_seleccionado'] = "default"
+    """Obtiene el tema guardado. Prioriza memoria, luego base de datos."""
+    # 1. Si ya lo cargamos en esta sesión, usarlo para que sea muy rápido
+    if 'tema_seleccionado' in st.session_state:
+        return st.session_state['tema_seleccionado']
     
-    return st.session_state['tema_seleccionado']
+    # 2. Si el usuario ya inició sesión, buscar su preferencia en la base de datos
+    if st.session_state.get('user_doc'):
+        try:
+            from utils.db import supabase
+            if supabase:
+                res = supabase.table("usuarios").select("tema_visual").eq("documento", st.session_state['user_doc']).execute()
+                if res.data and res.data[0].get('tema_visual'):
+                    tema_bd = res.data[0]['tema_visual']
+                    if tema_bd in TEMAS_DISPONIBLES:
+                        st.session_state['tema_seleccionado'] = tema_bd
+                        return tema_bd
+        except Exception as e:
+            from utils.logger import logger
+            logger.error(f"Aviso: No se pudo leer el tema de BD: {e}")
+
+    # 3. Si no hay sesión o falló, poner el tema por defecto
+    st.session_state['tema_seleccionado'] = "default"
+    return "default"
 
 def guardar_tema(tema_key: str):
-    """Guarda la preferencia de tema solo para el usuario actual."""
+    """Guarda la preferencia de tema en memoria y en el perfil de base de datos."""
     if tema_key in TEMAS_DISPONIBLES:
+        # 1. Guardar en memoria rápida
         st.session_state['tema_seleccionado'] = tema_key
+        
+        # 2. Guardar en base de datos de Supabase si hay un usuario conectado
+        if st.session_state.get('user_doc'):
+            try:
+                from utils.db import supabase
+                if supabase:
+                    supabase.table("usuarios").update({"tema_visual": tema_key}).eq("documento", st.session_state['user_doc']).execute()
+            except Exception as e:
+                from utils.logger import logger
+                logger.error(f"Error guardando tema en BD: {e}")
 
 def cargar_css():
     """Carga el CSS del tema actualmente seleccionado."""
@@ -59,7 +88,6 @@ def cargar_css():
         with open(archivo_css) as f:
             st.markdown(f"<style>{f.read()}</style>", unsafe_allow_html=True)
     except FileNotFoundError:
-        # Fallback al tema default si el archivo no existe
         try:
             with open("styles.css") as f:
                 st.markdown(f"<style>{f.read()}</style>", unsafe_allow_html=True)
@@ -72,7 +100,7 @@ def render_selector_tema():
 
     with st.sidebar:
         with st.expander("⚙️ Tema Visual", expanded=False):
-            st.caption("Personaliza los colores (solo afecta tu sesión actual).")
+            st.caption("Los colores se guardan en tu perfil personal.")
             for key, info in TEMAS_DISPONIBLES.items():
                 es_activo = key == tema_actual
                 estilo_btn = "primary" if es_activo else "secondary"
