@@ -540,6 +540,7 @@ def _render_edit(df_act):
         
         if nueva_foto_temp:
             st.success("✅ Imagen lista para reemplazar al guardar cambios.")
+            st.image(nueva_foto_temp.getvalue(), width=250)
         else:
             url_db = dat.get('foto_url')
             if url_db and len(url_db) > 10:
