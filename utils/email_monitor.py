@@ -16,10 +16,14 @@ from datetime import datetime, timedelta
 def _obtener_procesados():
     """Obtiene los message_id de correos ya procesados usando caché."""
     from utils.db import run_query
+    import pandas as pd
     try:
-        df_procesados = run_query("emails_procesados")
+        # 🔑 LA CLAVE: Agregamos order_by="message_id" porque esta tabla NO tiene columna "id"
+        df_procesados = run_query("emails_procesados", order_by="message_id")
+        
         if df_procesados.empty:
             return set()
+            
         ids = {str(row["message_id"]).strip() for _, row in df_procesados.iterrows() if pd.notna(row["message_id"])}
         return ids
     except Exception as e:
