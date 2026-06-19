@@ -693,27 +693,50 @@ def render_sugerencia_tecnico(df_ordenes, df_users):
 
 def mostrar_metricas_inteligentes(df_ordenes, df_users, df_solicitudes):
     from utils.helpers import navegar_a
+    from utils.db import supabase
+    from utils.logger import logger
+    
+    # ── 1. Inicializar variables por defecto ──
     n_solicitudes = 0
-    if not df_solicitudes.empty:
-        n_solicitudes = len(df_solicitudes[df_solicitudes['estado'].astype(str).str.strip() == 'Pendiente'])
-    total = len(df_ordenes)
+    total = 0
     pendientes = 0
     por_validar = 0
     concluidas = 0
     devueltas_calidad = 0
     porcentaje_concluidas = 0
-    if not df_ordenes.empty:
-        pendientes = len(df_ordenes[df_ordenes['estado'] == 'Abierta'])
-        por_validar = len(df_ordenes[df_ordenes['estado'] == 'Por Validar'])
-        concluidas = len(df_ordenes[df_ordenes['estado'] == 'Concluida'])
-        if 'comentarios_validacion' in df_ordenes.columns:
-            devueltas_calidad = len(df_ordenes[
-                (df_ordenes['estado'] == 'Abierta') &
-                (df_ordenes['comentarios_validacion'].notnull()) &
-                (df_ordenes['comentarios_validacion'] != "")
-            ])
-        porcentaje_concluidas = (concluidas / total * 100) if total > 0 else 0
+    
+    # ── 2. Intentar usar la función RPC ultra rápida de Supabase ──
+    try:
+        if supabase:
+            res = supabase.rpc("get_dashboard_metrics").execute()
+            if res.data:
+                metrics = res.data
+                n_solicitudes = metrics.get('solicitudes_pendientes', 0)
+                total = metrics.get('total_ordenes', 0)
+                pendientes = metrics.get('abiertas', 0)
+                por_validar = metrics.get('por_validar', 0)
+                concluidas = metrics.get('concluidas', 0)
+                devueltas_calidad = metrics.get('devueltas', 0)
+                porcentaje_concluidas = (concluidas / total * 100) if total > 0 else 0
+    except Exception as e:
+        logger.warning(f"Fallback a conteo con Pandas por fallo en RPC get_dashboard_metrics: {e}")
+        # ── Fallback: si falla la DB, usamos Pandas como antes ──
+        if not df_solicitudes.empty:
+            n_solicitudes = len(df_solicitudes[df_solicitudes['estado'].astype(str).str.strip() == 'Pendiente'])
+        if not df_ordenes.empty:
+            total = len(df_ordenes)
+            pendientes = len(df_ordenes[df_ordenes['estado'] == 'Abierta'])
+            por_validar = len(df_ordenes[df_ordenes['estado'] == 'Por Validar'])
+            concluidas = len(df_ordenes[df_ordenes['estado'] == 'Concluida'])
+            if 'comentarios_validacion' in df_ordenes.columns:
+                devueltas_calidad = len(df_ordenes[
+                    (df_ordenes['estado'] == 'Abierta') &
+                    (df_ordenes['comentarios_validacion'].notnull()) &
+                    (df_ordenes['comentarios_validacion'] != "")
+                ])
+            porcentaje_concluidas = (concluidas / total * 100) if total > 0 else 0
 
+    # ── 3. Renderizar Interfaz ──
     c1, c2, c3, c4, c5 = st.columns(5)
     with c1:
         color_sol = "normal" if n_solicitudes == 0 else "inverse"
