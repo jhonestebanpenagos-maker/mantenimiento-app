@@ -19,3 +19,7 @@ Thumbs.db
 preview_paletas.html
 .tema_actual
 views/ordenes_old.py.bak
+
+# Ignorar archivos de logs de la aplicacion
+logs/
+*.log
