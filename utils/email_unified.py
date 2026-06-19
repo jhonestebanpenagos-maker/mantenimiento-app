@@ -603,18 +603,31 @@ password = "xxxx xxxx xxxx xxxx"
     # ── Paginación ──
     ITEMS_POR_PAGINA = 10
     total_paginas = max(1, (len(filtrados) + ITEMS_POR_PAGINA - 1) // ITEMS_POR_PAGINA)
+    
+    # Asegurar que si el usuario filtra y hay menos páginas, no se quede en una página vacía
     pagina = st.session_state.get('_uc_pagina', 1)
+    if pagina > total_paginas:
+        pagina = total_paginas
+        st.session_state['_uc_pagina'] = pagina
 
     if total_paginas > 1:
-        col_pag1, col_pag2, col_pag3 = st.columns([1, 2, 1])
-        with col_pag1:
-            if st.button("⬅️ Anterior", disabled=(pagina <= 1), key="uc_pag_ant"):
+        c_info, c_prev, c_pg, c_next = st.columns([2, 1, 1, 1])
+        with c_info:
+            st.caption(f"📄 Página {pagina} de {total_paginas} — {len(filtrados)} correos")
+        with c_prev:
+            if st.button("◀", disabled=(pagina <= 1), key="uc_pag_ant", use_container_width=True):
                 st.session_state['_uc_pagina'] = pagina - 1
                 st.rerun()
-        with col_pag2:
-            st.caption(f"Página {pagina} de {total_paginas}")
-        with col_pag3:
-            if st.button("Siguiente ➡️", disabled=(pagina >= total_paginas), key="uc_pag_sig"):
+        with c_pg:
+            nueva_pag = st.number_input(
+                "Página", min_value=1, max_value=total_paginas, value=pagina,
+                key="uc_num_top", label_visibility="collapsed"
+            )
+            if nueva_pag != pagina:
+                st.session_state['_uc_pagina'] = nueva_pag
+                st.rerun()
+        with c_next:
+            if st.button("▶", disabled=(pagina >= total_paginas), key="uc_pag_sig", use_container_width=True):
                 st.session_state['_uc_pagina'] = pagina + 1
                 st.rerun()
 
