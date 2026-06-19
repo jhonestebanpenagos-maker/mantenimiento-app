@@ -1,4 +1,5 @@
 import streamlit as st
+import pandas as pd
 import imaplib
 import email
 from email.header import decode_header
@@ -13,21 +14,16 @@ from datetime import datetime, timedelta
 # 📦 PERSISTENCIA DE CORREOS PROCESADOS (Supabase)
 # ==============================================================================
 def _obtener_procesados():
-    """Obtiene los message_id de correos ya procesados desde Supabase."""
-    from utils.db import supabase
-    if not supabase:
-        print("⚠️ _obtener_procesados: supabase es None")
-        return set()
+    """Obtiene los message_id de correos ya procesados usando caché."""
+    from utils.db import run_query
     try:
-        res = supabase.table("emails_procesados").select("message_id").execute()
-        ids = {row["message_id"].strip() for row in (res.data or []) if row.get("message_id")}
-        print(f"📋 Procesados en BD: {len(ids)} registros")
-        for mid in list(ids)[:5]:
-            print(f"   → [{mid}]")
+        df_procesados = run_query("emails_procesados")
+        if df_procesados.empty:
+            return set()
+        ids = {str(row["message_id"]).strip() for _, row in df_procesados.iterrows() if pd.notna(row["message_id"])}
         return ids
     except Exception as e:
-        print(f"⚠️ Error obteniendo procesados: {type(e).__name__}: {e}")
-        st.warning(f"⚠️ No se pudo consultar correos procesados: {e}")
+        print(f"⚠️ Error obteniendo procesados: {e}")
         return set()
 
 
@@ -54,13 +50,14 @@ def _guardar_correo_pendiente(correo: dict):
 
 
 def _obtener_pendientes_guardados():
-    """Obtiene correos pendientes previamente descargados desde la tabla emails_pendientes."""
-    from utils.db import supabase
-    if not supabase:
-        return []
+    """Obtiene correos pendientes usando caché."""
+    from utils.db import run_query
     try:
-        res = supabase.table("emails_pendientes").select("*").order("descargado_en", desc=True).limit(50).execute()
-        return res.data or []
+        df_pendientes = run_query("emails_pendientes")
+        if df_pendientes.empty:
+            return []
+        # Convertir a lista de diccionarios
+        return df_pendientes.to_dict('records')
     except Exception as e:
         print(f"⚠️ Error obteniendo pendientes guardados: {e}")
         return []
