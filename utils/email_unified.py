@@ -340,30 +340,35 @@ def _render_card_correo(correo, idx, df_act, df_users, df_ordenes):
         descartar_clicked = st.button("🗑️ Descartar", key=f"ubtn_descartar_{idx}", use_container_width=True)
 
     if descartar_clicked:
-        print(f"🗑️ DESCARTANDO: message_id=[{message_id}]")
+        from utils.logger import logger
+        logger.info(f"🗑️ Intentando descartar: [{message_id}]")
         
-        # 1. Guardado directo y seguro en base de datos
         from utils.db import supabase
         guardado_exitoso = False
         
         if supabase:
             try:
-                # Omitimos 'orden_id' por completo para evitar que Supabase 
-                # rechace la petición al recibir un valor nulo en una columna Integer.
                 datos_procesado = {
                     "message_id": message_id.strip(),
                     "accion": "descartado",
                     "fecha_procesado": datetime.now().isoformat()
                 }
-                supabase.table("emails_procesados").upsert(datos_procesado).execute()
-                guardado_exitoso = True
+                res = supabase.table("emails_procesados").upsert(datos_procesado).execute()
+                
+                # VALIDACIÓN ANTI-FALLO SILENCIOSO
+                if hasattr(res, 'data') and len(res.data) == 0:
+                    st.error("❌ Supabase rechazó el guardado (Verifica permisos o RLS).")
+                    logger.error(f"Bloqueo de seguridad al descartar correo {message_id}")
+                else:
+                    guardado_exitoso = True
+                    logger.info("✅ Guardado confirmado en la base de datos.")
+                    
             except Exception as e:
-                # Si falla, EL RERUN SE DETIENE y el error queda visible en pantalla
                 st.error(f"❌ Error crítico guardando en BD: {e}")
+                logger.error(f"Error upsert correos: {e}")
         else:
             st.error("❌ No hay conexión a la base de datos.")
 
-        # 2. Solo si se guardó en BD, limpiamos la memoria temporal y reiniciamos
         if guardado_exitoso:
             _eliminar_de_pendientes(message_id)
             try:
@@ -377,7 +382,7 @@ def _render_card_correo(correo, idx, df_act, df_users, df_ordenes):
             st.session_state['_recentemente_procesados'] = procesados_local
             
             st.toast(f"🗑️ Descartado: {correo['asunto'][:40]}")
-            time.sleep(0.5)  # Breve pausa para asentar la base de datos
+            time.sleep(0.5)
             st.rerun()
 
     if vincular_clicked:
