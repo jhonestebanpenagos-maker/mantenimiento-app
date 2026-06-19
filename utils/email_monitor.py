@@ -1564,6 +1564,7 @@ password = "xxxx xxxx xxxx xxxx"
 
             if descartar_clicked:
                 _marcar_procesado(msg_id, accion="descartado")
+                _eliminar_pendiente(msg_id)  # <-- Línea añadida para purgar el correo de la tabla temporal
                 pendientes_actual = st.session_state.get('_correos_pendientes', [])
                 st.session_state['_correos_pendientes'] = [c for c in pendientes_actual if c['message_id'] != msg_id]
                 st.toast(f"🗑️ Descartado: {correo['asunto'][:40]}")
