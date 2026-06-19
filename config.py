@@ -17,12 +17,12 @@ def init_cloudinary():
     except KeyError:
         st.warning("⚠️ ADVERTENCIA: No se encontraron las credenciales de Cloudinary en secrets.toml.")
     except Exception as e:
+        from utils.logger import logger
+        logger.error(f"Error crítico configurando Cloudinary: {e}")
         st.error("⚠️ No se pudo configurar el servicio de imágenes. Contacte al administrador.")
-        print(f"Error configurando Cloudinary: {e}")
-
 
 # ==============================================================================
-# 🎨 SISTEMA DE TEMAS
+# 🎨 SISTEMA DE TEMAS (Optimizado para la Nube)
 # ==============================================================================
 TEMAS_DISPONIBLES = {
     "default": {
@@ -37,42 +37,17 @@ TEMAS_DISPONIBLES = {
     }
 }
 
-_TEMA_PREF_PATH = os.path.join(os.path.dirname(__file__), ".tema_actual")
-
-
 def obtener_tema_actual() -> str:
-    """Obtiene el tema guardado. Retorna la clave del tema."""
-    # Primero: session state
-    if 'tema_seleccionado' in st.session_state:
-        return st.session_state['tema_seleccionado']
-
-    # Segundo: archivo local persistente
-    try:
-        if os.path.exists(_TEMA_PREF_PATH):
-            with open(_TEMA_PREF_PATH, "r") as f:
-                tema = f.read().strip()
-                if tema in TEMAS_DISPONIBLES:
-                    st.session_state['tema_seleccionado'] = tema
-                    return tema
-    except Exception:
-        pass
-
-    # Default
-    st.session_state['tema_seleccionado'] = "default"
-    return "default"
-
+    """Obtiene el tema guardado en la sesión activa del usuario."""
+    if 'tema_seleccionado' not in st.session_state:
+        st.session_state['tema_seleccionado'] = "default"
+    
+    return st.session_state['tema_seleccionado']
 
 def guardar_tema(tema_key: str):
-    """Guarda la preferencia de tema."""
-    if tema_key not in TEMAS_DISPONIBLES:
-        return
-    st.session_state['tema_seleccionado'] = tema_key
-    try:
-        with open(_TEMA_PREF_PATH, "w") as f:
-            f.write(tema_key)
-    except Exception:
-        pass
-
+    """Guarda la preferencia de tema solo para el usuario actual."""
+    if tema_key in TEMAS_DISPONIBLES:
+        st.session_state['tema_seleccionado'] = tema_key
 
 def cargar_css():
     """Carga el CSS del tema actualmente seleccionado."""
@@ -91,13 +66,13 @@ def cargar_css():
         except FileNotFoundError:
             st.warning("⚠️ No se encontró ningún archivo de estilos.")
 
-
 def render_selector_tema():
     """Renderiza el selector de tema en el sidebar."""
     tema_actual = obtener_tema_actual()
 
     with st.sidebar:
-        with st.expander("⚙️ Tema", expanded=False):
+        with st.expander("⚙️ Tema Visual", expanded=False):
+            st.caption("Personaliza los colores (solo afecta tu sesión actual).")
             for key, info in TEMAS_DISPONIBLES.items():
                 es_activo = key == tema_actual
                 estilo_btn = "primary" if es_activo else "secondary"
@@ -106,5 +81,3 @@ def render_selector_tema():
                 if st.button(label, key=f"tema_{key}", use_container_width=True, type=estilo_btn):
                     guardar_tema(key)
                     st.rerun()
-
-            st.caption("El tema se guarda automáticamente.")
