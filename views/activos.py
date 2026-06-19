@@ -458,20 +458,30 @@ def _render_activo_creado():
     with st.container(border=True):
         c_foto, c_datos, c_qr = st.columns([1, 1.5, 1])
         with c_foto:
+            st.caption("📷 Fotografía")
+            # OPTIMIZACIÓN: Usar memoria local prioritaria para no esperar a la nube
+            foto_local = info.get('foto_bytes')
             foto_nube = info.get('foto_url')
-            if foto_nube and len(foto_nube) > 10:
+            
+            if foto_local:
+                st.image(foto_local, use_container_width=True)
+            elif foto_nube and len(foto_nube) > 10:
                 st.image(foto_nube, use_container_width=True)
             else:
                 st.info("ℹ️ Sin imagen disponible.")
+                
         with c_datos:
             st.markdown(f"### {info['nombre']}")
             st.markdown(f"**📍 Ubicación:** {info['area']} / {info['ubicacion']}")
             st.markdown(f"**🔧 Categoría:** {info['categoria']}")
             if info.get('detalles'):
                 st.table(pd.DataFrame(list(info['detalles'].items()), columns=["Característica", "Dato"]))
+                
         with c_qr:
+            st.caption("🏷️ Código QR")
             if info.get('qr_url'):
-                st.image(info['qr_url'], caption="QR Generado automáticamente")
+                # Forzar un tamaño de 150px evita que el QR se vuelva invisible al estirarse
+                st.image(info['qr_url'], width=150)
 
     b1, b2, b3 = st.columns(3)
     if b1.button("✅ FINALIZAR Y CREAR OTRO", type="primary", use_container_width=True):
