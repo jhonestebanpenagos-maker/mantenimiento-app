@@ -3,10 +3,8 @@ import pandas as pd
 import time
 import io
 import base64
-import html as html_module
 from datetime import datetime
-from PIL import Image
-from utils.db import supabase, run_query, render_paginacion, db_insert, db_update, db_delete, invalidate_cache
+from utils.db import supabase, run_query, run_query_filtered, render_paginacion, db_insert, db_update, db_delete, invalidate_cache
 from utils.helpers import mostrar_notificaciones, agregar_notificacion, registrar_accion_critica, error_amigable
 from utils.uploads import subir_imagen, mostrar_imagen_cloudinary
 from utils.helpers import navegar_a
@@ -15,17 +13,15 @@ from utils.qr import generar_qr_activo
 from utils.catalogos import AREAS_DATA, CATEGORIAS_ACTIVOS
 from pdf_utils import generar_hoja_vida_pdf
 
-
 CATEGORIAS_LIST = CATEGORIAS_ACTIVOS
-
-
 
 def render():
     st.title("📦 ACTIVOS")
     render_back_button()
     mostrar_notificaciones()
 
-    df_act = pd.DataFrame(run_query("activos"))
+    # Usamos la caché optimizada de la Fase 2
+    df_act = run_query("activos")
 
     if 'specs_data' not in st.session_state:
         st.session_state.specs_data = pd.DataFrame(columns=["Componente/Dato", "Valor"])
@@ -70,9 +66,8 @@ def render():
     with tab_edit:
         _render_edit(df_act)
 
-
 # ==============================================================================
-# 📋 LISTA DE ACTIVOS
+# 📋 LISTA DE ACTIVOS (MODERNIZADA CON COMPONENTES NATIVOS)
 # ==============================================================================
 def _render_lista(df_act):
     if not df_act.empty:
@@ -107,105 +102,38 @@ def _render_lista(df_act):
         if not df_filtered.empty:
             st.markdown(f"###### 🧬 Resultados: {len(df_filtered)}")
 
-            # Lightbox CSS + JS (una sola vez)
-            st.markdown("""
-            <style>
-            .lb-overlay{display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.85);z-index:9999;justify-content:center;align-items:center;cursor:pointer;backdrop-filter:blur(4px);}
-            .lb-overlay:target{display:flex;}
-            .lb-overlay img{max-width:90%;max-height:90%;border-radius:10px;box-shadow:0 0 40px rgba(0,0,0,0.5);}
-            .lb-close{position:absolute;top:20px;right:30px;color:#fff;font-size:2rem;text-decoration:none;font-weight:bold;cursor:pointer;z-index:10000;}
-            .lb-close:hover{color:#F59E0B;}
-            .lb-caption{text-align:center;color:#D1D5DB;font-size:0.95rem;margin-top:12px;}
-            </style>
-            <script>
-            document.addEventListener('keydown',function(e){if(e.key==='Escape'){var o=document.querySelector('.lb-overlay:target');if(o)window.location='#';}});
-            </script>
-            """, unsafe_allow_html=True)
-
-            # Renderizar como tarjetas HTML con lightbox
-            cards = []
-            for _, row in df_filtered.iterrows():
-                act_id = str(row["id"])
-                foto_url = row.get("foto_url", "")
-                qr_url = row.get("qr_url", "")
-                nombre_escaped = html_module.escape(str(row["nombre"]))
-
-                # Foto con lightbox
-                if isinstance(foto_url, str) and foto_url.startswith("http"):
-                    foto = (
-                        f'<a href="#lb-{act_id}" style="display:block;cursor:pointer;">'
-                        f'<img src="{foto_url}" style="width:100%;height:160px;object-fit:cover;border-radius:6px;transition:transform 0.2s;" '
-                        f'onmouseover="this.style.transform=\'scale(1.02)\'" onmouseout="this.style.transform=\'none\'" />'
-                        f'</a>'
-                    )
-                    # Modal de foto
-                    foto_modal = (
-                        f'<div id="lb-{act_id}" class="lb-overlay">'
-                        f'<a class="lb-close" href="#">&times;</a>'
-                        f'<div style="text-align:center;">'
-                        f'<img src="{foto_url}" style="max-width:90vw;max-height:80vh;border-radius:10px;" />'
-                        f'<div class="lb-caption">📷 {nombre_escaped}</div>'
-                        f'</div></div>'
-                    )
-                else:
-                    foto = '<div style="width:100%;height:160px;background:#1F2937;border-radius:6px;display:flex;align-items:center;justify-content:center;color:#6B7280;font-size:2rem;">📷</div>'
-                    foto_modal = ""
-
-                # QR con lightbox
-                if isinstance(qr_url, str) and qr_url.startswith("http"):
-                    qr = (
-                        f'<a href="#lb-qr-{act_id}" style="display:block;cursor:pointer;">'
-                        f'<img src="{qr_url}" style="width:60px;height:60px;border-radius:4px;transition:transform 0.2s;" '
-                        f'onmouseover="this.style.transform=\'scale(1.1)\'" onmouseout="this.style.transform=\'none\'" />'
-                        f'</a>'
-                    )
-                    qr_modal = (
-                        f'<div id="lb-qr-{act_id}" class="lb-overlay">'
-                        f'<a class="lb-close" href="#">&times;</a>'
-                        f'<div style="text-align:center;">'
-                        f'<img src="{qr_url}" style="max-width:50vw;max-height:60vh;border-radius:10px;" />'
-                        f'<div class="lb-caption">QR — {nombre_escaped}</div>'
-                        f'</div></div>'
-                    )
-                else:
-                    qr = ""
-                    qr_modal = ""
-
-                cat = html_module.escape(str(row.get("categoria", "N/A")))
-                area = html_module.escape(str(row.get("area", "")))
-                ubic = html_module.escape(str(row.get("ubicacion", "")))
-                card = (
-                    '<div style="background:#1F2937;border:1px solid #374151;border-radius:10px;overflow:hidden;">'
-                    + foto
-                    + '<div style="padding:12px;">'
-                    + '<div style="display:flex;justify-content:space-between;align-items:start;">'
-                    + '<div>'
-                    + '<div style="color:#F3F4F6;font-weight:600;font-size:0.95rem;">' + nombre_escaped + '</div>'
-                    + '<div style="color:#9CA3AF;font-size:0.8rem;margin-top:2px;">ID: ' + act_id + ' · ' + cat + '</div>'
-                    + '</div>'
-                    + qr
-                    + '</div>'
-                    + '<div style="margin-top:8px;font-size:0.8rem;color:#6B7280;">📍 ' + area + ' / ' + ubic + '</div>'
-                    + '</div></div>'
-                    + foto_modal + qr_modal
-                )
-                cards.append(card)
-            grid = '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:16px;">' + "".join(cards) + "</div>"
-            st.markdown(grid, unsafe_allow_html=True)
+            # Renderizado en cuadrícula usando st.columns y st.container (100% Nativo)
+            items_por_fila = 4
+            for i in range(0, len(df_filtered), items_por_fila):
+                cols = st.columns(items_por_fila)
+                for j, (_, row) in enumerate(df_filtered.iloc[i:i+items_por_fila].iterrows()):
+                    with cols[j]:
+                        with st.container(border=True):
+                            # Imagen (Streamlit ya integra visor fullscreen al hacer clic)
+                            foto_url = row.get("foto_url", "")
+                            if isinstance(foto_url, str) and foto_url.startswith("http"):
+                                st.image(foto_url, use_container_width=True)
+                            else:
+                                st.markdown("<div style='text-align:center;font-size:3rem;padding:20px;color:#6B7280;'>📷</div>", unsafe_allow_html=True)
+                            
+                            st.markdown(f"**{row['nombre']}**")
+                            st.caption(f"ID: {row['id']} · {row.get('categoria', 'N/A')}")
+                            st.caption(f"📍 {row.get('area', '')} / {row.get('ubicacion', '')}")
+                            
+                            # Botón de acción directo
+                            if st.button("📋 Ver Ficha", key=f"btn_lista_{row['id']}", use_container_width=True):
+                                navegar_a("Inventario Activos", jump_target="activo", jump_id=row['id'])
         else:
-            if search_term or filtro_area != "Todas" or filtro_cat != "Todas":
-                st.warning("⚠️ No se encontraron activos con estos filtros.")
+            st.warning("⚠️ No se encontraron activos con estos filtros.")
     else:
         st.info("Aún no hay activos registrados.")
-
 
 # ==============================================================================
 # 🔍 BÚSQUEDA RÁPIDA INTEGRADA
 # ==============================================================================
 def _render_busqueda_rapida():
-    """Barra de búsqueda rápida dentro de la página de Activos."""
     query = st.text_input(
-        "🔍 Buscar activo",
+        "🔍 Buscar activo rápidamente...",
         placeholder="Nombre, categoría o ubicación...",
         key="activos_search_input",
         label_visibility="collapsed"
@@ -213,6 +141,7 @@ def _render_busqueda_rapida():
     if query and len(query.strip()) >= 2:
         query = query.strip()
         try:
+            # Optimizamos las búsquedas con RPC o caché
             res_nom = supabase.table("activos").select("id, nombre, categoria, area, ubicacion, foto_url") \
                 .ilike("nombre", f"%{query}%").limit(10).execute()
             res_cat = supabase.table("activos").select("id, nombre, categoria, area, ubicacion, foto_url") \
@@ -232,43 +161,37 @@ def _render_busqueda_rapida():
                 cols = st.columns(min(len(resultados), 4))
                 for i, a in enumerate(resultados[:8]):
                     with cols[i % 4]:
-                        foto = a.get('foto_url', '')
-                        if foto and isinstance(foto, str) and len(foto) > 10:
-                            if not mostrar_imagen_cloudinary(foto, use_container_width=True):
-                                st.markdown("🔧", unsafe_allow_html=True)
-                        else:
-                            st.markdown("<div style='text-align:center;font-size:2rem;padding:15px;background:#1F2937;border-radius:6px;'>🔧</div>", unsafe_allow_html=True)
-                        st.caption(f"**{a['nombre']}**")
-                        st.caption(f"📍 {a.get('area', 'N/A')}")
-                        if st.button("Ver ficha", key=f"search_act_{a['id']}", use_container_width=True):
-                            navegar_a("Inventario Activos", jump_target="activo", jump_id=a['id'])
+                        with st.container(border=True):
+                            foto = a.get('foto_url', '')
+                            if foto and isinstance(foto, str) and len(foto) > 10:
+                                st.image(foto, use_container_width=True)
+                            else:
+                                st.markdown("<div style='text-align:center;font-size:2rem;padding:10px;'>🔧</div>", unsafe_allow_html=True)
+                            st.markdown(f"**{a['nombre']}**")
+                            st.caption(f"📍 {a.get('area', 'N/A')}")
+                            if st.button("Ver", key=f"search_act_{a['id']}", use_container_width=True):
+                                navegar_a("Inventario Activos", jump_target="activo", jump_id=a['id'])
                 st.markdown("---")
             else:
                 st.warning(f"🔍 Sin resultados para \"{query}\"")
         except Exception as e:
             st.caption(f"Error en búsqueda: {e}")
 
-
 # ==============================================================================
-# 🏗️ JERARQUÍA DE ACTIVOS (integrada)
+# 🏗️ JERARQUÍA DE ACTIVOS (NATIVA)
 # ==============================================================================
 def _render_jerarquia(df_act):
-    """Vista de jerarquía de la planta: Área → Sub-área → Equipo."""
     import re as re_module
-
-    df_ordenes = run_query("ordenes")
+    df_ordenes = run_query_filtered("ordenes", select_fields="id, activo_id, estado", filters={"estado": "Abierta"})
 
     if df_act.empty:
         st.info("No hay activos registrados. Ve a la pestaña **Nuevo** para crear el primero.")
         return
 
-    # Calcular métricas por ubicación
     mapa_ordenes_abiertas = {}
     if not df_ordenes.empty:
-        abiertas = df_ordenes[df_ordenes['estado'] == 'Abierta']
-        mapa_ordenes_abiertas = abiertas.groupby('activo_id').size().to_dict()
+        mapa_ordenes_abiertas = df_ordenes.groupby('activo_id').size().to_dict()
 
-    # KPIs generales
     total_activos = len(df_act)
     total_areas = len(AREAS_DATA)
     total_subs = sum(len(v) for v in AREAS_DATA.values())
@@ -279,10 +202,8 @@ def _render_jerarquia(df_act):
     k2.metric("📍 Sub-áreas", total_subs)
     k3.metric("🔧 Activos", total_activos)
     k4.metric("⚠️ Con OTs Abiertas", con_ordenes)
-
     st.markdown("---")
 
-    # ── NAVEGACIÓN POR ÁREA ──
     for area_nombre, sub_areas in sorted(AREAS_DATA.items()):
         activos_area = df_act[df_act['area'] == area_nombre]
         n_activos = len(activos_area)
@@ -290,193 +211,129 @@ def _render_jerarquia(df_act):
 
         area_icon = "🏭" if area_nombre == "Producción" else "🏢" if area_nombre == "Administración" else "📦" if area_nombre == "Ventas" else "🚚"
 
-        with st.expander(f"{area_icon} {area_nombre}  —  {n_activos} activos  {'⚠️ ' + str(ots_area) + ' OTs' if ots_area > 0 else '✅'}", expanded=False):
+        with st.expander(f"{area_icon} {area_nombre}  —  {n_activos} activos  {'⚠️ ' + str(ots_area) + ' OTs' if ots_area > 0 else '✅'}"):
             for sub_area in sorted(sub_areas):
                 activos_sub = activos_area[
-                    activos_area['ubicacion'].str.contains(
-                        rf"\[{re_module.escape(sub_area)}\]", regex=False, na=False
-                    )
+                    activos_area['ubicacion'].str.contains(rf"\[{re_module.escape(sub_area)}\]", regex=False, na=False)
                 ]
 
                 if activos_sub.empty:
-                    st.markdown(f"""
-                    <div style="padding:6px 12px;margin:2px 0;color:#6B7280;font-size:0.85rem;">
-                        📍 {sub_area} <span style="font-size:0.75rem;">(vacía)</span>
-                    </div>
-                    """, unsafe_allow_html=True)
+                    st.caption(f"📍 {sub_area} (vacía)")
                 else:
                     n_sub = len(activos_sub)
                     ots_sub = sum(1 for _, a in activos_sub.iterrows() if a['id'] in mapa_ordenes_abiertas)
-                    badge = f"🔴 {ots_sub} OTs" if ots_sub > 0 else f"🟢 {n_sub} activos"
+                    badge = f"🔴 {ots_sub} OTs pendientes" if ots_sub > 0 else f"🟢 {n_sub} activos listos"
 
-                    with st.expander(f"📍 {sub_area}  —  {badge}", expanded=False):
+                    with st.expander(f"📍 {sub_area}  —  {badge}"):
                         for _, activo in activos_sub.iterrows():
                             oid = activo['id']
                             tiene_ots = oid in mapa_ordenes_abiertas
-                            n_ots = mapa_ordenes_abiertas.get(oid, 0)
+                            
+                            with st.container(border=True):
+                                col_foto, col_info, col_btns = st.columns([1, 3, 1.5])
+                                with col_foto:
+                                    foto = activo.get('foto_url', '')
+                                    if foto and len(foto) > 10:
+                                        st.image(foto, use_container_width=True)
+                                    else:
+                                        st.markdown("<div style='text-align:center;font-size:2rem;padding:10px;'>🔧</div>", unsafe_allow_html=True)
+                                
+                                with col_info:
+                                    icono_estado = "🔴" if tiene_ots else "🟢"
+                                    st.markdown(f"**{icono_estado} {activo['nombre']}** (ID: {oid})")
+                                    st.caption(f"🔧 {activo.get('categoria', 'N/A')} | 📍 {activo.get('ubicacion', 'N/A')}")
+                                    
+                                    detalles = activo.get('detalles')
+                                    if detalles and isinstance(detalles, dict) and len(detalles) > 0:
+                                        st.caption("⚙️ Contiene Especificaciones Técnicas")
+                                
+                                with col_btns:
+                                    if st.button("📋 Ficha", key=f"jer_act_{oid}", use_container_width=True):
+                                        navegar_a("Inventario Activos", jump_target="activo", jump_id=oid)
+                                    if st.button("🛠️ Ver OTs", key=f"jer_ot_{oid}", use_container_width=True, type="primary" if tiene_ots else "secondary"):
+                                        navegar_a("Ordenes de Trabajo", jump_target="ordenes_por_activo", jump_id=oid)
 
-                            icono_estado = "🔴" if tiene_ots else "🟢"
-                            foto = activo.get('foto_url', '')
-
-                            col_foto, col_info = st.columns([1, 4])
-                            with col_foto:
-                                if foto and isinstance(foto, str) and len(foto) > 10:
-                                    if not mostrar_imagen_cloudinary(foto, use_container_width=True):
-                                        st.caption("📷")
-                                else:
-                                    st.markdown("<div style='text-align:center;font-size:2rem;padding:20px;'>🔧</div>", unsafe_allow_html=True)
-
-                            with col_info:
-                                st.markdown(f"""
-                                <div style="background:rgba(30,41,59,0.5);border-radius:8px;padding:12px;margin-bottom:8px;">
-                                    <div style="display:flex;justify-content:space-between;align-items:center;">
-                                        <span style="color:#E5E7EB;font-weight:700;font-size:1rem;">{icono_estado} {activo['nombre']}</span>
-                                        <span style="font-size:0.75rem;color:#9CA3AF;">ID: {oid}</span>
-                                    </div>
-                                    <div style="display:flex;gap:15px;margin-top:6px;font-size:0.8rem;color:#9CA3AF;">
-                                        <span>🔧 {activo.get('categoria', 'N/A')}</span>
-                                        <span>📍 {activo.get('ubicacion', 'N/A')}</span>
-                                    </div>
-                                </div>
-                                """, unsafe_allow_html=True)
-
-                                detalles = activo.get('detalles')
-                                if detalles and isinstance(detalles, dict) and len(detalles) > 0:
-                                    with st.expander("⚙️ Especificaciones"):
-                                        for k, v in detalles.items():
-                                            st.markdown(f"**{k}:** {v}")
-
-                                if st.button(f"📋 Ver ficha", key=f"jer_act_{oid}", type="primary", use_container_width=True):
-                                    navegar_a("Inventario Activos", jump_target="activo", jump_id=oid)
-                                if st.button(f"🛠️ Ver OTs", key=f"jer_ot_{oid}", type="secondary", use_container_width=True):
-                                    navegar_a("Ordenes de Trabajo", jump_target="ordenes_por_activo", jump_id=oid)
-
-    # ── Activos sin área asignada ──
     activos_sin_area = df_act[~df_act['area'].isin(AREAS_DATA.keys())]
     if not activos_sin_area.empty:
         with st.expander(f"⚠️ Activos sin área asignada  —  {len(activos_sin_area)}", expanded=False):
             for _, act in activos_sin_area.iterrows():
                 st.markdown(f"- **{act['nombre']}** (ID: {act['id']}) — Área: {act.get('area', 'N/A')}")
 
-
 # ==============================================================================
-# 🔍 FICHA DETALLE DE ACTIVO
+# 🔍 FICHA DETALLE DE ACTIVO (NATIVA)
 # ==============================================================================
 def _render_ficha_activo(activo):
-    """Renderiza la vista detalle de un activo con sus órdenes relacionadas."""
-    nombre = html_module.escape(str(activo.get('nombre', 'Sin nombre')))
-    st.title(f"🔧 {nombre}")
+    st.title(f"🔧 {activo.get('nombre', 'Sin nombre')}")
+    st.caption(f"📦 Inventario > {activo.get('area', 'N/A')} > {activo.get('ubicacion', 'N/A')} > {activo.get('nombre', '')}")
 
-    # Breadcrumb
-    area = html_module.escape(str(activo.get('area', 'N/A')))
-    ubic = html_module.escape(str(activo.get('ubicacion', 'N/A')))
-    st.caption(f"📦 Inventario > {area} > {ubic} > {nombre}")
-
-    # ── Foto + Datos principales ──
     col_foto, col_datos = st.columns([1, 2])
 
     with col_foto:
         url_foto = activo.get('foto_url')
-        if url_foto and isinstance(url_foto, str) and len(url_foto) > 10:
-            if not mostrar_imagen_cloudinary(url_foto, use_container_width=True, caption="Fotografía"):
-                st.info("📷 Foto no disponible")
+        if url_foto and len(url_foto) > 10:
+            st.image(url_foto, use_container_width=True, caption="Fotografía del Equipo")
         else:
-            st.markdown("<div style='text-align:center;font-size:4rem;padding:40px;background:#1F2937;border-radius:10px;'>🔧</div>", unsafe_allow_html=True)
+            st.info("📷 Foto no disponible")
 
-        # QR
         url_qr = activo.get('qr_url')
-        if url_qr and isinstance(url_qr, str) and len(url_qr) > 10:
-            st.image(url_qr, width=150, caption="Código QR")
+        if url_qr and len(url_qr) > 10:
+            with st.expander("Ver Código QR"):
+                st.image(url_qr, width=150)
 
     with col_datos:
-        st.markdown(f"""
-        <div style="background:rgba(30,41,59,0.6);border-radius:10px;padding:20px;">
-            <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
-                <div>
-                    <div style="color:#9CA3AF;font-size:0.8rem;text-transform:uppercase;">ID</div>
-                    <div style="color:#E5E7EB;font-weight:600;">#{activo['id']}</div>
-                </div>
-                <div>
-                    <div style="color:#9CA3AF;font-size:0.8rem;text-transform:uppercase;">Categoría</div>
-                    <div style="color:#E5E7EB;font-weight:600;">{html_module.escape(str(activo.get('categoria', 'N/A')))}</div>
-                </div>
-                <div>
-                    <div style="color:#9CA3AF;font-size:0.8rem;text-transform:uppercase;">Área</div>
-                    <div style="color:#E5E7EB;font-weight:600;">{area}</div>
-                </div>
-                <div>
-                    <div style="color:#9CA3AF;font-size:0.8rem;text-transform:uppercase;">Ubicación</div>
-                    <div style="color:#E5E7EB;font-weight:600;">{ubic}</div>
-                </div>
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
+        with st.container(border=True):
+            c1, c2, c3, c4 = st.columns(4)
+            c1.metric("ID", f"#{activo['id']}")
+            c2.metric("Categoría", str(activo.get('categoria', 'N/A')))
+            c3.metric("Área", str(activo.get('area', 'N/A')))
+            c4.metric("Ubicación Detalle", str(activo.get('ubicacion', 'N/A')))
 
-        # Especificaciones
         detalles = activo.get('detalles')
         if detalles and isinstance(detalles, dict) and len(detalles) > 0:
-            st.markdown("#### ⚙️ Especificaciones")
-            for k, v in detalles.items():
-                st.markdown(f"**{html_module.escape(str(k))}:** {html_module.escape(str(v))}")
+            with st.container(border=True):
+                st.markdown("#### ⚙️ Especificaciones Técnicas")
+                for k, v in detalles.items():
+                    st.markdown(f"**{k}:** {v}")
 
     st.markdown("---")
-
-    # ── Órdenes relacionadas ──
     st.markdown("#### 🛠️ Órdenes de Trabajo Relacionadas")
     try:
-        res_ordenes = supabase.table("ordenes").select("*") \
-            .eq("activo_id", int(activo['id'])) \
-            .order("fecha_creacion", desc=True).limit(10).execute()
+        res_ordenes = supabase.table("ordenes").select("*").eq("activo_id", int(activo['id'])).order("fecha_creacion", desc=True).limit(10).execute()
 
         if res_ordenes.data:
-            # KPIs rápidos
             total = len(res_ordenes.data)
             abiertas = sum(1 for o in res_ordenes.data if o['estado'] == 'Abierta')
             concluidas = sum(1 for o in res_ordenes.data if o['estado'] == 'Concluida')
 
             k1, k2, k3 = st.columns(3)
-            k1.metric("Total OTs", total)
-            k2.metric("🔨 Abiertas", abiertas)
+            k1.metric("Total Histórico", total)
+            k2.metric("🔨 En Ejecución", abiertas)
             k3.metric("✅ Concluidas", concluidas)
 
-            # Tabla de órdenes
             for orden in res_ordenes.data:
-                icono = "✅" if orden['estado'] == 'Concluida' else "🔨" if orden['estado'] == 'Abierta' else "🧐"
-                fecha = (orden.get('fecha_creacion', '') or '')[:10]
-                desc = (orden.get('descripcion', '') or '')[:60]
+                with st.container(border=True):
+                    c_info, c_btn = st.columns([4, 1])
+                    with c_info:
+                        icono = "✅" if orden['estado'] == 'Concluida' else "🔨" if orden['estado'] == 'Abierta' else "🧐"
+                        fecha = (orden.get('fecha_creacion', '') or '')[:10]
+                        st.markdown(f"**{icono} OT #{orden['id']}** — {fecha}")
+                        st.caption(f"{orden.get('estado', '?')} · {orden.get('criticidad', '?')} · {orden.get('descripcion', '')[:80]}...")
+                    with c_btn:
+                        if st.button("Gestionar", key=f"ficha_ot_{orden['id']}", use_container_width=True):
+                            navegar_a("Ordenes de Trabajo", jump_target="orden", jump_id=orden['id'])
 
-                col_info, col_btn = st.columns([4, 1])
-                with col_info:
-                    st.markdown(f"""
-                    <div style="background:rgba(255,255,255,0.03);border-left:3px solid {'#10B981' if orden['estado'] == 'Concluida' else '#F59E0B'};padding:8px 12px;border-radius:0 6px 6px 0;margin-bottom:4px;">
-                        <div style="display:flex;justify-content:space-between;font-size:0.85rem;">
-                            <span style="color:#E5E7EB;font-weight:600;">{icono} OT #{orden['id']}</span>
-                            <span style="color:#9CA3AF;">{fecha}</span>
-                        </div>
-                        <div style="color:#9CA3AF;font-size:0.8rem;">{desc}{'...' if len(orden.get('descripcion', '') or '') > 60 else ''}</div>
-                        <div style="font-size:0.75rem;color:#6B7280;">{orden.get('estado', '?')} · {orden.get('criticidad', '?')} · {orden.get('tipo_mantenimiento', '?')}</div>
-                    </div>
-                    """, unsafe_allow_html=True)
-                with col_btn:
-                    if st.button("⚙️ Gestionar", key=f"ficha_ot_{orden['id']}", type="secondary", use_container_width=True):
-                        navegar_a("Ordenes de Trabajo", jump_target="orden", jump_id=orden['id'])
-
-            # Link para ver todas
-            if st.button("📋 Ver todas las órdenes de este activo", key="ver_todas_ot_ficha"):
+            if st.button("📋 Ver Historial Completo", key="ver_todas_ot_ficha"):
                 navegar_a("Ordenes de Trabajo", jump_target="ordenes_por_activo", jump_id=int(activo['id']))
         else:
-            st.info("Este activo no tiene órdenes de trabajo registradas.")
-            if st.button("➕ Crear orden para este activo", type="primary"):
+            st.info("Este equipo no tiene incidencias ni mantenimientos registrados en el historial.")
+            if st.button("➕ Crear nueva Orden", type="primary"):
                 navegar_a("Ordenes de Trabajo", jump_target="crear_para_activo", jump_id=int(activo['id']))
     except Exception as e:
         st.error("No se pudieron cargar las órdenes.")
-        print(f"Error cargando OTs del activo: {e}")
 
-    # ── Botón para editar ──
     st.markdown("---")
-    if st.button("✏️ Editar este activo", use_container_width=True):
+    if st.button("✏️ Editar información del activo", use_container_width=True):
         navegar_a("Inventario Activos")
-
 
 # ==============================================================================
 # ➕ NUEVO ACTIVO
@@ -495,86 +352,40 @@ def _render_nuevo(df_act):
         except (ValueError, TypeError):
             return 0
 
-    # ── PASO 1: Ubicación ──
     st.markdown("##### 📍 Ubicación")
     c_loc1, c_loc2 = st.columns(2)
     keys_areas = sorted(AREAS_DATA.keys())
-    idx_area_def = keys_areas.index(draft.get('area')) if draft.get('area') in keys_areas else 0
-    area_principal = c_loc1.selectbox("Área Principal", keys_areas, index=idx_area_def, key="new_asset_area_out")
+    area_principal = c_loc1.selectbox("Área Principal", keys_areas, index=get_idx(keys_areas, draft.get('area')), key="new_asset_area_out")
 
     sub_areas = sorted(AREAS_DATA[area_principal])
-    d_sub_prev = ""
-    if draft.get('ubicacion'):
-        parts = draft['ubicacion'].split('] ', 1)
-        d_sub_prev = parts[0].replace('[', '')
-    idx_sub_def = sub_areas.index(d_sub_prev) if d_sub_prev in sub_areas else 0
-    sub_area = c_loc2.selectbox("Sub-área", sub_areas, index=idx_sub_def, key="new_asset_sub_out")
+    d_sub_prev = draft['ubicacion'].split('] ', 1)[0].replace('[', '') if draft.get('ubicacion') else ""
+    sub_area = c_loc2.selectbox("Sub-área", sub_areas, index=get_idx(sub_areas, d_sub_prev), key="new_asset_sub_out")
 
-    st.markdown("")
-
-    # ── PASO 2: Datos del activo ──
     st.markdown("##### 📝 Datos del Activo")
     c1, c2 = st.columns(2)
-    nom = c1.text_input("Nombre del Activo", value=draft.get('nombre', ''), key="new_asset_name")
-    d_det_prev = ""
-    if draft.get('ubicacion'):
-        parts = draft['ubicacion'].split('] ', 1)
-        if len(parts) > 1:
-            d_det_prev = parts[1]
-    ubic_detalle = c2.text_input("Ubicación Exacta / Detalle (Opcional)", value=d_det_prev, key="new_asset_detail")
+    nom = c1.text_input("Nombre del Equipo", value=draft.get('nombre', ''), key="new_asset_name")
+    d_det_prev = draft['ubicacion'].split('] ', 1)[1] if draft.get('ubicacion') and len(draft['ubicacion'].split('] ', 1)) > 1 else ""
+    ubic_detalle = c2.text_input("Ubicación Exacta / Referencia (Opcional)", value=d_det_prev, key="new_asset_detail")
     cat = c1.selectbox("Categoría", CATEGORIAS_LIST, index=get_idx(CATEGORIAS_LIST, draft.get('categoria')), key="new_asset_cat")
 
     st.markdown("---")
-
-    # ── PASO 3: Especificaciones ──
-    st.markdown("##### ⚙️ Especificaciones")
+    st.markdown("##### ⚙️ Especificaciones Técnicas (Opcional)")
     edited_df = st.data_editor(st.session_state.specs_data, num_rows="dynamic", use_container_width=True, key="new_asset_specs")
 
     st.markdown("---")
-
-    # ── PASO 4: Fotografía (fuera del form para drag-and-drop) ──
     st.markdown("##### 📸 Fotografía (Obligatorio)")
 
     if draft.get('foto_url'):
-        mostrar_imagen_cloudinary(draft['foto_url'], width=120, caption="Foto guardada (Draft)")
-        st.caption("Sube una nueva imagen para reemplazarla, o deja la actual.")
+        st.image(draft['foto_url'], width=120, caption="Foto guardada (Borrador)")
 
-    foto_archivo = st.file_uploader(
-        "Arrastra y suelta la imagen aquí, o haz clic para seleccionar",
-        type=["jpg", "png", "jpeg"],
-        key="new_asset_photo",
-    )
+    foto_archivo = st.file_uploader("Arrastra y suelta la imagen aquí", type=["jpg", "png", "jpeg"], key="new_asset_photo")
 
     if foto_archivo is not None:
         st.session_state.draft_data['foto_bytes'] = foto_archivo.getvalue()
-        try:
-            img_bytes = foto_archivo.getvalue()
-            b64 = base64
-            b64_str = b64.b64encode(img_bytes).decode()
-            nombre_lower = foto_archivo.name.lower() if hasattr(foto_archivo, 'name') else ""
-            if nombre_lower.endswith(".png"):
-                mime = "image/png"
-            elif nombre_lower.endswith((".jpg", ".jpeg")):
-                mime = "image/jpeg"
-            else:
-                mime = "image/png"
-            st.markdown(
-                f'<div style="text-align:center;">'
-                f'<img src="data:{mime};base64,{b64_str}" '
-                f'style="max-width:200px;height:auto;border-radius:8px;" />'
-                f'<p style="color:#10B981;font-size:0.85rem;margin-top:4px;">✅ Imagen lista para guardar</p>'
-                f'</div>',
-                unsafe_allow_html=True
-            )
-        except Exception:
-            st.warning("⚠️ No se pudo previsualizar, pero la foto se guardará correctamente.")
-        st.success("Foto cargada correctamente.")
-    elif draft.get('foto_bytes') is not None:
-        st.image(draft['foto_bytes'], width=200, caption="Foto del draft")
+        st.success("✅ Imagen cargada temporalmente.")
+        st.image(foto_archivo, width=200)
 
     st.markdown("---")
-
-    # ── Botón de guardar ──
     if st.button("💾 GUARDAR ACTIVO", type="primary", use_container_width=True, key="btn_save_new_asset"):
         foto_final = foto_archivo
         if foto_final is None and draft.get('foto_bytes') is not None:
@@ -582,14 +393,12 @@ def _render_nuevo(df_act):
             foto_final.name = "foto_draft.jpg"
         _guardar_nuevo_activo(nom, cat, area_principal, sub_area, ubic_detalle, foto_final, edited_df, draft)
 
-
 def _guardar_nuevo_activo(nom, cat, area_principal, sub_area, ubic_detalle, foto_archivo, edited_df, draft):
     final_url = None
     foto_bytes_local = None
 
     if foto_archivo:
-        with st.spinner("Subiendo foto a Cloudinary..."):
-            # Obtener bytes del archivo (UploadedFile o BytesIO)
+        with st.spinner("Procesando imagen en la nube..."):
             try:
                 foto_bytes_local = foto_archivo.getvalue() if hasattr(foto_archivo, 'getvalue') else foto_archivo.read()
             except Exception:
@@ -599,20 +408,18 @@ def _guardar_nuevo_activo(nom, cat, area_principal, sub_area, ubic_detalle, foto
         final_url = draft['foto_url']
 
     if not nom or not final_url:
-        agregar_notificacion('error', '⚠️ El Nombre y la Foto son obligatorios.')
+        st.error('⚠️ El Nombre y la Fotografía son datos obligatorios.')
         return
 
     try:
-        detalles_json = {
-            row["Componente/Dato"]: row["Valor"]
-            for i, row in edited_df.iterrows()
-            if row["Componente/Dato"] and row["Valor"]
-        }
+        detalles_json = {row["Componente/Dato"]: row["Valor"] for i, row in edited_df.iterrows() if row["Componente/Dato"] and row["Valor"]}
         ubic_final = f"[{sub_area}] {ubic_detalle}" if ubic_detalle else f"[{sub_area}]"
+        
         res = db_insert("activos", {
             "nombre": nom, "area": area_principal, "ubicacion": ubic_final,
             "categoria": cat, "foto_url": final_url, "detalles": detalles_json
         })
+        
         if res.data:
             nid = res.data[0]['id']
             qr = generar_qr_activo(nid, nom)
@@ -626,290 +433,168 @@ def _guardar_nuevo_activo(nom, cat, area_principal, sub_area, ubic_detalle, foto
             }
             st.rerun()
     except Exception as e:
-        agregar_notificacion('error', f'Error guardando en base de datos: {e}')
-
+        error_amigable(e, "guardar activo en la base de datos")
 
 def _render_activo_creado():
     info = st.session_state.activo_creado_info
-    st.markdown(f"""
-        <div style="background-color:rgba(6,78,59,0.5);border:1px solid #10B981;border-radius:10px;padding:20px;margin-bottom:20px;">
-            <h2 style="color:#10B981;text-align:center;margin:0;">✨ ACTIVO REGISTRADO</h2>
-            <p style="text-align:center;color:#D1FAE5;">Verifique los datos a continuación</p>
-        </div>
-    """, unsafe_allow_html=True)
+    st.success("✨ ¡ACTIVO REGISTRADO EXITOSAMENTE!")
+    
+    with st.container(border=True):
+        c_foto, c_datos, c_qr = st.columns([1, 1.5, 1])
+        with c_foto:
+            foto_nube = info.get('foto_url')
+            if foto_nube and len(foto_nube) > 10:
+                st.image(foto_nube, use_container_width=True)
+            else:
+                st.info("ℹ️ Sin imagen disponible.")
+        with c_datos:
+            st.markdown(f"### {info['nombre']}")
+            st.markdown(f"**📍 Ubicación:** {info['area']} / {info['ubicacion']}")
+            st.markdown(f"**🔧 Categoría:** {info['categoria']}")
+            if info.get('detalles'):
+                st.table(pd.DataFrame(list(info['detalles'].items()), columns=["Característica", "Dato"]))
+        with c_qr:
+            if info.get('qr_url'):
+                st.image(info['qr_url'], caption="QR Generado automáticamente")
 
-    c_foto, c_datos, c_qr = st.columns([1, 1.5, 1])
-    with c_foto:
-        st.markdown("#### 🖼️ Foto")
-        foto_nube = info.get('foto_url')
-        foto_local = info.get('foto_bytes')
-        # Prioridad 1: URL de Cloudinary (con fallback a bytes)
-        if foto_nube and isinstance(foto_nube, str) and len(foto_nube) > 10:
-            if not mostrar_imagen_cloudinary(foto_nube, use_container_width=True, caption="Fotografía"):
-                # Fallback a bytes locales
-                if foto_local and len(foto_local) > 0:
-                    try:
-                        st.image(io.BytesIO(foto_local), use_container_width=True, caption="Previsualización")
-                    except Exception:
-                        st.warning("No se pudo cargar la imagen.")
-                else:
-                    st.warning("No se pudo cargar la imagen.")
-        # Prioridad 2: Solo bytes locales
-        elif foto_local and len(foto_local) > 0:
-            try:
-                st.image(io.BytesIO(foto_local), use_container_width=True, caption="Previsualización")
-            except Exception:
-                st.warning("No se pudo cargar la vista previa local.")
-        else:
-            st.info("ℹ️ Sin imagen disponible.")
-    with c_datos:
-        st.markdown(f"### {info['nombre']}")
-        st.markdown(f"**📍 Ubicación:** {info['area']} / {info['ubicacion']}")
-        st.markdown(f"**🔧 Categoría:** {info['categoria']}")
-        st.markdown("---")
-        detalles = info['detalles']
-        if detalles and isinstance(detalles, dict) and len(detalles) > 0:
-            st.table(pd.DataFrame(list(detalles.items()), columns=["Característica", "Dato"]))
-    with c_qr:
-        if info.get('qr_url'):
-            st.image(info['qr_url'], caption="QR Asignado", width=180)
-
-    st.markdown("---")
     b1, b2, b3 = st.columns(3)
-    with b1:
-        if st.button("✅ FINALIZAR Y NUEVO", type="primary", use_container_width=True):
-            del st.session_state['activo_creado_info']
-            st.session_state.specs_data = pd.DataFrame(columns=["Componente/Dato", "Valor"])
-            st.session_state.draft_data = {}
-            st.rerun()
-    with b2:
-        if st.button("✏️ EDITAR (CORREGIR)", use_container_width=True):
-            db_delete("activos", "id", info['id'])
-            st.session_state.draft_data = info
-            if info['detalles']:
-                st.session_state.specs_data = pd.DataFrame(
-                    list(info['detalles'].items()), columns=["Componente/Dato", "Valor"]
-                )
-            del st.session_state['activo_creado_info']
-            st.rerun()
-    with b3:
-        if st.button("🗑️ DESHACER", type="secondary", use_container_width=True):
-            db_delete("activos", "id", info['id'])
-            del st.session_state['activo_creado_info']
-            st.session_state.specs_data = pd.DataFrame(columns=["Componente/Dato", "Valor"])
-            st.session_state.draft_data = {}
-            agregar_notificacion('warning', 'Registro cancelado.')
-            st.rerun()
-
+    if b1.button("✅ FINALIZAR Y CREAR OTRO", type="primary", use_container_width=True):
+        del st.session_state['activo_creado_info']
+        st.session_state.specs_data = pd.DataFrame(columns=["Componente/Dato", "Valor"])
+        st.session_state.draft_data = {}
+        st.rerun()
+    if b2.button("✏️ EDITAR (CORREGIR)", use_container_width=True):
+        db_delete("activos", "id", info['id'])
+        st.session_state.draft_data = info
+        if info['detalles']:
+            st.session_state.specs_data = pd.DataFrame(list(info['detalles'].items()), columns=["Componente/Dato", "Valor"])
+        del st.session_state['activo_creado_info']
+        st.rerun()
+    if b3.button("🗑️ DESHACER REGISTRO", use_container_width=True):
+        db_delete("activos", "id", info['id'])
+        del st.session_state['activo_creado_info']
+        st.session_state.specs_data = pd.DataFrame(columns=["Componente/Dato", "Valor"])
+        st.session_state.draft_data = {}
+        st.toast("Registro cancelado y eliminado de la BD.")
+        st.rerun()
 
 # ==============================================================================
-# ✏️ EDITAR / QR
+# ✏️ EDITAR / QR (ZONA DE PELIGRO NATIVA)
 # ==============================================================================
 def _render_edit(df_act):
     if not df_act.empty:
         all_assets = df_act['nombre'].values
-        sel_asset = st.selectbox("🔍 Buscar Activo para Ver o Editar", all_assets)
+        sel_asset = st.selectbox("🔍 Buscar Equipo para Modificar", all_assets)
         dat = df_act[df_act['nombre'] == sel_asset].iloc[0]
         id_suffix = dat['id']
 
         st.markdown("---")
         st.subheader(f"Editando: {dat['nombre']}")
 
-        c1, c2 = st.columns(2)
-        current_area_idx = list(sorted(AREAS_DATA.keys())).index(dat['area']) if dat['area'] in AREAS_DATA else 0
-        edit_area = c1.selectbox("Área", sorted(AREAS_DATA.keys()), index=current_area_idx, key=f"edit_area_{id_suffix}")
+        with st.container(border=True):
+            c1, c2 = st.columns(2)
+            current_area_idx = list(sorted(AREAS_DATA.keys())).index(dat['area']) if dat['area'] in AREAS_DATA else 0
+            edit_area = c1.selectbox("Área", sorted(AREAS_DATA.keys()), index=current_area_idx, key=f"edit_area_{id_suffix}")
 
-        curr_sub, curr_det = "", ""
-        if dat['ubicacion']:
-            parts = dat['ubicacion'].split('] ', 1)
-            curr_sub = parts[0].replace('[', '')
-            curr_det = parts[1] if len(parts) > 1 else ""
+            curr_sub, curr_det = "", ""
+            if dat['ubicacion']:
+                parts = dat['ubicacion'].split('] ', 1)
+                curr_sub = parts[0].replace('[', '')
+                curr_det = parts[1] if len(parts) > 1 else ""
 
-        sub_areas_edit = sorted(AREAS_DATA[edit_area])
-        curr_sub_idx = sub_areas_edit.index(curr_sub) if curr_sub in sub_areas_edit else 0
-        edit_sub = c2.selectbox("Sub-área", sub_areas_edit, index=curr_sub_idx, key=f"edit_sub_{id_suffix}")
-        edit_nom = c1.text_input("Nombre", value=dat['nombre'], key=f"edit_nom_{id_suffix}")
-        edit_det = c2.text_input("Ubicación Detalle", value=curr_det, key=f"edit_det_{id_suffix}")
-        curr_cat_idx = CATEGORIAS_LIST.index(dat['categoria']) if dat['categoria'] in CATEGORIAS_LIST else 0
-        edit_cat = c1.selectbox("Categoría", CATEGORIAS_LIST, index=curr_cat_idx, key=f"edit_cat_{id_suffix}")
+            sub_areas_edit = sorted(AREAS_DATA[edit_area])
+            curr_sub_idx = sub_areas_edit.index(curr_sub) if curr_sub in sub_areas_edit else 0
+            edit_sub = c2.selectbox("Sub-área", sub_areas_edit, index=curr_sub_idx, key=f"edit_sub_{id_suffix}")
+            edit_nom = c1.text_input("Nombre", value=dat['nombre'], key=f"edit_nom_{id_suffix}")
+            edit_det = c2.text_input("Referencia Específica", value=curr_det, key=f"edit_det_{id_suffix}")
+            curr_cat_idx = CATEGORIAS_LIST.index(dat['categoria']) if dat['categoria'] in CATEGORIAS_LIST else 0
+            edit_cat = c1.selectbox("Categoría", CATEGORIAS_LIST, index=curr_cat_idx, key=f"edit_cat_{id_suffix}")
 
-        st.markdown("---")
-        nueva_foto_temp = st.file_uploader("Subir nueva foto", type=["jpg", "png"], key=f"edit_up_{id_suffix}")
+        nueva_foto_temp = st.file_uploader("Subir nueva fotografía para reemplazar la actual", type=["jpg", "png"], key=f"edit_up_{id_suffix}")
+        
+        if nueva_foto_temp:
+            st.success("✅ Imagen lista para reemplazar al guardar cambios.")
+        else:
+            url_db = dat.get('foto_url')
+            if url_db and len(url_db) > 10:
+                with st.expander("Ver Imagen Actual"):
+                    st.image(url_db, width=300)
 
-        col_f1, col_f2 = st.columns([1, 2])
-        with col_f1:
-            st.markdown("#### 🖼️ Visualización")
-            if nueva_foto_temp:
-                try:
-                    img_bytes = nueva_foto_temp.getvalue()
-                    b64 = base64
-                    b64_str = b64.b64encode(img_bytes).decode()
-                    # Detectar tipo de imagen
-                    nombre_lower = nueva_foto_temp.name.lower() if hasattr(nueva_foto_temp, 'name') else ""
-                    if nombre_lower.endswith(".png"):
-                        mime = "image/png"
-                    elif nombre_lower.endswith((".jpg", ".jpeg")):
-                        mime = "image/jpeg"
-                    else:
-                        mime = "image/png"
-                    st.markdown(
-                        f'<div style="text-align:center;">'
-                        f'<img src="data:{mime};base64,{b64_str}" '
-                        f'style="max-width:100%;height:auto;border-radius:8px;" />'
-                        f'<p style="color:#10B981;font-size:0.85rem;margin-top:4px;">✅ Nueva imagen (Sin guardar)</p>'
-                        f'</div>',
-                        unsafe_allow_html=True
-                    )
-                except Exception:
-                    st.warning("⚠️ No se pudo previsualizar, pero la foto se guardará correctamente.")
-            else:
-                url_db = dat.get('foto_url')
-                if url_db and isinstance(url_db, str) and len(url_db.strip()) > 10:
-                    if not mostrar_imagen_cloudinary(url_db, use_container_width=True, caption="Imagen actual"):
-                        # Mostrar la URL para diagnóstico y un fallback visual
-                        st.warning("⚠️ No se pudo cargar la imagen desde Cloudinary.")
-                        with st.expander("🔍 Diagnóstico"):
-                            st.code(url_db, language="text")
-                            st.caption("Posibles causas: URL expirada, restricción de acceso, o problema de red.")
-                else:
-                    st.info("Sin imagen asignada.")
-        with col_f2:
-            st.markdown("#### 🔄 Estado de Carga")
-            if nueva_foto_temp:
-                st.toast("✅ Foto lista para actualizar.")
-            else:
-                st.caption("Selecciona un archivo arriba si deseas cambiar la foto actual.")
-
-        edit_foto_file = nueva_foto_temp
-
-        st.markdown("---")
         st.markdown("#### ⚙️ Editar Especificaciones")
-        current_specs_df = pd.DataFrame(columns=["Componente/Dato", "Valor"])
-        if dat.get('detalles') and isinstance(dat['detalles'], dict):
-            current_specs_df = pd.DataFrame(list(dat['detalles'].items()), columns=["Componente/Dato", "Valor"])
-        edited_specs = st.data_editor(
-            current_specs_df, num_rows="dynamic", use_container_width=True,
-            column_config={
-                "Componente/Dato": st.column_config.TextColumn("Característica"),
-                "Valor": st.column_config.TextColumn("Valor")
-            },
-            key=f"editor_edit_{id_suffix}"
-        )
+        current_specs_df = pd.DataFrame(list(dat['detalles'].items()), columns=["Componente/Dato", "Valor"]) if dat.get('detalles') else pd.DataFrame(columns=["Componente/Dato", "Valor"])
+        edited_specs = st.data_editor(current_specs_df, num_rows="dynamic", use_container_width=True, key=f"editor_edit_{id_suffix}")
 
         st.markdown("<br>", unsafe_allow_html=True)
         bc1, bc2 = st.columns([2, 1])
         with bc1:
             if st.button("💾 GUARDAR CAMBIOS", type="primary", use_container_width=True, key=f"btn_save_{id_suffix}"):
-                _guardar_edicion_activo(dat, edit_nom, edit_area, edit_sub, edit_det, edit_cat,
-                                         edit_foto_file, edited_specs, id_suffix)
+                _guardar_edicion_activo(dat, edit_nom, edit_area, edit_sub, edit_det, edit_cat, edit_foto_file=nueva_foto_temp, edited_specs=edited_specs, id_suffix=id_suffix)
         with bc2:
             _render_zona_peligro_activo(dat, id_suffix)
-
-        st.markdown("---")
-        if dat.get('qr_url'):
-            st.caption("Código QR del Activo")
-            st.image(dat['qr_url'], width=150)
     else:
         st.info("No hay activos registrados para editar.")
 
-
-def _guardar_edicion_activo(dat, edit_nom, edit_area, edit_sub, edit_det, edit_cat,
-                              edit_foto_file, edited_specs, id_suffix):
+def _guardar_edicion_activo(dat, edit_nom, edit_area, edit_sub, edit_det, edit_cat, edit_foto_file, edited_specs, id_suffix):
     if not edit_nom:
-        agregar_notificacion("error", "El nombre no puede estar vacío")
+        st.error("El nombre no puede estar vacío")
         return
     try:
-        with st.spinner("Actualizando activo..."):
+        with st.spinner("Actualizando datos del equipo..."):
             final_edit_url = dat['foto_url']
             if edit_foto_file:
                 final_edit_url = subir_imagen(edit_foto_file)
             final_edit_ubic = f"[{edit_sub}] {edit_det}" if edit_det else f"[{edit_sub}]"
-            final_specs_json = {
-                row["Componente/Dato"]: row["Valor"]
-                for i, row in edited_specs.iterrows()
-                if row["Componente/Dato"] and row["Valor"]
-            }
+            final_specs_json = {row["Componente/Dato"]: row["Valor"] for i, row in edited_specs.iterrows() if row["Componente/Dato"] and row["Valor"]}
+            
             db_update("activos", {
                 "nombre": edit_nom, "area": edit_area, "ubicacion": final_edit_ubic,
                 "categoria": edit_cat, "foto_url": final_edit_url, "detalles": final_specs_json
             }, "id", dat['id'])
-            agregar_notificacion("success", f"Activo '{edit_nom}' actualizado correctamente")
-            time.sleep(0.3)
+            st.toast(f"✅ Activo '{edit_nom}' actualizado correctamente")
+            time.sleep(0.5)
             st.rerun()
     except Exception as e:
         error_amigable(e, "actualizar activo")
 
-
 def _render_zona_peligro_activo(dat, id_suffix):
-    with st.expander("🗑️ Zona de Peligro", expanded=True):
-        st.warning("Acciones críticas.")
+    with st.expander("⚠️ Zona de Peligro (Eliminar Activo)"):
         ids_planes = ids_solic = ids_activas = ids_historial = []
 
         if dat.get('id'):
-            res = supabase.table("planes_mantenimiento").select("id").eq("activo_id", dat['id']).execute()
-            ids_planes = [str(x['id']) for x in res.data]
-            res = supabase.table("solicitudes").select("id").eq("activo_id", dat['id']).execute()
-            ids_solic = [str(x['id']) for x in res.data]
-            res = supabase.table("ordenes").select("id, estado").eq("activo_id", dat['id']).execute()
-            ids_activas = [str(o['id']) for o in res.data if o['estado'] in ['Abierta', 'Por Validar']]
-            ids_historial = [str(o['id']) for o in res.data if o['estado'] not in ['Abierta', 'Por Validar']]
+            ids_planes = [str(x['id']) for x in supabase.table("planes_mantenimiento").select("id").eq("activo_id", dat['id']).execute().data]
+            ids_solic = [str(x['id']) for x in supabase.table("solicitudes").select("id").eq("activo_id", dat['id']).execute().data]
+            res_ots = supabase.table("ordenes").select("id, estado").eq("activo_id", dat['id']).execute().data
+            ids_activas = [str(o['id']) for o in res_ots if o['estado'] in ['Abierta', 'Por Validar']]
+            ids_historial = [str(o['id']) for o in res_ots if o['estado'] not in ['Abierta', 'Por Validar']]
 
         bloqueo_total = ids_planes or ids_activas or ids_solic
 
         if bloqueo_total:
-            st.markdown("""
-            <div style="background-color:rgba(239,68,68,0.1);border-left:4px solid #EF4444;padding:10px;margin-bottom:10px;">
-                <strong style="color:#EF4444;">🛑 NO SE PUEDE BORRAR</strong>
-                <p style="font-size:0.85em;margin:0;">Hay tareas pendientes activas.</p>
-            </div>
-            """, unsafe_allow_html=True)
-            if ids_planes:
-                st.caption(f"📅 Planes ({len(ids_planes)})")
-            if ids_activas:
-                st.caption(f"🛠️ Órdenes Activas ({len(ids_activas)})")
-            if ids_solic:
-                st.caption(f"📬 Solicitudes ({len(ids_solic)}) — Gestionar en Buzón")
+            st.error("🛑 **NO SE PUEDE BORRAR:** Hay tareas pendientes activas para este equipo.")
+            if ids_planes: st.caption(f"📅 Planes de mantenimiento asociados: {len(ids_planes)}")
+            if ids_activas: st.caption(f"🛠️ Órdenes Abiertas/Por Validar: {len(ids_activas)}")
+            if ids_solic: st.caption(f"📬 Solicitudes de buzón sin atender: {len(ids_solic)}")
         else:
             if ids_historial:
-                st.markdown(f"""
-                <div style="background-color:rgba(245,158,11,0.1);border-left:4px solid #F59E0B;padding:10px;margin-bottom:10px;">
-                    <strong style="color:#F59E0B;">⚠️ TIENE HISTORIAL</strong>
-                    <p style="font-size:0.85em;margin:0;">Este equipo tiene <b>{len(ids_historial)}</b> órdenes cerradas.</p>
-                </div>
-                """, unsafe_allow_html=True)
+                st.warning(f"⚠️ **TIENE HISTORIAL:** Este equipo tiene {len(ids_historial)} órdenes cerradas en el registro.")
                 try:
-                    if 'df_users_cache' not in st.session_state:
-                        st.session_state.df_users_cache = run_query("usuarios")
-                    data_hist = supabase.table("ordenes").select("*").in_("id", ids_historial) \
-                        .order("fecha_creacion", desc=True).execute()
-                    if data_hist.data:
-                        pdf_bytes = generar_hoja_vida_pdf(dat, data_hist.data, st.session_state.df_users_cache)
-                        st.download_button(
-                            label="📄 DESCARGAR HOJA DE VIDA (PDF)",
-                            data=pdf_bytes,
-                            file_name=f"Hoja_Vida_{dat['nombre']}.pdf",
-                            mime="application/pdf",
-                            use_container_width=True
-                        )
+                    df_users_cache = run_query("usuarios")
+                    data_hist = supabase.table("ordenes").select("*").in_("id", ids_historial).order("fecha_creacion", desc=True).execute().data
+                    if data_hist:
+                        pdf_bytes = generar_hoja_vida_pdf(dat, data_hist, df_users_cache)
+                        st.download_button("📄 DESCARGAR HOJA DE VIDA PARA RESPALDO", data=pdf_bytes, file_name=f"Respaldo_{dat['nombre']}.pdf", mime="application/pdf", use_container_width=True)
                 except Exception as e:
-                    error_amigable(e, "generar PDF")
+                    pass
             else:
-                st.toast("✅ Equipo limpio (Sin historial).")
+                st.success("✅ Equipo limpio (No tiene mantenimientos previos).")
 
             st.markdown("---")
-            confirm_del_act = st.text_input("Escriba ELIMINAR para confirmar", key=f"confirm_del_act_{id_suffix}", placeholder="ELIMINAR")
-            if st.button("🗑️ CONFIRMAR ELIMINACIÓN", type="secondary",
-                         use_container_width=True, key=f"fin_del_{id_suffix}",
-                         disabled=(confirm_del_act.strip().upper() != "ELIMINAR")):
-                try:
-                    if ids_historial:
-                        supabase.table("ordenes").delete().in_("id", ids_historial).execute()
-                        invalidate_cache("ordenes")
-                    db_delete("activos", "id", dat['id'])
-                    registrar_accion_critica("ELIMINAR_ACTIVO", st.session_state.get('usuario', '?'),
-                                             f"Activo: {dat['nombre']} (ID: {dat['id']}) — {len(ids_historial)} OTs eliminadas")
-                    agregar_notificacion("delete", "Activo eliminado correctamente.")
-                    time.sleep(0.3)
-                    st.rerun()
-                except Exception as e:
-                    error_amigable(e, "eliminar activo")
+            confirm_del = st.text_input("Escribe ELIMINAR para proceder", key=f"conf_del_{id_suffix}")
+            if st.button("🗑️ ELIMINAR DEFINITIVAMENTE", use_container_width=True, disabled=(confirm_del.strip().upper() != "ELIMINAR")):
+                if ids_historial:
+                    supabase.table("ordenes").delete().in_("id", ids_historial).execute()
+                    invalidate_cache("ordenes")
+                db_delete("activos", "id", dat['id'])
+                st.toast("✅ Activo eliminado con éxito.")
+                time.sleep(0.5)
+                st.rerun()
