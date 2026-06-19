@@ -340,38 +340,38 @@ def _render_card_correo(correo, idx, df_act, df_users, df_ordenes):
         descartar_clicked = st.button("🗑️ Descartar", key=f"ubtn_descartar_{idx}", use_container_width=True)
 
     if descartar_clicked:
-        from utils.db import db_upsert, db_delete, db_update
+        from utils.db import supabase, invalidate_cache
         from utils.logger import logger
         import time
         
         logger.info(f"🗑️ Intentando descartar definitivamente: [{message_id}]")
         
         try:
-            # 1. Guardar en la tabla de procesados
-            db_upsert("emails_procesados", {
+            # 1. Inserción directa saltando wrappers
+            res_upsert = supabase.table("emails_procesados").upsert({
                 "message_id": message_id.strip(),
                 "accion": "descartado",
                 "fecha_procesado": datetime.now().isoformat()
-            })
+            }).execute()
             
-            # 2. Eliminar explícitamente de la tabla temporal de descargas
+            # VALIDACIÓN ESTRICTA: Si la DB bloquea el guardado detiene la app
+            if hasattr(res_upsert, 'data') and len(res_upsert.data) == 0:
+                st.error("🚨 La base de datos bloqueó el registro (Posible bloqueo por RLS en Supabase).")
+                st.stop()
+            
+            # 2. Borrar de pendientes (Ignoramos errores menores si ya no existe)
             try:
-                db_delete("emails_pendientes", "message_id", message_id.strip())
-            except Exception as e:
-                logger.warning(f"Aviso al borrar de pendientes: {e}")
-
-            # 3. Marcarlo como procesado en la caché de escaneo
-            try:
-                db_update("email_scan_cache", {"en_procesados": True}, "message_id", message_id.strip())
-            except Exception as e:
+                supabase.table("emails_pendientes").delete().eq("message_id", message_id.strip()).execute()
+                supabase.table("email_scan_cache").update({"en_procesados": True}).eq("message_id", message_id.strip()).execute()
+            except Exception:
                 pass
             
-            # 4. Limpiar la memoria visual agresivamente
-            st.session_state['_correos_pendientes'] = [
-                c for c in st.session_state.get('_correos_pendientes', []) 
-                if c['message_id'] != message_id
-            ]
+            # Limpiar caché de memoria global
+            invalidate_cache("emails_procesados")
+            invalidate_cache("emails_pendientes")
             
+            # 3. Limpiar memoria local visual
+            _eliminar_de_pendientes(message_id)
             procesados_local = st.session_state.get('_recentemente_procesados', set())
             procesados_local.add(message_id.strip())
             st.session_state['_recentemente_procesados'] = procesados_local
@@ -382,8 +382,9 @@ def _render_card_correo(correo, idx, df_act, df_users, df_ordenes):
             
         except Exception as e:
             logger.error(f"❌ Fallo crítico en BD al descartar: {e}")
-            st.error(f"❌ Error guardando descarte: {e}")
-
+            st.error(f"❌ Error guardando descarte. Detalle: {e}")
+            st.stop()
+            
     if vincular_clicked:
         st.session_state[f'_uvincular_ot_{idx}'] = True
         st.session_state.pop(f'_ucrear_ot_{idx}', None)
