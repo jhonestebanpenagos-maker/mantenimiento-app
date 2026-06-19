@@ -79,18 +79,19 @@ def render():
     # ── Acciones rápidas + Excel ──
     c1, c2, c3, c4 = st.columns([1, 1, 1, 1])
     with c1:
-        n_abiertas = len(df[df['estado'] == 'Abierta'])
+        n_abiertas = len(df[df[\'estado\'] == \'Abierta\'])
         if st.button(f"🔨 OT Abiertas ({n_abiertas})", use_container_width=True, key="dash_qa1"):
-            st.session_state['_filtro_estado_ots'] = "Abierta"
+            st.session_state[\'_filtro_estado_ots\'] = "Abierta"
+            st.session_state[\'_ordenes_tab_activa\'] = "gestion"
             navegar_a("Ordenes de Trabajo")
     with c2:
-        n_solic = len(df_solicitudes[df_solicitudes['estado'] == 'Pendiente']) if not df_solicitudes.empty else 0
+        n_solic = len(df_solicitudes[df_solicitudes[\'estado\'] == \'Pendiente\']) if not df_solicitudes.empty else 0
         if st.button(f"📬 Buzón ({n_solic})", use_container_width=True, key="dash_qa2"):
-            st.session_state['_ordenes_tab_activa'] = "buzon"
+            st.session_state[\'_ordenes_tab_activa\'] = "buzon"
             navegar_a("Ordenes de Trabajo")
     with c3:
         if st.button("➕ Nueva Orden", use_container_width=True, key="dash_qa3", type="primary"):
-            st.session_state['_ordenes_tab_activa'] = "crear"
+            st.session_state[\'_ordenes_tab_activa\'] = "crear"
             navegar_a("Ordenes de Trabajo")
     with c4:
         try:
@@ -115,6 +116,7 @@ def render():
         n_abiertas_g = len(df[df['estado'] == 'Abierta']) if not df.empty else 0
         if st.button(f"🔨 Ver {n_abiertas_g} Abiertas", key="dash_dist_ab", use_container_width=True):
             st.session_state['_filtro_estado_ots'] = "Abierta"
+            st.session_state['_ordenes_tab_activa'] = "gestion"
             navegar_a("Ordenes de Trabajo")
 
     # ════════════════════════════════════════════════════════════════════════

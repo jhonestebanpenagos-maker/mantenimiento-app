@@ -45,6 +45,10 @@ def render_gestion_global(df_act, df_users, df_ordenes):
 
     _filtro_estado = st.session_state.pop('_filtro_estado_ots', None)
     _filtro_tecnico = st.session_state.pop('_filtro_tecnico', None)
+    _filtro_crit = st.session_state.pop('_filtro_criticidad', None)
+    _filtro_tipo = st.session_state.pop('_filtro_tipo', None)
+
+    # ── Fila 1 de Filtros ──
     if _filtro_estado and _filtro_estado != "Todas":
         opciones = ["Todas", "Abierta", "Por Validar", "Concluida", "Cancelada"]
         idx_default = opciones.index(_filtro_estado) if _filtro_estado in opciones else 0
@@ -52,11 +56,20 @@ def render_gestion_global(df_act, df_users, df_ordenes):
     else:
         filtro_estado = col_filtros[0].selectbox("Filtrar Estado", ["Todas", "Abierta", "Por Validar", "Concluida", "Cancelada"], index=0)
 
-    if _filtro_tecnico and not df_users.empty:
-        tech_match = df_users[df_users['id'].astype(str) == str(_filtro_tecnico)]
-        if not tech_match.empty:
-            tech_nombre = tech_match.iloc[0]['nombre']
-            st.info(f"👷 Filtrando por técnico: **{tech_nombre}** — Ordena por 'Limpiar filtro' para ver todas")
+    # Filtrar por técnico
+    nombres_tecs = ["Todos"] + sorted(df_users['nombre'].tolist()) if not df_users.empty else ["Todos"]
+    idx_tec = 0
+    if _filtro_tecnico:
+        match_tec = df_users[df_users['id'].astype(str) == str(_filtro_tecnico)]
+        if not match_tec.empty:
+            idx_tec = nombres_tecs.index(match_tec.iloc[0]['nombre'])
+    
+    filtro_tec_nom = col_filtros[1].selectbox("Filtrar Técnico", nombres_tecs, index=idx_tec)
+    
+    # Filtrar por Criticidad
+    crit_opts = ["Todas", "Baja", "Media", "Alta", "Crítica"]
+    idx_crit = crit_opts.index(_filtro_crit) if _filtro_crit in crit_opts else 0
+    filtro_crit = col_filtros[2].selectbox("Filtrar Criticidad", crit_opts, index=idx_crit)
 
     if 'gestion_pagina' not in st.session_state:
         st.session_state.gestion_pagina = 1
@@ -64,6 +77,13 @@ def render_gestion_global(df_act, df_users, df_ordenes):
     query_filters = {}
     if filtro_estado != "Todas":
         query_filters['estado'] = filtro_estado
+    if filtro_tec_nom != "Todos":
+        tid = df_users[df_users['nombre'] == filtro_tec_nom].iloc[0]['id']
+        query_filters['tecnico_asignado'] = str(tid)
+    if filtro_crit != "Todas":
+        query_filters['criticidad'] = filtro_crit
+    if _filtro_tipo: # El tipo no tiene selector en la UI de gestion aún, pero lo aplicamos si viene del dashboard
+        query_filters['tipo_mantenimiento'] = _filtro_tipo
 
     filters_tuple = tuple(query_filters.items()) if query_filters else None
 

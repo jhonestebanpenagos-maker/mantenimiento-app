@@ -237,7 +237,7 @@ with st.sidebar:
     # ── Últimos accesos ──
     ultimos = st.session_state.get('ultimos_accesos', [])
     if ultimos:
-        with st.sidebar.expander("🕐 Últimos vistos", expanded=False):
+        with st.sidebar.expander("🕐 Últimos vistos", expanded=True):
             for item in ultimos[:10]:
                 tipo_icon = {"activo": "🔧", "orden": "🛠️", "repuesto": "🔩"}.get(item["tipo"], "📋")
                 if st.button(

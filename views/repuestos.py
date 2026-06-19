@@ -65,6 +65,8 @@ def _render_stock(df_rep):
         rep_focus = df_rep[df_rep['id'] == focus_id]
         if not rep_focus.empty:
             r = rep_focus.iloc[0]
+            from utils.helpers import registrar_acceso
+            registrar_acceso("repuesto", r["id"], r.get("nombre", "Repuesto"))
             stock = r.get('stock_actual', 0)
             minimo = r.get('stock_minimo', 0)
             icono = "🔴" if stock == 0 else "🟡" if stock <= minimo else "🟢"

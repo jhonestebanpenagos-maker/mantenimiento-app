@@ -294,6 +294,7 @@ def graficar_criticidad(df):
         with cols[i]:
             if st.button(label, key=f"btn_crit_{label}", use_container_width=True):
                 st.session_state["_filtro_criticidad"] = label
+                st.session_state["_ordenes_tab_activa"] = "gestion"
                 navegar_a("Ordenes de Trabajo")
 
 
@@ -333,6 +334,7 @@ def graficar_torta_tipo(df):
             with cols[i]:
                 if st.button(t, key=f"btn_tipo_{t}", use_container_width=True):
                     st.session_state["_filtro_tipo"] = t
+                    st.session_state["_ordenes_tab_activa"] = "gestion"
                     navegar_a("Ordenes de Trabajo")
 
 
@@ -802,27 +804,30 @@ def mostrar_metricas_inteligentes(df_ordenes, df_users, df_solicitudes):
         color_sol = "normal" if n_solicitudes == 0 else "inverse"
         st.metric("📬 Solicitudes Pendientes", n_solicitudes, "en Buzón", delta_color=color_sol)
         if st.button("Ver solicitudes", key="nav_solicitudes", use_container_width=True):
-            st.session_state['ordenes_tab'] = "kanban"
-            st.session_state['kanban_filtro_solicitudes'] = True
+            st.session_state['_ordenes_tab_activa'] = "buzon"
             navegar_a("Ordenes de Trabajo")
     with c2:
         delta_text = str(devueltas_calidad) + " Devueltas" if devueltas_calidad > 0 else None
         st.metric("🔨 OT en Ejecución", pendientes, delta_text, delta_color="inverse")
         if st.button("Ver OT abiertas", key="nav_abiertas", use_container_width=True):
             st.session_state['_filtro_estado_ots'] = "Abierta"
+            st.session_state['_ordenes_tab_activa'] = "gestion"
             navegar_a("Ordenes de Trabajo")
     with c3:
         st.metric("🧐 OT por Validar", por_validar, "Esperando Aprobación")
         if st.button("Ver por validar", key="nav_validar", use_container_width=True):
             st.session_state['_filtro_estado_ots'] = "Por Validar"
+            st.session_state['_ordenes_tab_activa'] = "gestion"
             navegar_a("Ordenes de Trabajo")
     with c4:
         st.metric("✅ OT Finalizadas", concluidas, str(round(porcentaje_concluidas)) + "% del total")
         if st.button("Ver finalizadas", key="nav_concluidas", use_container_width=True):
             st.session_state['_filtro_estado_ots'] = "Concluida"
+            st.session_state['_ordenes_tab_activa'] = "gestion"
             navegar_a("Ordenes de Trabajo")
     with c5:
         st.metric("📋 Total OTs Registradas", total)
         if st.button("Ver todas", key="nav_todas", use_container_width=True):
             st.session_state['_filtro_estado_ots'] = "Todas"
+            st.session_state['_ordenes_tab_activa'] = "gestion"
             navegar_a("Ordenes de Trabajo")
