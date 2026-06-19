@@ -71,9 +71,8 @@ def render():
         return
 
     # ════════════════════════════════════════════════════════════════════════
-    # 1️⃣ RESUMEN EJECUTIVO
+    # 1️⃣ MÉTRICAS PRINCIPALES
     # ════════════════════════════════════════════════════════════════════════
-    _seccion("Resumen Ejecutivo", "📈")
     mostrar_metricas_inteligentes(df, df_users, df_solicitudes)
 
     # ── Acciones rápidas + Excel ──
@@ -81,16 +80,13 @@ def render():
     with c1:
         n_abiertas = len(df[df['estado'] == 'Abierta'])
         if st.button(f"🔨 OT Abiertas ({n_abiertas})", use_container_width=True, key="dash_qa1"):
-            st.session_state['_filtro_estado_ots'] = "Abierta"
             navegar_a("Ordenes de Trabajo")
     with c2:
         n_solic = len(df_solicitudes[df_solicitudes['estado'] == 'Pendiente']) if not df_solicitudes.empty else 0
         if st.button(f"📬 Buzón ({n_solic})", use_container_width=True, key="dash_qa2"):
-            st.session_state['_ordenes_tab_activa'] = "buzon"
             navegar_a("Ordenes de Trabajo")
     with c3:
         if st.button("➕ Nueva Orden", use_container_width=True, key="dash_qa3", type="primary"):
-            st.session_state['_ordenes_tab_activa'] = "crear"
             navegar_a("Ordenes de Trabajo")
     with c4:
         try:
@@ -103,30 +99,35 @@ def render():
             st.caption("Excel no disponible")
 
     # ════════════════════════════════════════════════════════════════════════
-    # 2️⃣ TENDENCIA Y ESTADO
+    # 2️⃣ TENDENCIA SEMANAL
     # ════════════════════════════════════════════════════════════════════════
-    col_t1, col_t2 = st.columns([2, 1])
-    with col_t1:
-        _seccion("Tendencia Semanal", "📈")
-        graficar_tendencia_semanal(df)
-    with col_t2:
-        _seccion("Estado Actual", "📊")
+    _seccion("Tendencia Semanal", "📈")
+    graficar_tendencia_semanal(df)
+
+    # ════════════════════════════════════════════════════════════════════════
+    # 3️⃣ ANÁLISIS GLOBAL (3 gráficos en fila)
+    # ════════════════════════════════════════════════════════════════════════
+    _seccion("Distribución Global", "📊")
+    g1, g2, g3 = st.columns(3)
+    with g1:
+        st.caption("Estado de OTs")
         graficar_estado_barras(df)
         n_abiertas_g = len(df[df['estado'] == 'Abierta']) if not df.empty else 0
         if st.button(f"🔨 Ver {n_abiertas_g} Abiertas", key="dash_dist_ab", use_container_width=True):
             st.session_state['_filtro_estado_ots'] = "Abierta"
             navegar_a("Ordenes de Trabajo")
-
-    # ════════════════════════════════════════════════════════════════════════
-    # 3️⃣ DISTRIBUCIÓN (Criticidad y Tipo)
-    # ════════════════════════════════════════════════════════════════════════
-    col_d1, col_d2 = st.columns(2)
-    with col_d1:
-        _seccion("Por Criticidad", "🚨")
+    with g2:
+        st.caption("Por Criticidad")
         graficar_criticidad(df)
-    with col_d2:
-        _seccion("Por Tipo de Mantenimiento", "⚙️")
+        n_criticas = len(df[df['criticidad'].isin(['Alta', 'Crítica'])]) if not df.empty else 0
+        if st.button(f"🔴 Ver {n_criticas} Críticas", key="dash_dist_cr", use_container_width=True):
+            navegar_a("Ordenes de Trabajo")
+    with g3:
+        st.caption("Por Tipo")
         graficar_torta_tipo(df)
+        n_prev = len(df[df['tipo_mantenimiento'] == 'Preventivo']) if not df.empty else 0
+        if st.button(f"🛡️ Ver {n_prev} Preventivos", key="dash_dist_pr", use_container_width=True):
+            navegar_a("Ordenes de Trabajo")
 
     # ════════════════════════════════════════════════════════════════════════
     # 4️⃣ KPIs INDUSTRIALES
@@ -151,7 +152,6 @@ def render():
     col_nav1, col_nav2, col_nav3 = st.columns(3)
     with col_nav1:
         if st.button("🎛️ Gestión Global de OTs", use_container_width=True, key="dash_nav_gestion"):
-            st.session_state['_ordenes_tab_activa'] = "gestion"
             navegar_a("Ordenes de Trabajo")
     with col_nav2:
         if st.button("📦 Inventario de Activos", use_container_width=True, key="dash_nav_activos"):

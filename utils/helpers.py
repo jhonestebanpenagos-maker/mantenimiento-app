@@ -143,27 +143,6 @@ def check_open_orders(user_id):
 
 
 # ==============================================================================
-# 📋 HISTORIAL DE ACCESOS RÁPIDOS
-# ==============================================================================
-def registrar_acceso(tipo, item_id, nombre):
-    """Registra un acceso rápido para la lista de últimos visitados."""
-    if "ultimos_accesos" not in st.session_state:
-        st.session_state.ultimos_accesos = []
-
-    # Evitar duplicados
-    st.session_state.ultimos_accesos = [
-        a
-        for a in st.session_state.ultimos_accesos
-        if not (a["tipo"] == tipo and str(a["id"]) == str(item_id))
-    ]
-
-    st.session_state.ultimos_accesos.insert(0, {"tipo": tipo, "id": item_id, "nombre": nombre})
-
-    # Máximo 10
-    st.session_state.ultimos_accesos = st.session_state.ultimos_accesos[:10]
-
-
-# ==============================================================================
 # 🛠️ MANEJO DE ERRORES AMIGABLE
 # ==============================================================================
 

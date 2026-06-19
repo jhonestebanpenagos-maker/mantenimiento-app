@@ -237,14 +237,10 @@ with st.sidebar:
     # ── Últimos accesos ──
     ultimos = st.session_state.get('ultimos_accesos', [])
     if ultimos:
-        with st.sidebar.expander("🕐 Últimos vistos", expanded=False):
-            for item in ultimos[:10]:
-                tipo_icon = {"activo": "🔧", "orden": "🛠️", "repuesto": "🔩"}.get(item["tipo"], "📋")
-                if st.button(
-                    f"{tipo_icon} {item['nombre'][:25]}",
-                    key=f"sb_last_{item['tipo']}_{item['id']}",
-                    use_container_width=True,
-                ):
+        with st.expander("🕐 Últimos vistos", expanded=False):
+            for item in ultimos[:3]:
+                tipo_icon = {"activo": "🔧", "orden": "🛠️", "repuesto": "🔩"}.get(item['tipo'], "📋")
+                if st.button(f"{tipo_icon} {item['nombre'][:25]}", key=f"sb_last_{item['tipo']}_{item['id']}", use_container_width=True):
                     if item['tipo'] == 'activo':
                         navegar_a("Inventario Activos", jump_target="activo", jump_id=item['id'])
                     elif item['tipo'] == 'orden':

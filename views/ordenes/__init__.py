@@ -90,55 +90,39 @@ def render():
     if 'ordenes_tab' in st.session_state:
         del st.session_state['ordenes_tab']
 
-    # ── Navegación agrupada para reducir ruido visual ──
-    SECCIONES = {
-        "Ejecución": [
-            ("mis_gestiones", "📂", "Mis Gestiones"),
-            ("kanban", "📋", "Kanban"),
-        ],
-        "Operaciones": [
-            ("crear", "➕", "Crear"),
-            ("preventivos", "🗓️", "Preventivos"),
-        ],
-        "Supervisión": [
-            ("buzon", "📥", "Buzón"),
-            ("calidad", "🧐", "Calidad"),
-            ("correo", "📧", "Correo"),
-            ("gestion", "🎛️", "Global"),
-        ],
-    }
+    # ── Navegación en 2 grupos para mejor legibilidad ──
+    GRUPO_TRABAJO = [
+        ("mis_gestiones", "📂", "Mis Gestiones"),
+        ("kanban",        "📋", "Kanban"),
+        ("crear",         "➕", "Crear"),
+        ("preventivos",   "🗓️", "Preventivos"),
+    ]
+    GRUPO_SUPERVISION = [
+        ("buzon",   "📥", "Buzón"),
+        ("calidad", "🧐", "Calidad"),
+        ("correo",  "📧", "Correo"),
+        ("gestion", "🎛️", "Global"),
+    ]
 
-    # Determinar a qué sección pertenece la tab activa
-    seccion_activa = "Ejecución"
-    for sec, tabs in SECCIONES.items():
-        if any(t[0] == tab_activa for t in tabs):
-            seccion_activa = sec
-            break
+    st.caption("🔨 Mi Trabajo")
+    nav1_cols = st.columns(len(GRUPO_TRABAJO))
+    for i, (key, icon, label) in enumerate(GRUPO_TRABAJO):
+        with nav1_cols[i]:
+            is_active = key == tab_activa
+            if st.button(f"{icon} {label}", key=f"_nav_{key}", use_container_width=True,
+                         type="primary" if is_active else "secondary"):
+                st.session_state['_ordenes_tab_activa'] = key
+                st.rerun()
 
-    col_sec, col_tabs = st.columns([1, 3])
-
-    with col_sec:
-        nueva_seccion = st.selectbox(
-            "Sección",
-            options=list(SECCIONES.keys()),
-            index=list(SECCIONES.keys()).index(seccion_activa),
-            label_visibility="collapsed",
-        )
-
-    with col_tabs:
-        tabs_visibles = SECCIONES[nueva_seccion]
-        nav_cols = st.columns(len(tabs_visibles))
-        for i, (key, icon, label) in enumerate(tabs_visibles):
-            with nav_cols[i]:
-                is_active = key == tab_activa
-                if st.button(
-                    f"{icon} {label}",
-                    key=f"_nav_{key}",
-                    use_container_width=True,
-                    type="primary" if is_active else "secondary",
-                ):
-                    st.session_state["_ordenes_tab_activa"] = key
-                    st.rerun()
+    st.caption("👁️ Supervisión")
+    nav2_cols = st.columns(len(GRUPO_SUPERVISION))
+    for i, (key, icon, label) in enumerate(GRUPO_SUPERVISION):
+        with nav2_cols[i]:
+            is_active = key == tab_activa
+            if st.button(f"{icon} {label}", key=f"_nav_{key}", use_container_width=True,
+                         type="primary" if is_active else "secondary"):
+                st.session_state['_ordenes_tab_activa'] = key
+                st.rerun()
 
     st.markdown("<div style='margin-top:8px;'></div>", unsafe_allow_html=True)
 

@@ -258,82 +258,36 @@ def graficar_ordenes_por_tecnico(df_ordenes, df_users):
 def graficar_criticidad(df):
     if df.empty:
         return
-    from utils.helpers import navegar_a
-    conteo = df["criticidad"].value_counts().reset_index()
-    conteo.columns = ["Nivel", "Cantidad"]
-    conteo["Nivel"] = conteo["Nivel"].astype(str).str.strip()
+    conteo = df['criticidad'].value_counts().reset_index()
+    conteo.columns = ['Nivel', 'Cantidad']
+    conteo['Nivel'] = conteo['Nivel'].astype(str).str.strip()
     orden_oficial = ["Baja", "Media", "Alta", "Crítica"]
     colores = {"Baja": "#10B981", "Media": "#F59E0B", "Alta": "#EA580C", "Crítica": "#EF4444"}
-    conteo = conteo[conteo["Nivel"].isin(orden_oficial)]
-    fig = px.bar(
-        conteo,
-        x="Nivel",
-        y="Cantidad",
-        color="Nivel",
-        color_discrete_map=colores,
-        text="Cantidad",
-        category_orders={"Nivel": orden_oficial},
-    )
+    conteo = conteo[conteo['Nivel'].isin(orden_oficial)]
+    fig = px.bar(conteo, x='Nivel', y='Cantidad', color='Nivel', color_discrete_map=colores, text='Cantidad', category_orders={"Nivel": orden_oficial})
     fig.update_layout(
-        paper_bgcolor="rgba(0,0,0,0)",
-        plot_bgcolor="rgba(0,0,0,0)",
-        font=dict(color="white"),
-        showlegend=False,
-        margin=dict(l=0, r=0, t=10, b=0),
-        height=250,
-        xaxis=dict(title=None),
-        yaxis=dict(showgrid=True, gridcolor="rgba(255,255,255,0.1)"),
+        paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)',
+        font=dict(color='white'), showlegend=False,
+        margin=dict(l=0, r=0, t=10, b=0), height=250,
+        xaxis=dict(title=None), yaxis=dict(showgrid=True, gridcolor='rgba(255,255,255,0.1)')
     )
-    fig.update_traces(textfont_size=14, textposition="outside", marker_line_width=0)
+    fig.update_traces(textfont_size=14, textposition='outside', marker_line_width=0)
     st.plotly_chart(fig, use_container_width=True)
-
-    # Botones de filtrado rápido
-    cols = st.columns(4)
-    labels = ["Baja", "Media", "Alta", "Crítica"]
-    for i, label in enumerate(labels):
-        with cols[i]:
-            if st.button(label, key=f"btn_crit_{label}", use_container_width=True):
-                st.session_state["_filtro_criticidad"] = label
-                navegar_a("Ordenes de Trabajo")
 
 
 def graficar_torta_tipo(df):
     if df.empty:
         return
-    from utils.helpers import navegar_a
-    conteo = df["tipo_mantenimiento"].value_counts().reset_index()
-    conteo.columns = ["Tipo", "Cantidad"]
+    conteo = df['tipo_mantenimiento'].value_counts().reset_index()
+    conteo.columns = ['Tipo', 'Cantidad']
     colores_torta = ["#3B82F6", "#8B5CF6", "#EC4899"]
-    fig = go.Figure(
-        data=[
-            go.Pie(
-                labels=conteo["Tipo"],
-                values=conteo["Cantidad"],
-                hole=0.5,
-                marker=dict(colors=colores_torta, line=dict(color="#111827", width=2)),
-                textinfo="label+percent",
-                textfont=dict(color="white"),
-            )
-        ]
-    )
-    fig.update_layout(
-        paper_bgcolor="rgba(0,0,0,0)",
-        font=dict(color="white"),
-        height=250,
-        showlegend=False,
-        margin=dict(l=0, r=0, t=10, b=10),
-    )
+    fig = go.Figure(data=[go.Pie(
+        labels=conteo['Tipo'], values=conteo['Cantidad'], hole=.5,
+        marker=dict(colors=colores_torta, line=dict(color='#111827', width=2)),
+        textinfo='label+percent', textfont=dict(color='white')
+    )])
+    fig.update_layout(paper_bgcolor='rgba(0,0,0,0)', font=dict(color='white'), height=250, showlegend=False, margin=dict(l=0, r=0, t=10, b=10))
     st.plotly_chart(fig, use_container_width=True)
-
-    # Botones de filtrado rápido
-    tipos = conteo["Tipo"].tolist()
-    if tipos:
-        cols = st.columns(len(tipos))
-        for i, t in enumerate(tipos):
-            with cols[i]:
-                if st.button(t, key=f"btn_tipo_{t}", use_container_width=True):
-                    st.session_state["_filtro_tipo"] = t
-                    navegar_a("Ordenes de Trabajo")
 
 
 def graficar_estado_barras(df):
@@ -499,92 +453,55 @@ def mostrar_kpis_industriales(df_ordenes, df_act, df_planes=None):
     sc1, sc2, sc3, sc4 = st.columns(4)
     with sc1:
         st.markdown(
-            '<div style="background:rgba(30,41,59,0.8);border:1px solid '
-            + disp_color
-            + ';border-radius:12px;padding:20px;text-align:center;height:180px;">'
+            '<div style="background:rgba(30,41,59,0.8);border:1px solid ' + disp_color
+            + ';border-radius:12px;padding:20px;text-align:center;">'
             '<div style="font-size:0.8rem;color:#9CA3AF;text-transform:uppercase;letter-spacing:1px;">Disponibilidad</div>'
-            '<div style="font-size:2.2rem;font-weight:800;color:'
-            + disp_color
-            + ';margin:8px 0;">'
-            + disp_icono
-            + " "
-            + str(round(disponibilidad, 1))
-            + "%</div>"
+            '<div style="font-size:2.5rem;font-weight:800;color:' + disp_color + ';margin:8px 0;">'
+            + disp_icono + ' ' + str(round(disponibilidad, 1)) + '%</div>'
             '<div style="font-size:0.75rem;color:#6B7280;">MTBF/(MTBF+MTTR)</div></div>',
-            unsafe_allow_html=True,
+            unsafe_allow_html=True
         )
     with sc2:
         st.markdown(
-            '<div style="background:rgba(30,41,59,0.8);border:1px solid '
-            + prev_color
-            + ';border-radius:12px;padding:20px;text-align:center;height:180px;">'
-            '<div style="font-size:0.8rem;color:#9CA3AF;text-transform:uppercase;letter-spacing:1px;">Mant. Preventivo</div>'
-            '<div style="font-size:2.2rem;font-weight:800;color:'
-            + prev_color
-            + ';margin:8px 0;">'
-            + str(round(pct_preventivo, 1))
-            + "%</div>"
-            '<div style="font-size:0.75rem;color:#6B7280;">'
-            + str(preventivas)
-            + " prev / "
-            + str(correctivas)
-            + " corr</div></div>",
-            unsafe_allow_html=True,
+            '<div style="background:rgba(30,41,59,0.8);border:1px solid ' + prev_color
+            + ';border-radius:12px;padding:20px;text-align:center;">'
+            '<div style="font-size:0.8rem;color:#9CA3AF;text-transform:uppercase;letter-spacing:1px;">Mantenimiento Preventivo</div>'
+            '<div style="font-size:2.5rem;font-weight:800;color:' + prev_color + ';margin:8px 0;">'
+            + str(round(pct_preventivo, 1)) + '%</div>'
+            '<div style="font-size:0.75rem;color:#6B7280;">' + str(preventivas) + ' prev / ' + str(correctivas) + ' corr</div></div>',
+            unsafe_allow_html=True
         )
     with sc3:
         st.markdown(
-            '<div style="background:rgba(30,41,59,0.8);border:1px solid '
-            + backlog_color
-            + ';border-radius:12px;padding:20px;text-align:center;height:180px;">'
+            '<div style="background:rgba(30,41,59,0.8);border:1px solid ' + backlog_color
+            + ';border-radius:12px;padding:20px;text-align:center;">'
             '<div style="font-size:0.8rem;color:#9CA3AF;text-transform:uppercase;letter-spacing:1px;">Backlog</div>'
-            '<div style="font-size:2.2rem;font-weight:800;color:'
-            + backlog_color
-            + ';margin:8px 0;">'
-            + str(round(backlog_horas))
-            + "h</div>"
-            '<div style="font-size:0.75rem;color:#6B7280;">'
-            + str(backlog_ordenes)
-            + " órdenes pendientes</div></div>",
-            unsafe_allow_html=True,
+            '<div style="font-size:2.5rem;font-weight:800;color:' + backlog_color + ';margin:8px 0;">'
+            + str(round(backlog_horas)) + 'h</div>'
+            '<div style="font-size:0.75rem;color:#6B7280;">' + str(backlog_ordenes) + ' órdenes pendientes</div></div>',
+            unsafe_allow_html=True
         )
-        if st.button("Ver Backlog", key="kpi_backlog", use_container_width=True):
-            st.session_state["_filtro_estado_ots"] = "Abierta"
-            navegar_a("Ordenes de Trabajo")
     with sc4:
         if cumplimiento_planes is not None:
-            comp_color = (
-                "#10B981"
-                if cumplimiento_planes >= 90
-                else "#F59E0B" if cumplimiento_planes >= 70 else "#EF4444"
-            )
+            comp_color = "#10B981" if cumplimiento_planes >= 90 else "#F59E0B" if cumplimiento_planes >= 70 else "#EF4444"
             st.markdown(
-                '<div style="background:rgba(30,41,59,0.8);border:1px solid '
-                + comp_color
-                + ';border-radius:12px;padding:20px;text-align:center;height:180px;">'
+                '<div style="background:rgba(30,41,59,0.8);border:1px solid ' + comp_color
+                + ';border-radius:12px;padding:20px;text-align:center;">'
                 '<div style="font-size:0.8rem;color:#9CA3AF;text-transform:uppercase;letter-spacing:1px;">Cumplimiento Plan</div>'
-                '<div style="font-size:2.2rem;font-weight:800;color:'
-                + comp_color
-                + ';margin:8px 0;">'
-                + str(round(cumplimiento_planes, 1))
-                + "%</div>"
-                '<div style="font-size:0.75rem;color:#6B7280;">'
-                + str(total_planes)
-                + " planes configurados</div></div>",
-                unsafe_allow_html=True,
+                '<div style="font-size:2.5rem;font-weight:800;color:' + comp_color + ';margin:8px 0;">'
+                + str(round(cumplimiento_planes, 1)) + '%</div>'
+                '<div style="font-size:0.75rem;color:#6B7280;">' + str(total_planes) + ' planes configurados</div></div>',
+                unsafe_allow_html=True
             )
-            if st.button("Ver Planes", key="kpi_planes", use_container_width=True):
-                st.session_state["ordenes_tab"] = "preventivos"
-                navegar_a("Ordenes de Trabajo")
         else:
             st.markdown(
                 '<div style="background:rgba(30,41,59,0.8);border:1px solid #6B7280;'
-                'border-radius:12px;padding:20px;text-align:center;height:180px;">'
+                'border-radius:12px;padding:20px;text-align:center;">'
                 '<div style="font-size:0.8rem;color:#9CA3AF;text-transform:uppercase;letter-spacing:1px;">Tasa de Falla</div>'
-                '<div style="font-size:2.2rem;font-weight:800;color:#60A5FA;margin:8px 0;">'
-                + str(round(tasa_falla, 2))
-                + "</div>"
+                '<div style="font-size:2.5rem;font-weight:800;color:#60A5FA;margin:8px 0;">'
+                + str(round(tasa_falla, 2)) + '</div>'
                 '<div style="font-size:0.75rem;color:#6B7280;">fallas por 1000h</div></div>',
-                unsafe_allow_html=True,
+                unsafe_allow_html=True
             )
     st.markdown("---")
     st.markdown("#### 📋 Resumen de Indicadores")

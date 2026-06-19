@@ -3,7 +3,7 @@ import pandas as pd
 import time
 from datetime import datetime
 from utils.db import supabase, run_query, run_query_paginated, render_paginacion, db_insert, db_update, db_delete, invalidate_cache
-from utils.helpers import mostrar_notificaciones, agregar_notificacion, registrar_accion_critica, error_amigable, navegar_a, registrar_acceso
+from utils.helpers import mostrar_notificaciones, agregar_notificacion, registrar_accion_critica, error_amigable, navegar_a
 from utils.nav_button import render_back_button
 from utils.notifications import notificar_telegram
 from utils.charts import sugerir_tecnico, render_sugerencia_tecnico
@@ -40,8 +40,6 @@ def _interceptor_orden(target_id, df_act, df_users):
         res = supabase.table("ordenes").select("*").eq("id", target_id).execute()
         if res.data:
             orden_actual = res.data[0]
-            # Registrar acceso
-            registrar_acceso("orden", orden_actual["id"], f"OT #{orden_actual['id']}")
             with st.form(key=f"form_focus_orden_{target_id}"):
                 c_edit1, c_edit2, c_edit3 = st.columns(3)
                 est_opts = ["Abierta", "Por Validar", "Concluida", "Cancelada"]
