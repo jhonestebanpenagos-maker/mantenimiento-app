@@ -340,18 +340,44 @@ def _render_card_correo(correo, idx, df_act, df_users, df_ordenes):
 
     if descartar_clicked:
         print(f"🗑️ DESCARTANDO: message_id=[{message_id}]")
-        monitor._marcar_procesado(message_id, accion="descartado")
-        _eliminar_de_pendientes(message_id)
-        monitor._eliminar_pendiente(message_id)
-        audit._cache_actualizar_estado(message_id, en_procesados=True)
-        # Agregar a procesados locales (session state) para compensar
-        # el delay de consistencia del cliente Supabase
-        procesados_local = st.session_state.get('_recentemente_procesados', set())
-        procesados_local.add(message_id.strip())
-        st.session_state['_recentemente_procesados'] = procesados_local
-        print(f"✅ DESCARTADO: [{message_id[:50]}] agregado a procesados locales ({len(procesados_local)} total)")
-        st.toast(f"🗑️ Descartado: {correo['asunto'][:40]}")
-        st.rerun()
+        
+        # 1. Guardado directo y seguro en base de datos
+        from utils.db import supabase
+        guardado_exitoso = False
+        
+        if supabase:
+            try:
+                # Omitimos 'orden_id' por completo para evitar que Supabase 
+                # rechace la petición al recibir un valor nulo en una columna Integer.
+                datos_procesado = {
+                    "message_id": message_id.strip(),
+                    "accion": "descartado",
+                    "fecha_procesado": datetime.now().isoformat()
+                }
+                supabase.table("emails_procesados").upsert(datos_procesado).execute()
+                guardado_exitoso = True
+            except Exception as e:
+                # Si falla, EL RERUN SE DETIENE y el error queda visible en pantalla
+                st.error(f"❌ Error crítico guardando en BD: {e}")
+        else:
+            st.error("❌ No hay conexión a la base de datos.")
+
+        # 2. Solo si se guardó en BD, limpiamos la memoria temporal y reiniciamos
+        if guardado_exitoso:
+            _eliminar_de_pendientes(message_id)
+            try:
+                monitor._eliminar_pendiente(message_id)
+                audit._cache_actualizar_estado(message_id, en_procesados=True)
+            except Exception:
+                pass
+            
+            procesados_local = st.session_state.get('_recentemente_procesados', set())
+            procesados_local.add(message_id.strip())
+            st.session_state['_recentemente_procesados'] = procesados_local
+            
+            st.toast(f"🗑️ Descartado: {correo['asunto'][:40]}")
+            time.sleep(0.5)  # Breve pausa para asentar la base de datos
+            st.rerun()
 
     if vincular_clicked:
         st.session_state[f'_uvincular_ot_{idx}'] = True
