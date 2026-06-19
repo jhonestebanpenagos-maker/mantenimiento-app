@@ -347,7 +347,7 @@ def _render_card_correo(correo, idx, df_act, df_users, df_ordenes):
         logger.info(f"🗑️ Intentando descartar definitivamente: [{message_id}]")
         
         try:
-            # 1. Guardar en la tabla de procesados (historial persistente)
+            # 1. Guardar en la tabla de procesados
             db_upsert("emails_procesados", {
                 "message_id": message_id.strip(),
                 "accion": "descartado",
@@ -364,22 +364,25 @@ def _render_card_correo(correo, idx, df_act, df_users, df_ordenes):
             try:
                 db_update("email_scan_cache", {"en_procesados": True}, "message_id", message_id.strip())
             except Exception as e:
-                logger.warning(f"Aviso al actualizar caché: {e}")
+                pass
             
-            # 4. Limpiar la memoria visual de Streamlit
-            _eliminar_de_pendientes(message_id)
+            # 4. Limpiar la memoria visual agresivamente
+            st.session_state['_correos_pendientes'] = [
+                c for c in st.session_state.get('_correos_pendientes', []) 
+                if c['message_id'] != message_id
+            ]
+            
             procesados_local = st.session_state.get('_recentemente_procesados', set())
             procesados_local.add(message_id.strip())
             st.session_state['_recentemente_procesados'] = procesados_local
             
-            logger.info(f"✅ Correo {message_id} descartado y sincronizado en BD.")
             st.toast(f"🗑️ Descartado: {correo['asunto'][:40]}")
             time.sleep(0.5)
             st.rerun()
             
         except Exception as e:
             logger.error(f"❌ Fallo crítico en BD al descartar: {e}")
-            st.error(f"❌ Error guardando descarte. Revisa los logs. Detalle: {e}")
+            st.error(f"❌ Error guardando descarte: {e}")
 
     if vincular_clicked:
         st.session_state[f'_uvincular_ot_{idx}'] = True
