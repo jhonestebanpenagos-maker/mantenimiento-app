@@ -300,8 +300,8 @@ def _render_orden_detalle(id_orden_selec, orden_actual, df_display, idx_tabla, d
 
 
 
-def _render_bitacora(id_orden_selec):
-    """Renderiza bitácora con UNA sola query pre-fetched para todos los widgets."""
+def _render_bitacora(id_orden_selec, orden_actual=None):
+    """Renderiza bitácora utilizando datos en memoria para evitar latencia."""
     st.markdown("#### 📜 Bitácora y Adjuntos")
 
     try:
@@ -313,19 +313,12 @@ def _render_bitacora(id_orden_selec):
     usuario = st.session_state.get('usuario', '')
     rol = st.session_state.get('rol', '')
 
-    # ══════════════════════════════════════════════════════════════════
-    # 🔥 UNA SOLA QUERY — reemplaza ~10 queries individuales
-    # ══════════════════════════════════════════════════════════════════
+    # 🔥 Pre-fetch de la bitácora
     registros_orden = _prefetch_bitacora_orden(oid)
 
-    # Obtener estado de la orden desde los registros o hacer query ligera
-    estado_orden = "Abierta"
-    try:
-        res_estado = supabase.table("ordenes").select("estado").eq("id", oid).execute()
-        if res_estado.data:
-            estado_orden = res_estado.data[0].get('estado', 'Abierta')
-    except Exception:
-        pass
+    # 🔥 OPTIMIZACIÓN: Reutilizamos el estado que ya cargamos previamente en memoria, 
+    # eliminando por completo la necesidad de consultar la base de datos de nuevo.
+    estado_orden = orden_actual.get('estado', 'Abierta') if orden_actual is not None else "Abierta"
 
     # Pasar registros pre-fetched a cada widget (evita N queries)
     render_time_tracker(id_orden_selec, usuario, registros_orden)
