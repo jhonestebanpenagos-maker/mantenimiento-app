@@ -1,10 +1,12 @@
 # =============================================================================
-# utils/db.py — COMPLETO CON INVALIDACIÓN + FILTRADO OPTIMIZADO
+# utils/db.py — COMPLETO CON INVALIDACIÓN + FILTRADO OPTIMIZADO + LOGGER
 # =============================================================================
 import streamlit as st
 import pandas as pd
 from supabase import create_client, Client
 
+# IMPORTAMOS NUESTRO NUEVO LOGGER
+from utils.logger import logger 
 
 # =============================================================================
 # 🔌 CONEXIÓN A SUPABASE
@@ -17,15 +19,14 @@ def init_supabase():
         return create_client(url, key)
     except KeyError as e:
         st.error(f"❌ Configuración incompleta: falta la clave {e} en secrets.toml.")
+        logger.error(f"Falta clave en secrets: {e}") # Usamos el logger
         return None
     except Exception as e:
         st.error("❌ No se pudo conectar a la base de datos. Contacte al administrador.")
-        print(f"Error conectando Supabase: {e}")
+        logger.error(f"Error crítico conectando Supabase: {e}") # Usamos el logger
         return None
 
-
 supabase = init_supabase()
-
 
 # =============================================================================
 # 📦 CACHÉ DE LECTURA
@@ -45,16 +46,13 @@ def _run_query_cached(table_name, filters_tuple, order_by, limit):
         res = query.execute()
         return res.data if res.data else []
     except Exception as e:
-        print(f"Error en consulta {table_name}: {e}")
+        logger.error(f"Error en consulta general a la tabla '{table_name}': {e}") # Usamos el logger
         return []
 
-
 def run_query(table_name, filters=None, order_by="id", limit=5000):
-    """Lee datos con caché. Se actualiza inmediatamente tras writes.
-    Límite por defecto: 5000 registros. Usar run_query_paginated() para más."""
+    """Lee datos con caché. Se actualiza inmediatamente tras writes."""
     filters_tuple = tuple(filters.items()) if filters else None
     return pd.DataFrame(_run_query_cached(table_name, filters_tuple, order_by, limit))
-
 
 # =============================================================================
 # 🔍 CONSULTA CON FILTRADO SERVIDOR (OPTIMIZACIÓN)
@@ -74,16 +72,13 @@ def _run_query_filtered_cached(table_name, select_fields, filters_tuple, order_b
         res = query.execute()
         return res.data if res.data else []
     except Exception as e:
-        print(f"Error en consulta filtrada {table_name}: {e}")
+        logger.error(f"Error en consulta filtrada a la tabla '{table_name}': {e}") # Usamos el logger
         return []
 
-
 def run_query_filtered(table_name, select_fields="*", filters=None, order_by="id", limit=100):
-    """Consulta con selección de campos y filtrado en servidor.
-    Útil para cargar solo los datos necesarios en lugar de tablas completas."""
+    """Consulta con selección de campos y filtrado en servidor."""
     filters_tuple = tuple(filters.items()) if filters else None
     return pd.DataFrame(_run_query_filtered_cached(table_name, select_fields, filters_tuple, order_by, limit))
-
 
 # =============================================================================
 # ✏️ ESCRITURA CON INVALIDACIÓN AUTOMÁTICA
@@ -93,43 +88,34 @@ def invalidate_cache(table_name: str = None):
     _run_query_cached.clear()
     _run_query_filtered_cached.clear()
     run_query_paginated.clear()
-    print(f"🔄 Caché invalidado: {table_name or 'TODO'}")
-
+    logger.info(f"🔄 Caché invalidado para: {table_name or 'TODO'}") # Guardamos info de que el caché se limpió
 
 def db_insert(table_name: str, data: dict):
-    """Insert + invalidación automática."""
     result = supabase.table(table_name).insert(data).execute()
     invalidate_cache(table_name)
     return result
 
-
 def db_update(table_name: str, data: dict, id_field: str, id_value):
-    """Update + invalidación automática."""
     result = supabase.table(table_name).update(data).eq(id_field, id_value).execute()
     invalidate_cache(table_name)
     return result
 
-
 def db_upsert(table_name: str, data: dict):
-    """Upsert + invalidación automática."""
     result = supabase.table(table_name).upsert(data).execute()
     invalidate_cache(table_name)
     return result
 
-
 def db_delete(table_name: str, id_field: str, id_value):
-    """Delete + invalidación automática."""
     result = supabase.table(table_name).delete().eq(id_field, id_value).execute()
     invalidate_cache(table_name)
     return result
-
 
 # =============================================================================
 # 📄 CONSULTAS PAGINADAS
 # =============================================================================
 @st.cache_data(ttl=300, show_spinner=False)
 def run_query_paginated(table_name, page=1, per_page=25, filters_tuple=None, order_by="id", desc=True):
-    """Consulta paginada cacheada. Se invalida automáticamente tras writes."""
+    """Consulta paginada cacheada."""
     try:
         count_q = supabase.table(table_name).select("id", count="exact")
         if filters_tuple:
@@ -159,16 +145,13 @@ def run_query_paginated(table_name, page=1, per_page=25, filters_tuple=None, ord
         return data, total, total_paginas
 
     except Exception as e:
-        print(f"Error paginación {table_name}: {e}")
+        logger.error(f"Error de paginación en tabla '{table_name}': {e}") # Usamos el logger
         return [], 0, 0
 
-
 def run_query_paginated_df(table_name, page=1, per_page=25, filters=None, order_by="id", desc=True):
-    """Wrapper que retorna DataFrame."""
     filters_tuple = tuple(filters.items()) if filters else None
     data, total, total_paginas = run_query_paginated(table_name, page, per_page, filters_tuple, order_by, desc)
     return pd.DataFrame(data), total, total_paginas
-
 
 def render_paginacion(key_prefix: str, pagina_actual: int, total_paginas: int, total_registros: int) -> int:
     if total_paginas <= 1:
