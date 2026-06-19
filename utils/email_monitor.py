@@ -14,20 +14,19 @@ from datetime import datetime, timedelta
 # 📦 PERSISTENCIA DE CORREOS PROCESADOS (Supabase)
 # ==============================================================================
 def _obtener_procesados():
-    """Obtiene los message_id de correos ya procesados usando caché."""
-    from utils.db import run_query
-    import pandas as pd
+    """Obtiene los message_id de correos ya procesados desde Supabase."""
+    from utils.db import supabase
+    if not supabase:
+        print("⚠️ _obtener_procesados: supabase es None")
+        return set()
     try:
-        # 🔑 LA CLAVE: Agregamos order_by="message_id" porque esta tabla NO tiene columna "id"
-        df_procesados = run_query("emails_procesados", order_by="message_id")
+        # 🔥 LA MAGIA: Ordenamos descendentemente por fecha y aumentamos el límite a 10,000
+        res = supabase.table("emails_procesados").select("message_id").order("fecha_procesado", desc=True).limit(10000).execute()
         
-        if df_procesados.empty:
-            return set()
-            
-        ids = {str(row["message_id"]).strip() for _, row in df_procesados.iterrows() if pd.notna(row["message_id"])}
+        ids = {row["message_id"].strip() for row in (res.data or []) if row.get("message_id")}
         return ids
     except Exception as e:
-        print(f"⚠️ Error obteniendo procesados: {e}")
+        print(f"⚠️ Error obteniendo procesados: {type(e).__name__}: {e}")
         return set()
 
 
