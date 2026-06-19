@@ -115,14 +115,11 @@ def render_gestion_global(df_act, df_users, df_ordenes):
         if len(event.selection.rows) > 0:
             idx_tabla = event.selection.rows[0]
             id_orden_selec = df_display.iloc[idx_tabla]['id']
-            try:
-                res_sel = supabase.table("ordenes").select("*").eq("id", int(id_orden_selec)).execute()
-                if res_sel.data:
-                    orden_actual = pd.Series(res_sel.data[0])
-                else:
-                    orden_actual = df_display.iloc[idx_tabla]
-            except Exception:
-                orden_actual = df_display.iloc[idx_tabla]
+            
+            # 🔥 OPTIMIZACIÓN: Ya tenemos todos los datos en memoria por la paginación. 
+            # Evitamos hacer una segunda consulta innecesaria a Supabase.
+            orden_actual = df_display.iloc[idx_tabla].copy()
+            
             _render_orden_detalle(id_orden_selec, orden_actual, df_display, idx_tabla, df_users)
 
         render_paginacion("gestion_ordenes_bottom", st.session_state.gestion_pagina, total_pag, total)
