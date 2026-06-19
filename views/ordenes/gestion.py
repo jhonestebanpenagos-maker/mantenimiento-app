@@ -151,9 +151,15 @@ def render_gestion_global(df_act, df_users, df_ordenes):
                             q = supabase.table("ordenes").select("*")
                             if filtro_estado != "Todas":
                                 q = q.eq("estado", filtro_estado)
-                            q = q.order("id", desc=True)
+                            
+                            # 🔥 OPTIMIZACIÓN: Límite estricto de 200 órdenes.
+                            # Evita que el servidor colapse (Out Of Memory) si hay miles de registros.
+                            q = q.order("id", desc=True).limit(200)
                             res_all = q.execute()
                             ordenes_para_pdf = res_all.data if res_all.data else []
+                            
+                            if len(ordenes_para_pdf) == 200:
+                                st.toast("⚠️ Por seguridad de memoria, el PDF se limitó a las 200 órdenes más recientes.", icon="🛡️")
 
                         pdf_bytes = generar_reporte_ordenes_pdf(
                             ordenes_para_pdf, df_users, df_act,
