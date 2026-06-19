@@ -39,26 +39,33 @@ TEMAS_DISPONIBLES = {
 
 def obtener_tema_actual() -> str:
     """Obtiene el tema guardado. Prioriza memoria, luego base de datos."""
-    # 1. Si ya lo cargamos en esta sesión, usarlo para que sea muy rápido
+    user_doc = st.session_state.get('user_doc')
+    
+    # 1. Si no hay usuario logueado (pantalla de login), siempre usar default
+    if not user_doc:
+        # Nos aseguramos de NO bloquear la memoria con el tema por defecto
+        st.session_state.pop('tema_seleccionado', None)
+        return "default"
+
+    # 2. Si el usuario ya está logueado y su tema ya se cargó en memoria, lo usamos
     if 'tema_seleccionado' in st.session_state:
         return st.session_state['tema_seleccionado']
     
-    # 2. Si el usuario ya inició sesión, buscar su preferencia en la base de datos
-    if st.session_state.get('user_doc'):
-        try:
-            from utils.db import supabase
-            if supabase:
-                res = supabase.table("usuarios").select("tema_visual").eq("documento", st.session_state['user_doc']).execute()
-                if res.data and res.data[0].get('tema_visual'):
-                    tema_bd = res.data[0]['tema_visual']
-                    if tema_bd in TEMAS_DISPONIBLES:
-                        st.session_state['tema_seleccionado'] = tema_bd
-                        return tema_bd
-        except Exception as e:
-            from utils.logger import logger
-            logger.error(f"Aviso: No se pudo leer el tema de BD: {e}")
+    # 3. Si el usuario está logueado pero recién abrió el navegador, buscar en BD
+    try:
+        from utils.db import supabase
+        if supabase:
+            res = supabase.table("usuarios").select("tema_visual").eq("documento", user_doc).execute()
+            if res.data and res.data[0].get('tema_visual'):
+                tema_bd = res.data[0]['tema_visual']
+                if tema_bd in TEMAS_DISPONIBLES:
+                    st.session_state['tema_seleccionado'] = tema_bd
+                    return tema_bd
+    except Exception as e:
+        from utils.logger import logger
+        logger.error(f"Aviso: No se pudo leer el tema de BD: {e}")
 
-    # 3. Si no hay sesión o falló, poner el tema por defecto
+    # 4. Si la base de datos falla o no tiene tema registrado, aplicamos default
     st.session_state['tema_seleccionado'] = "default"
     return "default"
 
