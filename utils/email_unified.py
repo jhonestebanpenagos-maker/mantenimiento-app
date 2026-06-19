@@ -340,50 +340,46 @@ def _render_card_correo(correo, idx, df_act, df_users, df_ordenes):
         descartar_clicked = st.button("🗑️ Descartar", key=f"ubtn_descartar_{idx}", use_container_width=True)
 
     if descartar_clicked:
+        from utils.db import db_upsert, db_delete, db_update
         from utils.logger import logger
-        logger.info(f"🗑️ Intentando descartar: [{message_id}]")
+        import time
         
-        from utils.db import supabase
-        guardado_exitoso = False
+        logger.info(f"🗑️ Intentando descartar definitivamente: [{message_id}]")
         
-        if supabase:
-            try:
-                datos_procesado = {
-                    "message_id": message_id.strip(),
-                    "accion": "descartado",
-                    "fecha_procesado": datetime.now().isoformat()
-                }
-                res = supabase.table("emails_procesados").upsert(datos_procesado).execute()
-                
-                # VALIDACIÓN ANTI-FALLO SILENCIOSO
-                if hasattr(res, 'data') and len(res.data) == 0:
-                    st.error("❌ Supabase rechazó el guardado (Verifica permisos o RLS).")
-                    logger.error(f"Bloqueo de seguridad al descartar correo {message_id}")
-                else:
-                    guardado_exitoso = True
-                    logger.info("✅ Guardado confirmado en la base de datos.")
-                    
-            except Exception as e:
-                st.error(f"❌ Error crítico guardando en BD: {e}")
-                logger.error(f"Error upsert correos: {e}")
-        else:
-            st.error("❌ No hay conexión a la base de datos.")
-
-        if guardado_exitoso:
-            _eliminar_de_pendientes(message_id)
-            try:
-                monitor._eliminar_pendiente(message_id)
-                audit._cache_actualizar_estado(message_id, en_procesados=True)
-            except Exception:
-                pass
+        try:
+            # 1. Guardar en la tabla de procesados (historial persistente)
+            db_upsert("emails_procesados", {
+                "message_id": message_id.strip(),
+                "accion": "descartado",
+                "fecha_procesado": datetime.now().isoformat()
+            })
             
+            # 2. Eliminar explícitamente de la tabla temporal de descargas
+            try:
+                db_delete("emails_pendientes", "message_id", message_id.strip())
+            except Exception as e:
+                logger.warning(f"Aviso al borrar de pendientes: {e}")
+
+            # 3. Marcarlo como procesado en la caché de escaneo
+            try:
+                db_update("email_scan_cache", {"en_procesados": True}, "message_id", message_id.strip())
+            except Exception as e:
+                logger.warning(f"Aviso al actualizar caché: {e}")
+            
+            # 4. Limpiar la memoria visual de Streamlit
+            _eliminar_de_pendientes(message_id)
             procesados_local = st.session_state.get('_recentemente_procesados', set())
             procesados_local.add(message_id.strip())
             st.session_state['_recentemente_procesados'] = procesados_local
             
+            logger.info(f"✅ Correo {message_id} descartado y sincronizado en BD.")
             st.toast(f"🗑️ Descartado: {correo['asunto'][:40]}")
             time.sleep(0.5)
             st.rerun()
+            
+        except Exception as e:
+            logger.error(f"❌ Fallo crítico en BD al descartar: {e}")
+            st.error(f"❌ Error guardando descarte. Revisa los logs. Detalle: {e}")
 
     if vincular_clicked:
         st.session_state[f'_uvincular_ot_{idx}'] = True
