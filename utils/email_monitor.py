@@ -57,9 +57,12 @@ def _obtener_pendientes_guardados():
     """Obtiene correos pendientes usando caché."""
     from utils.db import run_query
     try:
-        df_pendientes = run_query("emails_pendientes")
+        # 🔑 LA CLAVE: Agregamos order_by="message_id" porque esta tabla NO tiene columna "id"
+        df_pendientes = run_query("emails_pendientes", order_by="message_id")
+        
         if df_pendientes.empty:
             return []
+            
         # Convertir a lista de diccionarios
         return df_pendientes.to_dict('records')
     except Exception as e:
