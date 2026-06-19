@@ -295,7 +295,7 @@ def _render_orden_detalle(id_orden_selec, orden_actual, df_display, idx_tabla, d
                 st.rerun()
 
     with col_der:
-        _render_bitacora(id_orden_selec)
+        _render_bitacora(id_orden_selec, orden_actual)
 
 
 
