@@ -1,6 +1,3 @@
-# =============================================================================
-# utils/db.py — COMPLETO CON INVALIDACIÓN + FILTRADO OPTIMIZADO + LOGGER
-# =============================================================================
 import streamlit as st
 import pandas as pd
 from supabase import create_client, Client
@@ -19,21 +16,31 @@ def init_supabase():
         return create_client(url, key)
     except KeyError as e:
         st.error(f"❌ Configuración incompleta: falta la clave {e} en secrets.toml.")
-        logger.error(f"Falta clave en secrets: {e}") # Usamos el logger
+        logger.error(f"Falta clave en secrets: {e}")
         return None
     except Exception as e:
         st.error("❌ No se pudo conectar a la base de datos. Contacte al administrador.")
-        logger.error(f"Error crítico conectando Supabase: {e}") # Usamos el logger
+        logger.error(f"Error crítico conectando Supabase: {e}")
         return None
 
 supabase = init_supabase()
 
 # =============================================================================
-# 📦 CACHÉ DE LECTURA
+# 📦 CACHÉ INTELIGENTE (SEPARADO)
 # =============================================================================
-@st.cache_data(ttl=300, show_spinner=False)
-def _run_query_cached(table_name, filters_tuple, order_by, limit):
-    """Consulta genérica cacheada. TTL largo porque se invalida al escribir."""
+# 1. Caché de larga duración para Catálogos (Se guarda por 1 hora en memoria)
+@st.cache_data(ttl=3600, show_spinner=False)
+def _query_catalogo(table_name):
+    try:
+        res = supabase.table(table_name).select("*").execute()
+        return res.data if res.data else []
+    except Exception as e:
+        logger.error(f"Error en catálogo '{table_name}': {e}")
+        return []
+
+# 2. Caché rápido para Órdenes y Bitácoras (Se limpia constantemente)
+@st.cache_data(ttl=60, show_spinner=False)
+def _query_dinamico(table_name, filters_tuple, order_by, limit):
     try:
         query = supabase.table(table_name).select("*")
         if filters_tuple:
@@ -46,18 +53,32 @@ def _run_query_cached(table_name, filters_tuple, order_by, limit):
         res = query.execute()
         return res.data if res.data else []
     except Exception as e:
-        logger.error(f"Error en consulta general a la tabla '{table_name}': {e}") # Usamos el logger
+        logger.error(f"Error en dinámico '{table_name}': {e}")
         return []
 
 def run_query(table_name, filters=None, order_by="id", limit=5000):
-    """Lee datos con caché. Se actualiza inmediatamente tras writes."""
+    """Lee datos. Decide automáticamente si usar caché estático o dinámico."""
+    CATALOGOS = ["usuarios", "activos", "repuestos", "planes_mantenimiento"]
+    
+    # Si es un catálogo (y no tiene filtros raros), usa el caché de 1 hora
+    if table_name in CATALOGOS and not filters:
+        data = _query_catalogo(table_name)
+        df = pd.DataFrame(data)
+        # Mantener compatibilidad de ordenamiento para no romper menús
+        if not df.empty and order_by in df.columns:
+            df = df.sort_values(by=order_by)
+        if limit and not df.empty:
+            df = df.head(limit)
+        return df
+        
+    # Si es operativo (ordenes, bitácora) o tiene filtros, usar caché dinámico
     filters_tuple = tuple(filters.items()) if filters else None
-    return pd.DataFrame(_run_query_cached(table_name, filters_tuple, order_by, limit))
+    return pd.DataFrame(_query_dinamico(table_name, filters_tuple, order_by, limit))
 
 # =============================================================================
 # 🔍 CONSULTA CON FILTRADO SERVIDOR (OPTIMIZACIÓN)
 # =============================================================================
-@st.cache_data(ttl=300, show_spinner=False)
+@st.cache_data(ttl=60, show_spinner=False)
 def _run_query_filtered_cached(table_name, select_fields, filters_tuple, order_by, limit):
     """Consulta con selección de campos y filtrado en servidor."""
     try:
@@ -72,23 +93,29 @@ def _run_query_filtered_cached(table_name, select_fields, filters_tuple, order_b
         res = query.execute()
         return res.data if res.data else []
     except Exception as e:
-        logger.error(f"Error en consulta filtrada a la tabla '{table_name}': {e}") # Usamos el logger
+        logger.error(f"Error en consulta filtrada a '{table_name}': {e}")
         return []
 
 def run_query_filtered(table_name, select_fields="*", filters=None, order_by="id", limit=100):
-    """Consulta con selección de campos y filtrado en servidor."""
     filters_tuple = tuple(filters.items()) if filters else None
     return pd.DataFrame(_run_query_filtered_cached(table_name, select_fields, filters_tuple, order_by, limit))
 
 # =============================================================================
-# ✏️ ESCRITURA CON INVALIDACIÓN AUTOMÁTICA
+# ✏️ ESCRITURA CON INVALIDACIÓN INTELIGENTE
 # =============================================================================
 def invalidate_cache(table_name: str = None):
-    """Limpia caché para que el siguiente rerun traiga datos frescos."""
-    _run_query_cached.clear()
+    """Limpia el caché de forma selectiva para no saturar el servidor."""
+    # 1. Las tablas operativas siempre se limpian para tener info fresca
+    _query_dinamico.clear()
     _run_query_filtered_cached.clear()
     run_query_paginated.clear()
-    logger.info(f"🔄 Caché invalidado para: {table_name or 'TODO'}") # Guardamos info de que el caché se limpió
+    
+    # 2. SOLO limpiamos los catálogos si el usuario editó explícitamente uno de ellos
+    CATALOGOS = ["usuarios", "activos", "repuestos", "planes_mantenimiento"]
+    if table_name in CATALOGOS or table_name is None:
+        _query_catalogo.clear()
+        
+    logger.info(f"🔄 Caché invalidado. Origen de la modificación: {table_name or 'Global'}")
 
 def db_insert(table_name: str, data: dict):
     result = supabase.table(table_name).insert(data).execute()
@@ -113,9 +140,8 @@ def db_delete(table_name: str, id_field: str, id_value):
 # =============================================================================
 # 📄 CONSULTAS PAGINADAS
 # =============================================================================
-@st.cache_data(ttl=300, show_spinner=False)
+@st.cache_data(ttl=60, show_spinner=False)
 def run_query_paginated(table_name, page=1, per_page=25, filters_tuple=None, order_by="id", desc=True):
-    """Consulta paginada cacheada."""
     try:
         count_q = supabase.table(table_name).select("id", count="exact")
         if filters_tuple:
@@ -145,7 +171,7 @@ def run_query_paginated(table_name, page=1, per_page=25, filters_tuple=None, ord
         return data, total, total_paginas
 
     except Exception as e:
-        logger.error(f"Error de paginación en tabla '{table_name}': {e}") # Usamos el logger
+        logger.error(f"Error de paginación en tabla '{table_name}': {e}")
         return [], 0, 0
 
 def run_query_paginated_df(table_name, page=1, per_page=25, filters=None, order_by="id", desc=True):
