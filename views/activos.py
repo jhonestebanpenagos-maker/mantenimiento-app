@@ -396,9 +396,10 @@ def _render_nuevo(df_act):
     foto_archivo = st.file_uploader("Arrastra y suelta la imagen aquí", type=["jpg", "png", "jpeg"], key="new_asset_photo")
 
     if foto_archivo is not None:
-        st.session_state.draft_data['foto_bytes'] = foto_archivo.getvalue()
+        foto_bytes = foto_archivo.getvalue()
+        st.session_state.draft_data['foto_bytes'] = foto_bytes
         st.success("✅ Imagen cargada temporalmente.")
-        st.image(foto_archivo, width=200)
+        st.image(foto_bytes, width=250)
 
     st.markdown("---")
     if st.button("💾 GUARDAR ACTIVO", type="primary", use_container_width=True, key="btn_save_new_asset"):
