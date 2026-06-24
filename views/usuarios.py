@@ -43,9 +43,17 @@ def _render_crear():
         documento = c1.text_input("Documento/ID", key="new_user_doc")
         nombre = c2.text_input("Nombre Completo", key="new_user_name")
         password = c1.text_input("Contraseña", type="password", key="new_user_pass")
-        st.caption(f"🔒 Mínimo {PASSWORD_MIN_LENGTH} caracteres, mayúscula, minúscula y número.")
-        rol = c2.selectbox("Rol", ["Tecnico", "Programador", "Admin"], key="new_user_rol")
-        submitted = st.form_submit_button("REGISTRAR USUARIO", type="primary")
+        rol = c2.selectbox("Rol en el Sistema (Permisos)", ["Tecnico", "Programador", "Admin"], key="new_user_rol")
+        
+        # 🔥 NUEVOS CAMPOS: Tipo y Disponibilidad
+        c3, c4 = st.columns(2)
+        tipo_personal = c3.selectbox("Tipo de Personal", ["Técnico Interno", "Contratista Externo", "Administrador"], key="new_user_tipo")
+        estado_disp = c4.selectbox("Estado de Disponibilidad", ["Activo", "Vacaciones", "Incapacitado", "Permiso Especial"], key="new_user_estado")
+        
+        st.caption(f"🔒 Contraseña: Mínimo {PASSWORD_MIN_LENGTH} caracteres, mayúscula, minúscula y número.")
+        st.markdown("<br>", unsafe_allow_html=True)
+        
+        submitted = st.form_submit_button("REGISTRAR USUARIO", type="primary", use_container_width=True)
 
         if submitted:
             if documento and nombre and password and rol:
@@ -57,13 +65,18 @@ def _render_crear():
                         agregar_notificacion('error', pass_error)
                     else:
                         try:
+                            # Insertamos los nuevos campos en la BD
                             res = supabase.table("usuarios").insert({
-                                "documento": documento, "nombre": nombre,
-                                "password": hashear_password(password), "rol": rol
+                                "documento": documento, 
+                                "nombre": nombre,
+                                "password": hashear_password(password), 
+                                "rol": rol,
+                                "tipo_personal": tipo_personal,
+                                "estado_disponibilidad": estado_disp
                             }).execute()
                             if res.data:
                                 st.cache_data.clear()
-                                registrar_accion_critica("CREAR_USUARIO", documento, f"Nombre: {nombre}, Rol: {rol}")
+                                registrar_accion_critica("CREAR_USUARIO", documento, f"Nombre: {nombre}, Rol: {rol}, Tipo: {tipo_personal}")
                                 agregar_notificacion('success', f'Usuario {nombre} registrado con éxito.')
                                 st.rerun()
                             else:
@@ -71,7 +84,7 @@ def _render_crear():
                         except Exception as e:
                             agregar_notificacion('error', f'Error de base de datos: {e}')
             else:
-                agregar_notificacion('warning', 'Por favor, complete todos los campos.')
+                agregar_notificacion('warning', 'Por favor, complete todos los campos obligatorios.')
 
 
 # ==============================================================================
@@ -86,7 +99,11 @@ def _render_gestionar():
         selected_option = st.selectbox("Usuario:", user_options_list, key="user_selector")
 
         st.markdown("### Lista Completa de Usuarios")
-        st.dataframe(df_users[['id', 'documento', 'nombre', 'rol']], hide_index=True, use_container_width=True)
+        # Mostrar las nuevas columnas si existen
+        cols_to_show = ['id', 'documento', 'nombre', 'rol']
+        if 'tipo_personal' in df_users.columns: cols_to_show.append('tipo_personal')
+        if 'estado_disponibilidad' in df_users.columns: cols_to_show.append('estado_disponibilidad')
+        st.dataframe(df_users[cols_to_show], hide_index=True, use_container_width=True)
 
         if selected_option != "-- Seleccione un usuario --":
             user_id = user_options[selected_option]
@@ -99,13 +116,27 @@ def _render_gestionar():
                 c1, c2 = st.columns(2)
                 edit_doc = c1.text_input("Documento/ID", value=selected_user['documento'])
                 edit_name = c2.text_input("Nombre Completo", value=selected_user['nombre'])
+                
                 rol_options = ["Tecnico", "Programador", "Admin"]
                 current_rol_index = rol_options.index(selected_user['rol']) if selected_user['rol'] in rol_options else 0
-                new_rol = st.selectbox("Rol", rol_options, index=current_rol_index)
-                # Agrégalo en _render_nuevo() y en _render_editar()
-                tipo_personal = st.selectbox("Tipo de Personal", ["Técnico Interno", "Contratista Externo", "Administrador"])
-                estado_disp = st.selectbox("Estado de Disponibilidad", ["Activo", "Vacaciones", "Incapacitado", "Permiso Especial"])
-                new_password = st.text_input("Nueva Contraseña (Dejar vacío para no cambiar)", type="password")
+                new_rol = c1.selectbox("Rol en el Sistema", rol_options, index=current_rol_index)
+                
+                new_password = c2.text_input("Nueva Contraseña (Vacío = no cambiar)", type="password")
+                
+                # 🔥 NUEVOS CAMPOS EN EDICIÓN
+                tipo_options = ["Técnico Interno", "Contratista Externo", "Administrador"]
+                curr_tipo_val = selected_user.get('tipo_personal', 'Técnico Interno')
+                # Prevenir errores si en la BD hay un valor nulo
+                if pd.isna(curr_tipo_val): curr_tipo_val = 'Técnico Interno'
+                curr_tipo_idx = tipo_options.index(curr_tipo_val) if curr_tipo_val in tipo_options else 0
+                new_tipo = c1.selectbox("Tipo de Personal", tipo_options, index=curr_tipo_idx)
+
+                estado_options = ["Activo", "Vacaciones", "Incapacitado", "Permiso Especial"]
+                curr_estado_val = selected_user.get('estado_disponibilidad', 'Activo')
+                if pd.isna(curr_estado_val): curr_estado_val = 'Activo'
+                curr_estado_idx = estado_options.index(curr_estado_val) if curr_estado_val in estado_options else 0
+                new_estado = c2.selectbox("Estado de Disponibilidad", estado_options, index=curr_estado_idx)
+
                 if new_password:
                     st.caption(f"🔒 Mínimo {PASSWORD_MIN_LENGTH} caracteres, mayúscula, minúscula y número.")
                 st.markdown("<br>", unsafe_allow_html=True)
@@ -120,7 +151,14 @@ def _render_gestionar():
                     if not validar_usuario_unico(edit_doc, user_id):
                         agregar_notificacion('error', 'El documento ya está en uso por otro usuario.')
                     else:
-                        update_data = {"documento": edit_doc, "nombre": edit_name, "rol": new_rol}
+                        # Preparamos la data a actualizar
+                        update_data = {
+                            "documento": edit_doc, 
+                            "nombre": edit_name, 
+                            "rol": new_rol,
+                            "tipo_personal": new_tipo,
+                            "estado_disponibilidad": new_estado
+                        }
                         cambios = []
                         if new_rol != selected_user['rol']:
                             cambios.append(f"Rol: {selected_user['rol']} → {new_rol}")
@@ -138,7 +176,7 @@ def _render_gestionar():
                                 registrar_accion_critica("ACTUALIZAR_USUARIO",
                                                          st.session_state.get('usuario', '?'),
                                                          f"Usuario: {edit_name} — {', '.join(cambios)}")
-                            agregar_notificacion('success', f'Usuario {edit_name} actualizado.')
+                            agregar_notificacion('success', f'Usuario {edit_name} actualizado correctamente.')
                             st.rerun()
                         except Exception as e:
                             agregar_notificacion('error', f'Error al actualizar: {e}')
