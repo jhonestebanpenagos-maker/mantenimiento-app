@@ -102,6 +102,9 @@ def _render_gestionar():
                 rol_options = ["Tecnico", "Programador", "Admin"]
                 current_rol_index = rol_options.index(selected_user['rol']) if selected_user['rol'] in rol_options else 0
                 new_rol = st.selectbox("Rol", rol_options, index=current_rol_index)
+                # Agrégalo en _render_nuevo() y en _render_editar()
+                tipo_personal = st.selectbox("Tipo de Personal", ["Técnico Interno", "Contratista Externo", "Administrador"])
+                estado_disp = st.selectbox("Estado de Disponibilidad", ["Activo", "Vacaciones", "Incapacitado", "Permiso Especial"])
                 new_password = st.text_input("Nueva Contraseña (Dejar vacío para no cambiar)", type="password")
                 if new_password:
                     st.caption(f"🔒 Mínimo {PASSWORD_MIN_LENGTH} caracteres, mayúscula, minúscula y número.")
