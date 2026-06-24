@@ -86,7 +86,7 @@ def render_programacion(df_ordenes, df_users, df_activos):
                 cols = st.columns(max(len(df_grupo), 1))
                 for idx, (_, tech) in enumerate(df_grupo.iterrows()):
                     with cols[idx]:
-                        st.markdown(f"<div style='text-align:center; background:#1F2937; padding:8px; border-radius:6px; border:1px solid #374151; margin-bottom:10px;'><b>{tech['nombre']}</b></div>", unsafe_allow_html=True)
+                        st.markdown(f"<div style='text-align:center; background:#1F2937; color:#F9FAFB; padding:8px; border-radius:6px; border:1px solid #374151; margin-bottom:10px;'><b>{tech['nombre']}</b></div>", unsafe_allow_html=True)
                         ots_del_tecnico = con_fecha[con_fecha['tecnico_asignado'] == str(tech['id'])]
                         
                         if ots_del_tecnico.empty:
