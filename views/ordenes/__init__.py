@@ -10,6 +10,7 @@ from utils.nav_button import render_back_button
 from utils.notifications import notificar_telegram
 from utils.charts import sugerir_tecnico, render_sugerencia_tecnico
 
+
 from .helpers import generar_adjunto_html, render_archivo_unificado
 from .kanban import render_kanban
 from .calidad import render_calidad
@@ -19,6 +20,7 @@ from .preventivos import render_preventivos
 from .buzon import render_buzon
 from .mis_gestiones import render_mis_gestiones
 from .interceptor import render_interceptor
+from .programacion import render_programacion
 from utils.email_unified import render_buzon_correo, render_auditoria_correos
 
 
@@ -36,6 +38,7 @@ _TAB_DEPS = {
     "gestion":       ["activos", "usuarios", "ordenes"],
     "correo":        [],
     "auditoria":     [],
+    "programacion":  ["activos", "usuarios", "ordenes"],
 }
 
 
@@ -99,6 +102,7 @@ def render():
     ]
     GRUPO_SUPERVISION = [
         ("buzon",   "📥", "Buzón"),
+        ("programacion", "📅", "Planificador"),
         ("calidad", "🧐", "Calidad"),
         ("correo",  "📧", "Correo"),
         ("gestion", "🎛️", "Global"),
@@ -149,6 +153,8 @@ def render():
         render_crear_directa(df_act, df_users, df_ordenes)
     elif tab_activa == 'preventivos':
         render_preventivos(df_act, df_users)
+    elif tab_activa == 'programacion':                 # <---- NUEVO BLOQUE AQUÍ
+        render_programacion(df_ordenes, df_users, df_act)
     elif tab_activa == 'correo':
         render_buzon_correo()
     elif tab_activa == 'auditoria':
