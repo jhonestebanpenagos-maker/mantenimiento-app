@@ -326,9 +326,23 @@ def _render_card_correo(correo, idx, df_act, df_users, df_ordenes):
                         st.caption(f"📄 {att['nombre']} — {att['tamano'] / 1024:.1f} KB ({att['tipo']})")
                     with col_btn:
                         if att.get('datos_b64'):
-                            import base64 as _b64
-                            st.download_button("⬇️ Descargar", data=_b64.b64decode(att['datos_b64']), file_name=att['nombre'], mime=att['tipo'], key=f"udl_{idx}_{a_idx}", use_container_width=True)
-
+                            # OPTIMIZACIÓN: Descarga directa en el navegador para evitar caídas de red
+                            b64_data = att['datos_b64']
+                            mime = att['tipo']
+                            fname = str(att['nombre']).replace('"', '') # Evitar que las comillas rompan el HTML
+                            
+                            html_btn = f'''
+                            <a href="data:{mime};base64,{b64_data}" download="{fname}" 
+                               style="display: block; text-align: center; text-decoration: none; 
+                                      background-color: #1F2937; color: #F3F4F6; border: 1px solid #374151; 
+                                      padding: 5px 0px; border-radius: 6px; font-size: 0.85rem; 
+                                      font-family: sans-serif; cursor: pointer; transition: 0.2s;"
+                               onmouseover="this.style.backgroundColor='#374151'" 
+                               onmouseout="this.style.backgroundColor='#1F2937'">
+                               ⬇️ Descargar
+                            </a>
+                            '''
+                            st.markdown(html_btn, unsafe_allow_html=True)
     # ── Acciones ──
     col_crear, col_vincular, col_descartar, col_espacio = st.columns([2, 2, 2, 2])
 
