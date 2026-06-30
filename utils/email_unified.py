@@ -673,9 +673,10 @@ password = "xxxx xxxx xxxx xxxx"
                 st.session_state['_uc_pagina'] = pagina - 1
                 st.rerun()
         with c_pg_b:
+            # 🔥 TRUCO: Llave dinámica también para la caja inferior
             nueva_pag_bot = st.number_input(
                 "Página", min_value=1, max_value=total_paginas, value=pagina,
-                key="uc_num_bot", label_visibility="collapsed"
+                key=f"uc_num_bot_{pagina}_{total_paginas}", label_visibility="collapsed"
             )
             if nueva_pag_bot != pagina:
                 st.session_state['_uc_pagina'] = nueva_pag_bot
