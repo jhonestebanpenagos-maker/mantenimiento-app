@@ -623,25 +623,29 @@ password = "xxxx xxxx xxxx xxxx"
     if pagina > total_paginas:
         pagina = total_paginas
         st.session_state['_uc_pagina'] = pagina
+    if pagina < 1:
+        pagina = 1
+        st.session_state['_uc_pagina'] = pagina
 
     if total_paginas > 1:
         c_info, c_prev, c_pg, c_next = st.columns([2, 1, 1, 1])
         with c_info:
             st.caption(f"📄 Página {pagina} de {total_paginas} — {len(filtrados)} correos")
         with c_prev:
-            if st.button("◀", disabled=(pagina <= 1), key="uc_pag_ant", use_container_width=True):
+            if st.button("◀", disabled=(pagina <= 1), key="uc_pag_ant_top", use_container_width=True):
                 st.session_state['_uc_pagina'] = pagina - 1
                 st.rerun()
         with c_pg:
+            # 🔥 TRUCO: Llave dinámica para que Streamlit no "congele" el número de página
             nueva_pag = st.number_input(
                 "Página", min_value=1, max_value=total_paginas, value=pagina,
-                key="uc_num_top", label_visibility="collapsed"
+                key=f"uc_num_top_{pagina}_{total_paginas}", label_visibility="collapsed"
             )
             if nueva_pag != pagina:
                 st.session_state['_uc_pagina'] = nueva_pag
                 st.rerun()
         with c_next:
-            if st.button("▶", disabled=(pagina >= total_paginas), key="uc_pag_sig", use_container_width=True):
+            if st.button("▶", disabled=(pagina >= total_paginas), key="uc_pag_sig_top", use_container_width=True):
                 st.session_state['_uc_pagina'] = pagina + 1
                 st.rerun()
 
