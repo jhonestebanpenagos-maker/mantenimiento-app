@@ -231,7 +231,22 @@ def ejecutar_migracion(orden_id: int = None, solo_verificar: bool = False):
         usuario_text = b.get('usuario_text', '') or ''
         archivo_url = b.get('archivo_url', '') or ''
 
-        # Skip si ya tiene formato nuevo
+        # Caso C: Ya tiene formato nuevo pero cuerpo vacío o muy corto
+        if es_mensaje_email(mensaje) and archivo_url:
+            # Verificar si el cuerpo está vacío entre --- y [/📧 CORREO]
+            cuerpo_match = re.search(r'---\n(.*?)\n\[/📧 CORREO\]', mensaje, re.DOTALL)
+            if cuerpo_match:
+                cuerpo = cuerpo_match.group(1).strip()
+                # Si el cuerpo está vacío, es muy corto, o es un placeholder
+                if not cuerpo or len(cuerpo) < 50 or 'Correo original adjunto' in cuerpo or 'no se pudo parsear' in cuerpo:
+                    if archivo_url.lower().endswith(('.msg', '.eml')):
+                        entradas_a_migrar.append({
+                            'tipo': 'rellenar_cuerpo',
+                            'entrada': b,
+                        })
+                        continue
+
+        # Skip si ya tiene formato nuevo (y no es caso C)
         if es_mensaje_email(mensaje):
             continue
 
@@ -267,6 +282,10 @@ def ejecutar_migracion(orden_id: int = None, solo_verificar: bool = False):
             print(f"    Mensaje: {(b.get('mensaje', '') or '')[:80]}...")
             print(f"    URL: {(b.get('archivo_url', '') or '')[:60]}")
             print()
+        print(f"\n📋 Resumen:")
+        print(f"   - 'rellenar_cuerpo': Ya tienen formato nuevo pero les falta el contenido")
+        print(f"   - 'archivo_msg': Tienen .msg/.eml pero el mensaje no está estructurado")
+        print(f"   - 'formato_viejo': Formato antiguo 'CORREO (remitente)'")
         return 0, n_total, []
 
     # ── 3. Migrar ──
@@ -280,19 +299,24 @@ def ejecutar_migracion(orden_id: int = None, solo_verificar: bool = False):
         try:
             datos_correo = None
 
-            if item['tipo'] == 'archivo_msg':
+            if item['tipo'] in ('archivo_msg', 'rellenar_cuerpo'):
                 # Descargar y parsear el .msg/.eml
                 print(f"  📥 Descargando correo de Orden #{b['orden_id']}...")
                 datos_correo = _parsear_msg_desde_url(b['archivo_url'])
 
                 if not datos_correo:
-                    # No se pudo parsear, usar datos mínimos
-                    datos_correo = {
-                        'remitente': b.get('usuario_text', 'Desconocido'),
-                        'asunto': '(Correo adjunto — no se pudo parsear)',
-                        'fecha': '',
-                        'cuerpo': '',
-                    }
+                    if item['tipo'] == 'archivo_msg':
+                        # No se pudo parsear, usar datos mínimos
+                        datos_correo = {
+                            'remitente': b.get('usuario_text', 'Desconocido'),
+                            'asunto': '(Correo adjunto — no se pudo parsear)',
+                            'fecha': '',
+                            'cuerpo': '',
+                        }
+                    else:
+                        # Caso rellenar_cuerpo: no se pudo descargar, saltar
+                        print(f"  ⏭️ Bitácora #{bit_id}: no se pudo descargar el archivo")
+                        continue
 
             elif item['tipo'] == 'formato_viejo':
                 # Extraer datos del mensaje viejo
