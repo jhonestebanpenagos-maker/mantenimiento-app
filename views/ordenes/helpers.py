@@ -132,8 +132,8 @@ def construir_mensaje_bitacora_email(datos_email: dict) -> str:
 
     cuerpo = datos_email.get('cuerpo', '')
     if cuerpo:
-        if len(cuerpo) > 500:
-            cuerpo = cuerpo[:500] + "... [truncado]"
+        if len(cuerpo) > 2000:
+            cuerpo = cuerpo[:2000] + "... [truncado]"
         partes.append(cuerpo)
 
     if datos_email.get('adjuntos'):

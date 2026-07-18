@@ -36,7 +36,7 @@ def _normalizar_fecha_correo(fecha_raw) -> str:
 
 def _parsear_msg_desde_url(url: str) -> dict | None:
     """
-    Descarga un archivo .msg/.eml desde una URL y lo parsea.
+    Descarga un archivo .msg/.eml/.html desde una URL y lo parsea.
     Retorna dict con: remitente, asunto, fecha, cuerpo
     """
     if not url:
@@ -51,57 +51,124 @@ def _parsear_msg_desde_url(url: str) -> dict | None:
         bytes_data = resp.content
         url_lower = url.lower()
 
+        # ── Archivo .msg (Outlook) ──
         if url_lower.endswith('.msg'):
-            import extract_msg
-            msg = extract_msg.Message(io.BytesIO(bytes_data))
-            remitente = msg.sender or 'Desconocido'
-            asunto = msg.subject or '(Sin asunto)'
-            fecha = msg.date or ''
-            cuerpo = msg.body or ''
-            # Limpiar cuerpo
-            cuerpo = _limpiar_cuerpo(cuerpo)
-            return {
-                'remitente': remitente,
-                'asunto': asunto,
-                'fecha': _normalizar_fecha_correo(fecha),
-                'cuerpo': cuerpo,
-            }
+            try:
+                import extract_msg
+                msg = extract_msg.Message(io.BytesIO(bytes_data))
+                remitente = msg.sender or 'Desconocido'
+                asunto = msg.subject or '(Sin asunto)'
+                fecha = msg.date or ''
+                cuerpo = msg.body or ''
+                cuerpo = _limpiar_cuerpo(cuerpo)
+                return {
+                    'remitente': remitente,
+                    'asunto': asunto,
+                    'fecha': _normalizar_fecha_correo(fecha),
+                    'cuerpo': cuerpo,
+                }
+            except Exception as e:
+                print(f"⚠️ Error parseando .msg: {e}")
+                return None
 
+        # ── Archivo .eml (estándar) ──
         elif url_lower.endswith('.eml'):
-            import email
-            import email.policy
-            msg = email.message_from_bytes(bytes_data, policy=email.policy.default)
-            remitente = msg['from'] or 'Desconocido'
-            asunto = msg['subject'] or '(Sin asunto)'
-            fecha = msg['date'] or ''
+            try:
+                import email
+                import email.policy
+                msg = email.message_from_bytes(bytes_data, policy=email.policy.default)
+                remitente = msg['from'] or 'Desconocido'
+                asunto = msg['subject'] or '(Sin asunto)'
+                fecha = msg['date'] or ''
 
-            cuerpo = ''
-            if msg.is_multipart():
-                for part in msg.walk():
-                    ctype = part.get_content_type()
-                    if ctype == 'text/plain':
-                        payload = part.get_payload(decode=True)
-                        if payload:
-                            charset = part.get_content_charset() or 'utf-8'
-                            cuerpo = payload.decode(charset, errors='replace')
-                        break
-            else:
-                payload = msg.get_payload(decode=True)
-                if payload:
-                    charset = msg.get_content_charset() or 'utf-8'
-                    cuerpo = payload.decode(charset, errors='replace')
+                cuerpo = ''
+                if msg.is_multipart():
+                    for part in msg.walk():
+                        ctype = part.get_content_type()
+                        if ctype == 'text/plain':
+                            payload = part.get_payload(decode=True)
+                            if payload:
+                                charset = part.get_content_charset() or 'utf-8'
+                                cuerpo = payload.decode(charset, errors='replace')
+                            break
+                else:
+                    payload = msg.get_payload(decode=True)
+                    if payload:
+                        charset = msg.get_content_charset() or 'utf-8'
+                        cuerpo = payload.decode(charset, errors='replace')
 
-            cuerpo = _limpiar_cuerpo(cuerpo)
-            return {
-                'remitente': remitente,
-                'asunto': asunto,
-                'fecha': _normalizar_fecha_correo(fecha),
-                'cuerpo': cuerpo,
-            }
+                cuerpo = _limpiar_cuerpo(cuerpo)
+                return {
+                    'remitente': remitente,
+                    'asunto': asunto,
+                    'fecha': _normalizar_fecha_correo(fecha),
+                    'cuerpo': cuerpo,
+                }
+            except Exception as e:
+                print(f"⚠️ Error parseando .eml: {e}")
+                return None
+
+        # ── Archivo .html (migración anterior lo convirtió) ──
+        elif url_lower.endswith('.html'):
+            try:
+                html_text = bytes_data.decode('utf-8', errors='replace')
+                datos = _extraer_datos_de_html(html_text)
+                return datos
+            except Exception as e:
+                print(f"⚠️ Error parseando .html: {e}")
+                return None
+
+        else:
+            print(f"⚠️ Tipo de archivo no soportado: {url_lower}")
+            return None
 
     except Exception as e:
-        print(f"⚠️ Error parseando correo desde URL: {e}")
+        print(f"⚠️ Error descargando correo desde URL: {e}")
         return None
+
+
+def _extraer_datos_de_html(html_text: str) -> dict:
+    """
+    Extrae datos de correo desde un HTML generado por la migración anterior.
+    El HTML tiene formato:
+    <h2>📧 Asunto</h2>
+    <p>De: remitente</p>
+    <div>cuerpo</div>
+    """
+    import re
+
+    datos = {
+        'remitente': 'Desconocido',
+        'asunto': '(Sin asunto)',
+        'fecha': '',
+        'cuerpo': '',
+    }
+
+    # Extraer asunto del <h2>
+    asunto_match = re.search(r'<h2[^>]*>📧\s*(.*?)</h2>', html_text, re.DOTALL)
+    if asunto_match:
+        datos['asunto'] = re.sub(r'<[^>]+>', '', asunto_match.group(1)).strip()
+
+    # Extraer remitente de "De: ..."
+    remitente_match = re.search(r'De:\s*(.*?)</p>', html_text, re.DOTALL)
+    if remitente_match:
+        datos['remitente'] = re.sub(r'<[^>]+>', '', remitente_match.group(1)).strip()
+
+    # Extraer cuerpo del div principal (después del header)
+    cuerpo_match = re.search(r'<div style="line-height:1.6;color:#374151;">(.*?)</div>', html_text, re.DOTALL)
+    if cuerpo_match:
+        cuerpo_html = cuerpo_match.group(1)
+        # Convertir HTML a texto plano
+        cuerpo = re.sub(r'<br\s*/?>', '\n', cuerpo_html, flags=re.IGNORECASE)
+        cuerpo = re.sub(r'</?p[^>]*>', '\n', cuerpo, flags=re.IGNORECASE)
+        cuerpo = re.sub(r'<[^>]+>', ' ', cuerpo)
+        cuerpo = cuerpo.replace('&nbsp;', ' ').replace('&amp;', '&')
+        cuerpo = cuerpo.replace('&lt;', '<').replace('&gt;', '>')
+        cuerpo = re.sub(r'\s+', ' ', cuerpo)
+        cuerpo = re.sub(r'\n\s*\n+', '\n\n', cuerpo)
+        datos['cuerpo'] = cuerpo.strip()
+
+    return datos
 
 
 def _limpiar_cuerpo(cuerpo: str) -> str:
@@ -118,9 +185,9 @@ def _limpiar_cuerpo(cuerpo: str) -> str:
         if not en_firma:
             limpias.append(linea)
     resultado = '\n'.join(limpias).strip()
-    # Limitar a 500 chars
-    if len(resultado) > 500:
-        resultado = resultado[:500] + '... [truncado]'
+    # Limitar a 2000 chars
+    if len(resultado) > 2000:
+        resultado = resultado[:2000] + '... [truncado]'
     return resultado
 
 
@@ -178,8 +245,8 @@ def construir_mensaje_bitacora_email(datos_email: dict) -> str:
 
     cuerpo = datos_email.get('cuerpo', '')
     if cuerpo:
-        if len(cuerpo) > 500:
-            cuerpo = cuerpo[:500] + '... [truncado]'
+        if len(cuerpo) > 2000:
+            cuerpo = cuerpo[:2000] + '... [truncado]'
         partes.append(cuerpo)
 
     if datos_email.get('adjuntos'):
