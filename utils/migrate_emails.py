@@ -261,13 +261,14 @@ def es_mensaje_email(mensaje: str) -> bool:
     return '[📧 CORREO]' in (mensaje or '')
 
 
-def ejecutar_migracion(orden_id: int = None, solo_verificar: bool = False):
+def ejecutar_migracion(orden_id: int = None, solo_verificar: bool = False, forzar_reprocesar: bool = False):
     """
     Ejecuta la migración de correos antiguos al nuevo formato.
 
     Args:
         orden_id: Si se especifica, solo migra esa orden. Si es None, migra todas.
         solo_verificar: Si es True, solo muestra lo que migraría sin hacer cambios.
+        forzar_reprocesar: Si es True, re-procesa TODOS los correos con formato [📧 CORREO] que tengan archivo.
 
     Returns:
         (n_migrados, n_total, errores)
@@ -297,16 +298,24 @@ def ejecutar_migracion(orden_id: int = None, solo_verificar: bool = False):
         mensaje = b.get('mensaje', '') or ''
         usuario_text = b.get('usuario_text', '') or ''
         archivo_url = b.get('archivo_url', '') or ''
+        url_lower = archivo_url.lower()
+
+        # ── Modo forzar: re-procesar TODOS los [📧 CORREO] que tengan archivo ──
+        if forzar_reprocesar and es_mensaje_email(mensaje) and archivo_url:
+            if url_lower.endswith(('.msg', '.eml', '.html')):
+                entradas_a_migrar.append({
+                    'tipo': 'forzar_reprocesar',
+                    'entrada': b,
+                })
+                continue
 
         # Caso C: Ya tiene formato nuevo pero cuerpo vacío o muy corto
         if es_mensaje_email(mensaje) and archivo_url:
-            # Verificar si el cuerpo está vacío entre --- y [/📧 CORREO]
             cuerpo_match = re.search(r'---\n(.*?)\n\[/📧 CORREO\]', mensaje, re.DOTALL)
             if cuerpo_match:
                 cuerpo = cuerpo_match.group(1).strip()
-                # Si el cuerpo está vacío, es muy corto, o es un placeholder
-                if not cuerpo or len(cuerpo) < 50 or 'Correo original adjunto' in cuerpo or 'no se pudo parsear' in cuerpo:
-                    if archivo_url.lower().endswith(('.msg', '.eml')):
+                if not cuerpo or len(cuerpo) < 100 or 'Correo original adjunto' in cuerpo or 'no se pudo parsear' in cuerpo or '(Contenido no disponible)' in cuerpo:
+                    if url_lower.endswith(('.msg', '.eml', '.html')):
                         entradas_a_migrar.append({
                             'tipo': 'rellenar_cuerpo',
                             'entrada': b,
@@ -318,10 +327,19 @@ def ejecutar_migracion(orden_id: int = None, solo_verificar: bool = False):
             continue
 
         # Caso A: archivo_url es .msg/.eml y mensaje es corto/genérico
-        if archivo_url.lower().endswith(('.msg', '.eml')):
+        if url_lower.endswith(('.msg', '.eml')):
             if len(mensaje) < 100 or '📧 Correo' in mensaje or 'Correo adjunto' in mensaje:
                 entradas_a_migrar.append({
                     'tipo': 'archivo_msg',
+                    'entrada': b,
+                })
+                continue
+
+        # Caso A2: archivo_url es .html y mensaje es corto/genérico
+        if url_lower.endswith('.html'):
+            if len(mensaje) < 100 or '📧 Correo' in mensaje or 'Correo adjunto' in mensaje:
+                entradas_a_migrar.append({
+                    'tipo': 'archivo_html',
                     'entrada': b,
                 })
                 continue
@@ -366,14 +384,13 @@ def ejecutar_migracion(orden_id: int = None, solo_verificar: bool = False):
         try:
             datos_correo = None
 
-            if item['tipo'] in ('archivo_msg', 'rellenar_cuerpo'):
-                # Descargar y parsear el .msg/.eml
-                print(f"  📥 Descargando correo de Orden #{b['orden_id']}...")
+            if item['tipo'] in ('archivo_msg', 'archivo_html', 'rellenar_cuerpo', 'forzar_reprocesar'):
+                # Descargar y parsear el archivo
+                print(f"  📥 Descargando correo de Orden #{b['orden_id']} (tipo: {item['tipo']})...")
                 datos_correo = _parsear_msg_desde_url(b['archivo_url'])
 
                 if not datos_correo:
                     if item['tipo'] == 'archivo_msg':
-                        # No se pudo parsear, usar datos mínimos
                         datos_correo = {
                             'remitente': b.get('usuario_text', 'Desconocido'),
                             'asunto': '(Correo adjunto — no se pudo parsear)',
@@ -381,12 +398,10 @@ def ejecutar_migracion(orden_id: int = None, solo_verificar: bool = False):
                             'cuerpo': '',
                         }
                     else:
-                        # Caso rellenar_cuerpo: no se pudo descargar, saltar
                         print(f"  ⏭️ Bitácora #{bit_id}: no se pudo descargar el archivo")
                         continue
 
             elif item['tipo'] == 'formato_viejo':
-                # Extraer datos del mensaje viejo
                 datos_correo = _extraer_datos_de_mensaje_viejo(
                     b.get('mensaje', ''),
                     b.get('usuario_text', '')
@@ -468,6 +483,22 @@ def render():
             else:
                 st.error(f"❌ Hubo {len(errores)} error(es) durante la migración.")
 
+    # ── Forzar re-procesamiento de TODOS los correos ──
+    st.markdown("---")
+    st.markdown("### ⚡ Forzar re-procesamiento")
+    st.warning("Esta opción re-descarga y re-procesa TODOS los correos que ya tienen el formato [📧 CORREO]. Úsalo si la migración normal no funcionó.")
+
+    if st.button("⚡ FORZAR re-procesamiento de TODOS los correos", type="secondary", use_container_width=True):
+        with st.spinner("Re-procesando todos los correos..."):
+            n_migrados, n_total, errores = ejecutar_migracion(solo_verificar=False, forzar_reprocesar=True)
+        if n_migrados > 0:
+            st.success(f"✅ {n_migrados}/{n_total} correos re-procesados.")
+            st.rerun()
+        elif n_total == 0:
+            st.info("ℹ️ No hay correos para re-procesar.")
+        else:
+            st.error(f"❌ {len(errores)} error(es).")
+
     # ── Migración individual por orden ──
     st.markdown("---")
     st.markdown("### 🎯 Migración individual")
@@ -475,7 +506,7 @@ def render():
 
     if st.button("Migrar solo esta orden", use_container_width=True):
         with st.spinner(f"Migrando Orden #{orden_id}..."):
-            n_migrados, n_total, errores = ejecutar_migracion(orden_id=int(orden_id), solo_verificar=False)
+            n_migrados, n_total, errores = ejecutar_migracion(orden_id=int(orden_id), solo_verificar=False, forzar_reprocesar=True)
         if n_migrados > 0:
             st.success(f"✅ Orden #{orden_id}: {n_migrados} entrada(s) migrada(s).")
         elif n_total == 0:

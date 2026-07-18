@@ -301,13 +301,29 @@ def _render_herramientas():
             else:
                 st.error(f"❌ Hubo {len(errores)} error(es).")
 
+    # ── Forzar re-procesamiento ──
+    st.markdown("---")
+    st.markdown("**⚡ Forzar re-procesamiento:**")
+    st.caption("Si la migración normal no funcionó, esto re-descarga TODOS los correos.")
+    if st.button("⚡ FORZAR re-procesamiento de TODOS", type="secondary", use_container_width=True, key="btn_forzar_migracion"):
+        from utils.migrate_emails import ejecutar_migracion
+        with st.spinner("Re-procesando todos los correos..."):
+            n_migrados, n_total, errores = ejecutar_migracion(solo_verificar=False, forzar_reprocesar=True)
+        if n_migrados > 0:
+            st.success(f"✅ {n_migrados}/{n_total} correos re-procesados.")
+            st.rerun()
+        elif n_total == 0:
+            st.info("ℹ️ No hay correos para re-procesar.")
+        else:
+            st.error(f"❌ {len(errores)} error(es).")
+
     # ── Migración individual ──
     st.markdown("**🎯 Migrar una orden específica:**")
     orden_id_mig = st.number_input("ID de Orden", min_value=1, step=1, key="migrar_orden_id_herramientas")
     if st.button("Migrar solo esta orden", use_container_width=True, key="btn_migrar_orden_individual"):
         from utils.migrate_emails import ejecutar_migracion
         with st.spinner(f"Migrando Orden #{orden_id_mig}..."):
-            n_migrados, n_total, errores = ejecutar_migracion(orden_id=int(orden_id_mig), solo_verificar=False)
+            n_migrados, n_total, errores = ejecutar_migracion(orden_id=int(orden_id_mig), solo_verificar=False, forzar_reprocesar=True)
         if n_migrados > 0:
             st.success(f"✅ Orden #{orden_id_mig}: {n_migrados} correo(s) migrado(s).")
         elif n_total == 0:
