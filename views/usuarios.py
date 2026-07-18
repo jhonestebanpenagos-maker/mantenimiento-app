@@ -271,6 +271,52 @@ def _render_herramientas():
 
     st.markdown("---")
 
+    st.markdown("#### 📧 Migrar Correos Antiguos")
+    st.markdown("""
+    Si tienes correos anexados a órdenes que se ven como "📧 Correo adjunto" sin
+    poder ver el contenido, este botón los actualiza al nuevo formato.
+    """)
+
+    col_mig1, col_mig2 = st.columns(2)
+    with col_mig1:
+        if st.button("🔍 Verificar correos pendientes", type="secondary", use_container_width=True, key="btn_verificar_migracion"):
+            from utils.migrate_emails import ejecutar_migracion
+            with st.spinner("Analizando bitácora..."):
+                n_migrados, n_total, errores = ejecutar_migracion(solo_verificar=True)
+            if n_total == 0:
+                st.success("✅ No hay correos pendientes de migrar.")
+            else:
+                st.warning(f"📋 {n_total} correo(s) pendiente(s) de migrar.")
+
+    with col_mig2:
+        if st.button("🔄 Migrar correos ahora", type="primary", use_container_width=True, key="btn_ejecutar_migracion"):
+            from utils.migrate_emails import ejecutar_migracion
+            with st.spinner("Migrando correos..."):
+                n_migrados, n_total, errores = ejecutar_migracion(solo_verificar=False)
+            if n_migrados > 0:
+                st.success(f"✅ {n_migrados}/{n_total} correo(s) migrado(s) correctamente.")
+                st.rerun()
+            elif n_total == 0:
+                st.success("✅ No hay correos pendientes de migrar.")
+            else:
+                st.error(f"❌ Hubo {len(errores)} error(es).")
+
+    # ── Migración individual ──
+    st.markdown("**🎯 Migrar una orden específica:**")
+    orden_id_mig = st.number_input("ID de Orden", min_value=1, step=1, key="migrar_orden_id_herramientas")
+    if st.button("Migrar solo esta orden", use_container_width=True, key="btn_migrar_orden_individual"):
+        from utils.migrate_emails import ejecutar_migracion
+        with st.spinner(f"Migrando Orden #{orden_id_mig}..."):
+            n_migrados, n_total, errores = ejecutar_migracion(orden_id=int(orden_id_mig), solo_verificar=False)
+        if n_migrados > 0:
+            st.success(f"✅ Orden #{orden_id_mig}: {n_migrados} correo(s) migrado(s).")
+        elif n_total == 0:
+            st.info(f"ℹ️ Orden #{orden_id_mig}: No hay correos pendientes.")
+        else:
+            st.error(f"❌ Orden #{orden_id_mig}: {len(errores)} error(es).")
+
+    st.markdown("---")
+
     st.markdown("#### ℹ️ Información del Sistema")
     try:
         from utils.db import supabase
