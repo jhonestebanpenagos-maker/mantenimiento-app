@@ -8,7 +8,7 @@ from utils.helpers import mostrar_notificaciones, agregar_notificacion, registra
 from utils.nav_button import render_back_button
 from utils.notifications import notificar_telegram
 from utils.charts import sugerir_tecnico, render_sugerencia_tecnico
-from .helpers import generar_adjunto_html, render_archivo_unificado
+from .helpers import generar_adjunto_html, render_archivo_unificado, es_mensaje_email, extraer_datos_email_de_mensaje
 from utils.time_tracking import render_time_tracker
 from utils.costos import render_costos
 from utils.firmas import render_firmas_cierre
@@ -236,33 +236,60 @@ def _render_orden_gestion(row, nombre_activo, df_users, usuario, registros_orden
                         fecha_fmt = b['fecha'][:10] + " " + b['fecha'][11:16]
                         usuario_log = b.get('usuario_text', 'Usuario')
                         url = b['archivo_url']
+                        mensaje_raw = b.get('mensaje', '')
 
-                        adjunto_html = ""
-                        if url:
-                            ul = url.lower()
-                            if ul.endswith(('.jpg', '.jpeg', '.png', '.webp')):
-                                adjunto_html = f"""<br><a href="{url}" target="_blank" style="color:#10B981;font-weight:bold;">🖼️ Ver Imagen</a>"""
-                            elif ul.endswith('.pdf'):
-                                adjunto_html = f"""<br><a href="{url}" target="_blank" style="color:#EF4444;font-weight:bold;">📄 Ver PDF</a>"""
-                            elif ul.endswith(('.xls', '.xlsx')):
-                                adjunto_html = f"""<br><a href="{url}" target="_blank" style="color:#16A34A;font-weight:bold;">📊 Ver Excel</a>"""
-                            elif ul.endswith('.msg'):
-                                adjunto_html = f"""<br><a href="{url}" target="_blank" style="color:#3B82F6;font-weight:bold;">📧 Ver Correo</a>"""
-                            else:
-                                adjunto_html = f"""<br><a href="{url}" target="_blank" style="color:#F59E0B;font-weight:bold;">📎 Ver Archivo</a>"""
+                        # ── Detectar si es un correo estructurado ──
+                        if es_mensaje_email(mensaje_raw):
+                            email_datos = extraer_datos_email_de_mensaje(mensaje_raw)
+                            remitente = html_mod.escape(email_datos.get('remitente', 'Desconocido'))
+                            asunto = html_mod.escape(email_datos.get('asunto', '(Sin asunto)'))
+                            fecha_correo = email_datos.get('fecha_correo', '')
+                            cuerpo = email_datos.get('cuerpo', '')
 
-                        mensaje_seguro = html_mod.escape(b['mensaje']).replace('\n', '<br>')
-                        usuario_seguro = html_mod.escape(usuario_log)
-
-                        st.markdown(f"""
-                        <div style="background-color:rgba(255,255,255,0.05);border-left:3px solid #F59E0B;padding:10px;border-radius:0 5px 5px 0;margin-bottom:5px;">
-                            <div style="display:flex;justify-content:space-between;color:#9CA3AF;font-size:0.85em;">
-                                <span>📅 {fecha_fmt}</span><span>👤 <b>{usuario_seguro}</b></span>
+                            st.markdown(f"""
+                            <div style="background-color:rgba(59,130,246,0.08);border-left:3px solid #3B82F6;padding:10px;border-radius:0 5px 5px 0;margin-bottom:5px;">
+                                <div style="display:flex;justify-content:space-between;color:#9CA3AF;font-size:0.85em;">
+                                    <span>📅 {fecha_fmt}</span><span>👤 <b>{html_mod.escape(usuario_log)}</b></span>
+                                </div>
+                                <div style="margin-top:6px;display:flex;align-items:center;gap:6px;">
+                                    <span style="font-size:1.1rem;">📧</span>
+                                    <span style="color:#60A5FA;font-weight:600;">Correo de: {remitente}</span>
+                                </div>
+                                <div style="color:#E5E7EB;font-size:0.9em;margin-top:2px;">
+                                    <b>Asunto:</b> {asunto}
+                                </div>
+                                {f'<div style="color:#9CA3AF;font-size:0.8em;margin-top:1px;">Fecha del correo: {html_mod.escape(fecha_correo)}</div>' if fecha_correo else ''}
                             </div>
-                            <div style="margin-top:5px;color:#E5E7EB;white-space:pre-wrap;">{mensaje_seguro}</div>
-                            {adjunto_html}
-                        </div>
-                        """, unsafe_allow_html=True)
+                            """, unsafe_allow_html=True)
+
+                            # Cuerpo expandible
+                            if cuerpo:
+                                with st.expander("📝 Ver contenido del correo", expanded=False):
+                                    st.text(cuerpo[:2000])
+
+                            # Link al archivo .msg/.eml
+                            if url:
+                                adjunto_html = generar_adjunto_html(url)
+                                if adjunto_html:
+                                    st.markdown(adjunto_html, unsafe_allow_html=True)
+                        else:
+                            # ── Mensaje normal (no es correo) ──
+                            adjunto_html = ""
+                            if url:
+                                adjunto_html = generar_adjunto_html(url)
+
+                            mensaje_seguro = html_mod.escape(mensaje_raw).replace('\n', '<br>')
+                            usuario_seguro = html_mod.escape(usuario_log)
+
+                            st.markdown(f"""
+                            <div style="background-color:rgba(255,255,255,0.05);border-left:3px solid #F59E0B;padding:10px;border-radius:0 5px 5px 0;margin-bottom:5px;">
+                                <div style="display:flex;justify-content:space-between;color:#9CA3AF;font-size:0.85em;">
+                                    <span>📅 {fecha_fmt}</span><span>👤 <b>{usuario_seguro}</b></span>
+                                </div>
+                                <div style="margin-top:5px;color:#E5E7EB;white-space:pre-wrap;">{mensaje_seguro}</div>
+                                {adjunto_html}
+                            </div>
+                            """, unsafe_allow_html=True)
 
                     with c_actions:
                         if st.button("✏️", key=f"btn_edit_{b['id']}", help="Editar"):

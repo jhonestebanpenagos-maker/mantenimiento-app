@@ -6,6 +6,8 @@ from utils.db import supabase, db_insert, db_update, db_delete
 from utils.helpers import error_amigable, agregar_notificacion, registrar_accion_critica, navegar_a
 from utils.uploads import subir_archivo_generico
 from utils.email_parser import parse_email_file, construir_descripcion_email, render_email_preview
+from email.utils import parsedate_to_datetime
+import re as _re
 
 
 def generar_adjunto_html(url, icon_mode=False):
@@ -73,3 +75,108 @@ def render_archivo_unificado(context_key: str):
     else:
         st.caption(f"📄 {archivo.name} — listo para adjuntar")
         return archivo, None
+
+
+# ==============================================================================
+# 📅 UTILIDADES PARA FECHA DE CORREO EN BITÁCORA
+# ==============================================================================
+def _parsear_fecha_correo(fecha_raw) -> str:
+    """
+    Convierte la fecha del correo a formato ISO 8601.
+    Soporta múltiples formatos: string RFC 2822, ISO, datetime.
+    Retorna la fecha actual si no puede parsear.
+    """
+    if not fecha_raw:
+        return datetime.now().isoformat()
+
+    if isinstance(fecha_raw, str):
+        fecha_str = fecha_raw.strip()
+        # Si ya parece ISO
+        if fecha_str and fecha_str[0].isdigit():
+            return fecha_str[:19]
+        # Intentar RFC 2822
+        try:
+            dt = parsedate_to_datetime(fecha_str)
+            return dt.strftime('%Y-%m-%dT%H:%M:%S')
+        except Exception:
+            pass
+        # Intentar ISO genérico
+        try:
+            dt = datetime.fromisoformat(fecha_str.replace('Z', '+00:00'))
+            return dt.strftime('%Y-%m-%dT%H:%M:%S')
+        except Exception:
+            pass
+
+    if isinstance(fecha_raw, datetime):
+        return fecha_raw.strftime('%Y-%m-%dT%H:%M:%S')
+
+    return datetime.now().isoformat()
+
+
+def construir_mensaje_bitacora_email(datos_email: dict) -> str:
+    """
+    Construye un mensaje estructurado para la bitácora cuando se anexa un correo.
+    Usa tags [📧 CORREO]...[/📧 CORREO] que el historial detecta y renderiza
+    de forma expandible.
+    """
+    if not datos_email:
+        return "📧 Correo adjunto."
+
+    partes = []
+    partes.append("[📧 CORREO]")
+    partes.append(f"Remitente: {datos_email.get('remitente', 'Desconocido')}")
+    partes.append(f"Asunto: {datos_email.get('asunto', '(Sin asunto)')}")
+    if datos_email.get('fecha'):
+        partes.append(f"Fecha correo: {datos_email['fecha']}")
+    partes.append("---")
+
+    cuerpo = datos_email.get('cuerpo', '')
+    if cuerpo:
+        if len(cuerpo) > 500:
+            cuerpo = cuerpo[:500] + "... [truncado]"
+        partes.append(cuerpo)
+
+    if datos_email.get('adjuntos'):
+        partes.append(f"📎 {len(datos_email['adjuntos'])} adjunto(s) en el correo")
+
+    partes.append("[/📧 CORREO]")
+    return '\n'.join(partes)
+
+
+def es_mensaje_email(mensaje: str) -> bool:
+    """Detecta si un mensaje de bitácora es un correo estructurado."""
+    return '[📧 CORREO]' in (mensaje or '')
+
+
+def extraer_datos_email_de_mensaje(mensaje: str) -> dict:
+    """
+    Extrae los datos del correo desde un mensaje de bitácora estructurado.
+    Retorna dict con: remitente, asunto, fecha_correo, cuerpo
+    """
+    datos = {}
+    if not mensaje or '[📧 CORREO]' not in mensaje:
+        return datos
+
+    contenido = mensaje.split('[📧 CORREO]')[1]
+    if '[/📧 CORREO]' in contenido:
+        contenido = contenido.split('[/📧 CORREO]')[0]
+
+    lineas = contenido.strip().split('\n')
+    cuerpo_lineas = []
+    en_cuerpo = False
+
+    for linea in lineas:
+        linea_strip = linea.strip()
+        if linea_strip.startswith('Remitente:'):
+            datos['remitente'] = linea_strip[len('Remitente:'):].strip()
+        elif linea_strip.startswith('Asunto:'):
+            datos['asunto'] = linea_strip[len('Asunto:'):].strip()
+        elif linea_strip.startswith('Fecha correo:'):
+            datos['fecha_correo'] = linea_strip[len('Fecha correo:'):].strip()
+        elif linea_strip == '---':
+            en_cuerpo = True
+        elif en_cuerpo:
+            cuerpo_lineas.append(linea)
+
+    datos['cuerpo'] = '\n'.join(cuerpo_lineas).strip()
+    return datos

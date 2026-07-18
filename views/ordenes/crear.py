@@ -7,7 +7,7 @@ from utils.helpers import mostrar_notificaciones, agregar_notificacion, registra
 from utils.nav_button import render_back_button
 from utils.notifications import notificar_telegram
 from utils.charts import sugerir_tecnico, render_sugerencia_tecnico
-from .helpers import generar_adjunto_html, render_archivo_unificado
+from .helpers import generar_adjunto_html, render_archivo_unificado, construir_mensaje_bitacora_email, _parsear_fecha_correo
 from utils.uploads import subir_archivo_generico
 
 def render_crear_directa(df_act, df_users, df_ordenes):
@@ -166,12 +166,17 @@ def render_crear_para_activo(df_act, df_users, df_ordenes):
                             with st.spinner("Subiendo archivo adjunto..."):
                                 url_doc = subir_archivo_generico(archivo_inicial)
                                 if url_doc:
-                                    msg = "📧 Correo adjunto." if email_datos else "📎 Documento adjunto."
+                                    if email_datos:
+                                        msg = construir_mensaje_bitacora_email(email_datos)
+                                        fecha_bit = _parsear_fecha_correo(email_datos.get('fecha'))
+                                    else:
+                                        msg = "📎 Documento adjunto."
+                                        fecha_bit = datetime.now().isoformat()
                                     db_insert("bitacora", {
                                         "orden_id": nuevo_id,
                                         "usuario_text": st.session_state.get('usuario', ''),
                                         "mensaje": msg, "archivo_url": url_doc,
-                                        "fecha": datetime.now().isoformat()
+                                        "fecha": fecha_bit
                                     })
                         for k in [desc_key, f'_parsed_email_crear_para_activo_{activo_id}',
                                   f'_archivo_unif_crear_para_activo_{activo_id}',
