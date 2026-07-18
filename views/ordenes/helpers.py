@@ -131,10 +131,13 @@ def construir_mensaje_bitacora_email(datos_email: dict) -> str:
     partes.append("---")
 
     cuerpo = datos_email.get('cuerpo', '')
+    print(f"📧 construir_mensaje_bitacora_email: cuerpo_len={len(cuerpo)}")
     if cuerpo:
         if len(cuerpo) > 2000:
             cuerpo = cuerpo[:2000] + "... [truncado]"
         partes.append(cuerpo)
+    else:
+        partes.append("(Contenido no disponible)")
 
     if datos_email.get('adjuntos'):
         partes.append(f"📎 {len(datos_email['adjuntos'])} adjunto(s) en el correo")

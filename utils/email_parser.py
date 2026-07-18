@@ -42,7 +42,25 @@ def _parse_msg(uploaded_file) -> dict:
     remitente = msg.sender or "Desconocido"
     asunto = msg.subject or "(Sin asunto)"
     fecha = msg.date or ""
+
+    # Intentar extraer cuerpo de múltiples formas
     cuerpo = msg.body or ""
+    if not cuerpo:
+        # Fallback: intentar con htmlBody
+        try:
+            cuerpo = msg.htmlBody or ""
+            if cuerpo:
+                cuerpo = _html_a_texto(cuerpo)
+        except Exception:
+            pass
+    if not cuerpo:
+        # Fallback: intentar con rtfBody
+        try:
+            cuerpo = msg.rtfBody or ""
+        except Exception:
+            pass
+
+    print(f"📧 Parseando .msg: asunto='{asunto}', cuerpo_len={len(cuerpo)}")
 
     # Limpiar cuerpo
     cuerpo = _limpiar_cuerpo(cuerpo)
@@ -141,13 +159,23 @@ def _limpiar_cuerpo(cuerpo: str) -> str:
 
 def _html_a_texto(html: str) -> str:
     """Convierte HTML básico a texto plano."""
+    # Quitar scripts y styles
+    texto = re.sub(r'<style[^>]*>.*?</style>', '', html, flags=re.DOTALL)
+    texto = re.sub(r'<script[^>]*>.*?</script>', '', texto, flags=re.DOTALL)
+    # Convertir saltos de línea HTML
+    texto = re.sub(r'<br\s*/?>', '\n', texto, flags=re.IGNORECASE)
+    texto = re.sub(r'</?p[^>]*>', '\n', texto, flags=re.IGNORECASE)
+    texto = re.sub(r'</?div[^>]*>', '\n', texto, flags=re.IGNORECASE)
     # Quitar tags HTML
-    texto = re.sub(r'<[^>]+>', ' ', html)
+    texto = re.sub(r'<[^>]+>', ' ', texto)
     # Decodificar entidades comunes
     texto = texto.replace('&nbsp;', ' ').replace('&amp;', '&')
     texto = texto.replace('&lt;', '<').replace('&gt;', '>')
-    # Colapsar espacios
-    texto = re.sub(r'\s+', ' ', texto)
+    texto = texto.replace('&quot;', '"').replace('&#39;', "'")
+    # Colapsar espacios múltiples
+    texto = re.sub(r'[ \t]+', ' ', texto)
+    # Colapsar saltos de línea múltiples
+    texto = re.sub(r'\n\s*\n+', '\n\n', texto)
     return texto.strip()
 
 
