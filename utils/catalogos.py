@@ -26,8 +26,8 @@ AREAS_DATA = {
 # ==============================================================================
 CATEGORIAS_ACTIVOS = sorted([
     "Aire Acondicionado", "CCTV", "Control de Acceso", "Eléctrico", "Estanterías",
-    "Extraccion", "Hidrosanitario", "Infraestructura", "Mecánico", "Muelles",
-    "Red Contra Incendio", "Refrigeración Industrial", "Ventilacion"
+    "Extraccion", "Hidrosanitario", "Infraestructura", "Mecánico", "Mobiliario",
+    "Muelles", "Red Contra Incendio", "Refrigeración Industrial", "Ventilacion"
 ])
 
 CATEGORIAS_REPUESTOS = sorted([
