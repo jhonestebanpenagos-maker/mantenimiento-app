@@ -200,3 +200,44 @@ de markdown/caption.
 **Verificaciones ejecutadas:** `py_compile` de los 6 archivos Python (sin errores),
 balance de llaves de los 4 CSS, y pruebas unitarias del normalizador EXIF
 (rotación aplicada ✔, GIF intacto ✔, bytes corruptos sin modificar ✔).
+
+---
+
+# 🔄 SEGUNDA RONDA — Rendimiento del Tablero + Sidebar en iPhone (2026-11-01)
+
+Problemas reportados tras el primer despliegue: **(1)** el Tablero de Mando tardaba
+demasiado en cargar; **(2)** el sidebar no funcionaba en Safari de iPhone.
+
+## Problema 1 — Tablero lento 🔴
+
+Causas encontradas y corregidas:
+
+| Causa | Corrección | Archivo |
+|-------|------------|---------|
+| 5 consultas Supabase **secuenciales** en el primer render (~2-4 s) | Carga **en paralelo** con `ThreadPoolExecutor` y TTL 300→600 s | `views/dashboard.py` |
+| Chequeo SLA con **envíos de Telegram síncronos** (hasta 10 s cada uno) que se repetía en cada recarga de pestaña (iOS crea sesión nueva) | Throttle de proceso: 1 chequeo cada 10 min + tope de 10 envíos por chequeo | `utils/notifications.py` |
+| Generación del Excel en **cada rerun** (cada clic re-ejecuta el script y `@st.cache_data` recalculaba el hash de 3 DataFrames grandes) | Memorización por sesión con clave barata: se regenera solo cuando los datos cambian | `views/dashboard.py` |
+
+Estimación: el primer render pasa de ~6-10 s a ~2-3 s (dominado por la latencia de
+Supabase y el render de los ~10 gráficos Plotly en el navegador).
+
+## Problema 2 — Sidebar no funciona en iPhone 🔴
+
+**Causa raíz (CSS):** la regla heredada forzaba
+`[data-testid="stHeader"], .stApp > header { z-index: 0 !important }`. La cabecera de
+Streamlit contiene el botón "Open sidebar" (hamburguesa). Con `z-index: 0`, la
+cabecera quedaba **debajo del contenido** — en móvil, `.block-container` tiene poco
+`padding-top` (1.5rem) y el contenido se superpone a la zona de la cabecera → los
+taps de iOS caían en el contenido y **el botón jamás recibía el toque**. En escritorio
+funcionaba porque el contenido no se superpone al botón.
+
+**Corrección (en `styles.css` y `styles_opcion_claro.css`):**
+- Cabecera elevada a `z-index: 1000000` pero con `pointer-events: none` → nunca
+  bloquea el contenido; solo sus botones (`pointer-events: auto`) reciben toques.
+- Drawer del sidebar en móvil a `z-index: 1000001` + scroll táctil + botones
+  tocables (regla 6.7 en los 4 temas).
+
+**Verificación en iPhone:** tocar la hamburguesa debe abrir el sidebar; los botones del
+menú deben navegar; el ✕ debe cerrarlo. Si el síntoma persiste, indicar si (a) el
+botón hamburguesa no responde, (b) abre pero detrás del contenido, o (c) abre y los
+botones del menú no navegan — cada caso tiene un diagnóstico distinto.

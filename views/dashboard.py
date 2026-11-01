@@ -32,19 +32,33 @@ def _seccion(titulo, icono="📊"):
 # ==============================================================================
 # 🚀 CARGA UNIFICADA
 # ==============================================================================
-@st.cache_data(ttl=300, show_spinner=False)
+@st.cache_data(ttl=600, show_spinner=False)
 def _cargar_datos_dashboard():
-    df_ordenes = run_query("ordenes")
-    df_users = run_query("usuarios")
-    df_solicitudes = run_query("solicitudes")
-    df_activos = run_query("activos")
-    df_planes = run_query("planes_mantenimiento")
+    """Carga las 5 tablas EN PARALELO (antes eran 5 consultas secuenciales
+    que sumaban varios segundos en el primer render del tablero)."""
+    from concurrent.futures import ThreadPoolExecutor
+    tablas = ["ordenes", "usuarios", "solicitudes", "activos", "planes_mantenimiento"]
+    with ThreadPoolExecutor(max_workers=len(tablas)) as pool:
+        resultados = list(pool.map(run_query, tablas))
+    df_ordenes, df_users, df_solicitudes, df_activos, df_planes = resultados
     return df_ordenes, df_users, df_solicitudes, df_activos, df_planes
 
 
-@st.cache_data(ttl=600, show_spinner=False)
 def generar_excel_cached(df_len, df_ordenes, df_activos, df_usuarios):
-    return generar_excel_historial(df_ordenes, df_activos, df_usuarios)
+    """Genera el Excel del tablero UNA sola vez por versión de datos.
+
+    Antes usaba @st.cache_data, que recalculaba el hash de 3 DataFrames grandes
+    en cada rerun (cada clic re-ejecuta todo el script) y regeneraba el libro.
+    Ahora se memoriza por sesión con una clave barata.
+    """
+    try:
+        clave = (df_len, hash(df_ordenes.to_csv(index=False)))
+    except Exception:
+        clave = (df_len, 0)
+    if st.session_state.get('_excel_dash_key') != clave:
+        st.session_state['_excel_dash_buf'] = generar_excel_historial(df_ordenes, df_activos, df_usuarios)
+        st.session_state['_excel_dash_key'] = clave
+    return st.session_state['_excel_dash_buf']
 
 
 # ==============================================================================

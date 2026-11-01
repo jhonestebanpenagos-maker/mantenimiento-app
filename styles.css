@@ -88,11 +88,23 @@ button[aria-label="Open sidebar"]:hover,
     border-color: #FBBF24 !important;
 }
 
-/* Barra superior que aparece con sidebar colapsado — que no tape el botón */
+/* Barra superior que aparece con sidebar colapsado.
+   ⚠️ FIX Safari/iOS: con z-index:0 la cabecera quedaba DEBAJO del contenido móvil
+   y el botón "Open sidebar" no recibía los toques en iPhone (el contenido se
+   superpone a la cabecera porque .block-container tiene poco padding-top en móvil).
+   Se eleva la cabecera, pero con pointer-events:none para que nunca bloquee el
+   contenido: solo sus botones reciben toques. */
 [data-testid="stHeader"],
 .stApp > header {
     background-color: transparent !important;
-    z-index: 0 !important;
+    z-index: 1000000 !important;
+    pointer-events: none !important;
+}
+[data-testid="stHeader"] button,
+[data-testid="stHeader"] [role="button"],
+.stApp > header button,
+.stApp > header [role="button"] {
+    pointer-events: auto !important;
 }
 [data-testid="stToolbar"] {
     background-color: transparent !important;
@@ -366,4 +378,16 @@ button, a, [role="button"] {
 [data-testid="stMarkdownContainer"], [data-testid="stCaptionContainer"] {
     overflow-wrap: break-word;
     word-wrap: break-word;
+}
+
+/* 6.7 — Drawer del sidebar en móvil: por encima del contenido, scroll táctil
+          y botones tocables en Safari/iOS */
+@media (max-width: 768px) {
+    [data-testid="stSidebar"] {
+        z-index: 1000001 !important;
+        -webkit-overflow-scrolling: touch;
+    }
+    [data-testid="stSidebar"] button {
+        pointer-events: auto !important;
+    }
 }

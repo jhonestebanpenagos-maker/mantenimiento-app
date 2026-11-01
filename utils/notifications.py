@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 import requests
+import time
 from datetime import datetime
 
 
@@ -48,9 +49,25 @@ def notificar_telegram(chat_id, mensaje, foto_url=None):
 # ==============================================================================
 # ⏱️ MOTOR DE ALERTAS SLA
 # ==============================================================================
+# Throttle a nivel de proceso (no por sesión): iOS/Safari recarga la pestaña al
+# volver de segundo plano y crea una sesión nueva de Streamlit cada vez; sin este
+# control, el chequeo SLA + envíos de Telegram se repetían en cada recarga y
+# bloqueaban el render del tablero durante varios segundos.
+_ULTIMO_CHECK_SLA_TS = 0.0
+SLA_CHECK_INTERVALO_SEG = 600   # como máximo 1 chequeo cada 10 minutos por proceso
+SLA_MAX_NOTIFICACIONES = 10     # tope de envíos de Telegram por chequeo
+
+
 def verificar_sla_y_alertar(df_ordenes, df_users, df_act):
+    global _ULTIMO_CHECK_SLA_TS
     if st.session_state.get('sla_verificado'):
         return
+
+    # Si ya se revisó hace poco (en este proceso), no repetir el trabajo pesado
+    if time.time() - _ULTIMO_CHECK_SLA_TS < SLA_CHECK_INTERVALO_SEG:
+        st.session_state['sla_verificado'] = True
+        return
+    _ULTIMO_CHECK_SLA_TS = time.time()
 
     df_ordenes = pd.DataFrame(df_ordenes) if not isinstance(df_ordenes, pd.DataFrame) else df_ordenes
     df_users = pd.DataFrame(df_users) if not isinstance(df_users, pd.DataFrame) else df_users
@@ -77,6 +94,7 @@ def verificar_sla_y_alertar(df_ordenes, df_users, df_act):
     map_user = dict(zip(df_users['id'].astype(str), df_users['nombre'])) if not df_users.empty else {}
 
     alertas_enviadas = 0
+    notificaciones_enviadas = 0
     for _, orden in df_abiertas.iterrows():
         limite = LIMITES_SLA.get(orden['criticidad'], 999)
         if orden['horas_abiertas'] > limite:
@@ -91,8 +109,9 @@ def verificar_sla_y_alertar(df_ordenes, df_users, df_act):
                 f"👷 *Técnico:* {nombre_tecnico}\n\n"
                 f"⚠️ Esta orden requiere atención inmediata."
             )
-            if orden.get('chat_id'):
+            if orden.get('chat_id') and notificaciones_enviadas < SLA_MAX_NOTIFICACIONES:
                 notificar_telegram(orden.get('chat_id'), mensaje)
+                notificaciones_enviadas += 1
             alertas_enviadas += 1
 
     if alertas_enviadas > 0:

@@ -319,3 +319,15 @@ button, a, [role="button"] {
     overflow-wrap: break-word;
     word-wrap: break-word;
 }
+
+/* 6.7 — Drawer del sidebar en móvil: por encima del contenido, scroll táctil
+          y botones tocables en Safari/iOS */
+@media (max-width: 768px) {
+    [data-testid="stSidebar"] {
+        z-index: 1000001 !important;
+        -webkit-overflow-scrolling: touch;
+    }
+    [data-testid="stSidebar"] button {
+        pointer-events: auto !important;
+    }
+}
