@@ -691,7 +691,8 @@ def _render_preview_correo(correo, idx):
             html_seguro = _re.sub(r'<script[^>]*>.*?</script>', '', html_raw, flags=_re.DOTALL | _re.IGNORECASE)
             html_seguro = _re.sub(r'<iframe[^>]*>.*?</iframe>', '', html_seguro, flags=_re.DOTALL | _re.IGNORECASE)
             components.html(
-                f'<div style="background:#fff;color:#1f2937;padding:16px;border-radius:8px;font-family:Arial,sans-serif;font-size:14px;line-height:1.6;overflow:auto;">{html_seguro}</div>',
+                f'<div style="background:#fff;color:#1f2937;padding:16px;border-radius:8px;font-family:Arial,sans-serif;font-size:14px;line-height:1.6;overflow:auto;-webkit-overflow-scrolling:touch;overflow-wrap:break-word;word-break:break-word;">'
+                f'<style>img,table{{max-width:100%!important;height:auto;}}</style>{html_seguro}</div>',
                 height=500,
                 scrolling=True
             )

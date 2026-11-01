@@ -743,7 +743,12 @@ def generar_reporte_ordenes_pdf(ordenes_data, df_users, df_act, incluir_abiertas
 # VISOR DE PDF ADJUNTO (para Streamlit)
 # ==============================================================================
 def render_pdf_viewer(url, titulo="Documento PDF"):
-    """Renderiza un visor inline de PDF en Streamlit usando iframe."""
+    """Renderiza un visor inline de PDF en Streamlit.
+
+    Compatible con Safari/iOS (WebKit): iOS no puede mostrar PDF dentro de un
+    <iframe>, por eso la vista integrada se hace con <object> y, si el navegador
+    tampoco puede renderizarlo, se degrada a un visor embebido + botón de apertura.
+    """
     if not url:
         st.warning("No hay URL de documento disponible.")
         return
@@ -753,22 +758,42 @@ def render_pdf_viewer(url, titulo="Documento PDF"):
 
     if not es_pdf:
         st.info("Este archivo no parece ser un PDF. Usa el link directo para abrirlo.")
-        st.markdown(f'<a href="{url}" target="_blank">📎 Abrir archivo</a>', unsafe_allow_html=True)
+        st.markdown(f'<a href="{url}" target="_blank" rel="noopener">📎 Abrir archivo</a>', unsafe_allow_html=True)
         return
 
     col1, col2 = st.columns([3, 1])
     with col1:
         st.caption(f"📄 {titulo}")
     with col2:
-        st.markdown(f'<a href="{url}" target="_blank" style="font-size:0.8em;">🔗 Abrir en pestaña nueva</a>', unsafe_allow_html=True)
+        st.markdown(f'<a href="{url}" target="_blank" rel="noopener" style="font-size:0.8em;">🔗 Abrir en pestaña nueva</a>', unsafe_allow_html=True)
+
+    # URL del visor embebido de Google (fallback si <object> no renderiza)
+    from urllib.parse import quote
+    gview_url = f"https://docs.google.com/gview?url={quote(url, safe='')}&embedded=true"
+    titulo_html = (titulo or "Documento PDF").replace('"', '&quot;').replace('<', '&lt;')
 
     iframe_html = f"""
     <div style="border: 1px solid #374151; border-radius: 8px; overflow: hidden; background: #1F2937;">
-        <iframe 
-            src="https://docs.google.com/gview?url={url}&embedded=true" 
+        <object
+            data="{url}"
+            type="application/pdf"
+            aria-label="{titulo_html}"
             style="width: 100%; height: 500px; border: none;"
-            loading="lazy"
-        ></iframe>
+        >
+            <!-- Fallback para navegadores sin visor de PDF integrado (p. ej. Safari en iOS) -->
+            <iframe
+                src="{gview_url}"
+                style="width: 100%; height: 500px; border: none;"
+                loading="lazy"
+            ></iframe>
+            <div style="padding: 24px; text-align: center;">
+                <p style="color: #E5E7EB; margin-bottom: 12px;">Tu navegador no puede mostrar el PDF de forma integrada.</p>
+                <a href="{url}" target="_blank" rel="noopener"
+                   style="display: inline-block; background: #EF4444; color: #ffffff; padding: 12px 24px; border-radius: 8px; font-weight: 700; text-decoration: none;">
+                    📄 Abrir / Descargar PDF
+                </a>
+            </div>
+        </object>
     </div>
     """
     st.markdown(iframe_html, unsafe_allow_html=True)

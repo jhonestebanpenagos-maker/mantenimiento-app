@@ -6,6 +6,48 @@ import cloudinary.uploader
 from utils.helpers import error_amigable
 
 
+# ===============================================================================
+# 📱 NORMALIZACIÓN EXIF (fotos de iPhone/iPad)
+# ===============================================================================
+def _normalizar_imagen_exif(file_bytes):
+    """Aplica la rotación EXIF a los bytes de una imagen antes de subirla.
+
+    Las fotos tomadas con iPhone/iPad se guardan "horizontales" + una etiqueta
+    EXIF de orientación. Navegadores modernos la respetan, pero OpenCV, los PDF
+    generados y algunos visores la ignoran y muestran la foto girada 90°.
+    Aquí se hornea la rotación en los píxeles una sola vez.
+
+    Si algo falla (formato no soportado, bytes corruptos, animaciones GIF…),
+    devuelve los bytes originales sin modificar.
+    """
+    if not file_bytes:
+        return file_bytes
+    try:
+        import io as _io
+        from PIL import Image, ImageOps
+
+        img = Image.open(_io.BytesIO(file_bytes))
+        fmt = (img.format or "").upper()
+        # No tocar formates animados o sin soporte EXIF fiable
+        if fmt not in ("JPEG", "PNG", "WEBP", "TIFF", "MPO"):
+            return file_bytes
+
+        img2 = ImageOps.exif_transpose(img)
+        if img2 is None:
+            img2 = img
+        # Si no había etiqueta de orientación, exif_transpose devuelve una copia
+        # idéntica: en ese caso conservamos los bytes originales byte a byte.
+        out = _io.BytesIO()
+        if fmt == "JPEG":
+            img2.convert("RGB").save(out, format="JPEG", quality=92)
+        else:
+            img2.save(out, format=fmt)
+        nuevos = out.getvalue()
+        return nuevos if nuevos else file_bytes
+    except Exception:
+        return file_bytes
+
+
 # ==============================================================================
 # 🖼️ MOSTRAR IMAGEN DESDE CLOUDINARY
 # ==============================================================================
@@ -97,6 +139,8 @@ def subir_imagen(archivo, carpeta="orion_evidencias"):
     if archivo:
         try:
             file_to_upload = archivo.getvalue() if hasattr(archivo, 'getvalue') else archivo
+            # Corrige la rotación EXIF de fotos móviles (iPhone/iPad)
+            file_to_upload = _normalizar_imagen_exif(file_to_upload)
             respuesta = cloudinary.uploader.upload(
                 file_to_upload,
                 folder=carpeta,
@@ -123,7 +167,10 @@ def subir_archivo_generico(archivo):
             ext_imagenes = ('.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp')
             es_imagen_visual = nombre_original.endswith(ext_imagenes)
 
+            contenido = archivo.getvalue()
             if es_imagen_visual:
+                # Corrige la rotación EXIF de fotos móviles (iPhone/iPad)
+                contenido = _normalizar_imagen_exif(contenido)
                 tipo_recurso = "image"
                 carpeta = "orion_evidencias"
                 public_id_manual = None
@@ -138,7 +185,7 @@ def subir_archivo_generico(archivo):
                 use_unique = False
 
             respuesta = cloudinary.uploader.upload(
-                archivo.getvalue(),
+                contenido,
                 folder=carpeta,
                 resource_type=tipo_recurso,
                 public_id=public_id_manual,

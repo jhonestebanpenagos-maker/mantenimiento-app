@@ -1530,7 +1530,7 @@ password = "xxxx xxxx xxxx xxxx"
                             import streamlit.components.v1 as components
                             html_seguro = re.sub(r'<script[^>]*>.*?</script>', '', correo.get('html_raw', ''), flags=re.DOTALL | re.IGNORECASE)
                             html_seguro = re.sub(r'<iframe[^>]*>.*?</iframe>', '', html_seguro, flags=re.DOTALL | re.IGNORECASE)
-                            components.html(f'<div style="background:#fff;color:#1f2937;padding:16px;border-radius:8px;font-family:Arial,sans-serif;font-size:14px;line-height:1.6;overflow:auto;">{html_seguro}</div>', height=500, scrolling=True)
+                            components.html(f'<div style="background:#fff;color:#1f2937;padding:16px;border-radius:8px;font-family:Arial,sans-serif;font-size:14px;line-height:1.6;overflow:auto;-webkit-overflow-scrolling:touch;overflow-wrap:break-word;word-break:break-word;"><style>img,table{{max-width:100%!important;height:auto;}}</style>{html_seguro}</div>', height=500, scrolling=True)
                         with tab_texto:
                             if correo.get('cuerpo'):
                                 st.text_area("Contenido", value=correo['cuerpo'][:3000], height=200, disabled=True, key=f"correo_body_{idx}", label_visibility="collapsed")

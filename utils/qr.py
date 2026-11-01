@@ -54,8 +54,18 @@ def regenerar_todos_los_qrs():
 
 def leer_qr_imagen(uploaded_image):
     try:
-        file_bytes = np.asarray(bytearray(uploaded_image.read()), dtype=np.uint8)
-        img = cv2.imdecode(file_bytes, 1)
+        raw = uploaded_image.read()
+        # Corregir rotación EXIF antes de decodificar (fotos tomadas con iPhone/iPad)
+        try:
+            import io as _io
+            from PIL import Image, ImageOps
+            pil_img = Image.open(_io.BytesIO(raw))
+            pil_img = ImageOps.exif_transpose(pil_img) or pil_img
+            img = cv2.cvtColor(np.array(pil_img.convert("RGB")), cv2.COLOR_RGB2BGR)
+        except Exception:
+            # Fallback: decodificación directa (comportamiento original)
+            file_bytes = np.asarray(bytearray(raw), dtype=np.uint8)
+            img = cv2.imdecode(file_bytes, 1)
         detector = cv2.QRCodeDetector()
         data, bbox, _ = detector.detectAndDecode(img)
         if data:

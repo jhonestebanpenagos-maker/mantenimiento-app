@@ -383,3 +383,53 @@ div[data-testid="stVerticalBlock"] > div:empty {
 [data-testid="stSidebarNav"] {
     padding-top: 10px !important;
 }
+
+/* =========================================
+   6. COMPATIBILIDAD SAFARI / iOS (WebKit)
+   ========================================= */
+
+/* 6.1 — Evitar el auto-zoom de iOS al enfocar campos (< 16px lo dispara y rompe el layout) */
+@media (max-width: 768px) {
+    input, textarea, select,
+    .stTextInput input, .stTextArea textarea,
+    [data-baseweb="input"] input, [data-baseweb="select"] input {
+        font-size: 16px !important;
+    }
+}
+
+/* 6.2 — Scroll táctil suave (momentum) en contenedores con overflow */
+div[style*="overflow"], [data-testid="stTable"], .stDataFrame {
+    -webkit-overflow-scrolling: touch;
+}
+
+/* 6.3 — Sin destello azul de tap ni retardo de doble tap en iOS */
+button, a, [role="button"] {
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
+}
+
+/* 6.4 — En táctiles, las transformaciones de :hover quedan "pegadas" al tocar.
+          Solo se neutraliza el transform (Chrome/escritorio intactos). */
+@media (hover: none) {
+    div.stButton > button:first-child:hover,
+    section[data-testid="stMain"] button[kind="secondary"]:hover,
+    div[data-testid="stHorizontalBlock"] div[data-testid="stVerticalBlock"] div.stButton > button:hover,
+    [data-testid="stDownloadButton"] button:hover {
+        transform: none !important;
+    }
+}
+
+/* 6.5 — Área segura (notch / Dynamic Island) sin alterar el resto de pantallas */
+@media (max-width: 768px) {
+    .block-container {
+        padding-left: max(0.5rem, env(safe-area-inset-left)) !important;
+        padding-right: max(0.5rem, env(safe-area-inset-right)) !important;
+        padding-bottom: max(1rem, env(safe-area-inset-bottom)) !important;
+    }
+}
+
+/* 6.6 — Evitar scroll horizontal por palabras/URLs largas en iOS */
+[data-testid="stMarkdownContainer"], [data-testid="stCaptionContainer"] {
+    overflow-wrap: break-word;
+    word-wrap: break-word;
+}
