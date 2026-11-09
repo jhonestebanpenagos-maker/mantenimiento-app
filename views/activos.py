@@ -45,7 +45,7 @@ def render():
             st.title("✏️ EDITAR ACTIVO")
             _render_edit(df_act, preselect_id=edit_id)
             st.markdown("---")
-            if st.button("⬅️ Cancelar y volver a la lista", use_container_width=True):
+            if st.button("⬅️ Cancelar y volver", use_container_width=True):
                 st.session_state.editar_activo_id = None
                 st.rerun()
             return
@@ -55,17 +55,24 @@ def render():
             st.markdown("---")
 
     if jump == "activo" and jump_id:
+        st.session_state.ficha_activo_id = int(jump_id)
         st.session_state.jump_target = None
         st.session_state.jump_id = None
-        activo_sel = df_act[df_act['id'] == int(jump_id)] if not df_act.empty else pd.DataFrame()
+
+    # ── Ficha del activo (modo estable: persiste ante recargas/interacciones) ──
+    if st.session_state.get('ficha_activo_id') and not st.session_state.get('editar_activo_id'):
+        ficha_id = int(st.session_state.ficha_activo_id)
+        activo_sel = df_act[df_act['id'] == ficha_id] if not df_act.empty else pd.DataFrame()
         if not activo_sel.empty:
             _render_ficha_activo(activo_sel.iloc[0])
             st.markdown("---")
             if st.button("📋 Ver lista completa de activos", use_container_width=True):
+                st.session_state.ficha_activo_id = None
                 st.rerun()
             return
         else:
-            st.error(f"Activo #{jump_id} no encontrado.")
+            st.session_state.ficha_activo_id = None
+            st.error(f"Activo #{ficha_id} no encontrado.")
             st.markdown("---")
 
     # ── Búsqueda rápida integrada ──

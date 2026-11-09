@@ -222,6 +222,9 @@ with st.sidebar:
             st.session_state.current_page = valor
             st.session_state.jump_target = None
             st.session_state.jump_id = None
+            # Limpiar modos pegajosos de la vista de activos (ficha/edición)
+            st.session_state.ficha_activo_id = None
+            st.session_state.editar_activo_id = None
             st.rerun()
 
     # ── Indicador de ubicación ──
@@ -255,6 +258,7 @@ with st.sidebar:
 # ==============================================================================
 JUMP_MAP = {
     "activo": "Inventario Activos",
+    "activo_editar": "Inventario Activos",
     "orden": "Ordenes de Trabajo",
     "ordenes_por_activo": "Ordenes de Trabajo",
     "crear_para_activo": "Ordenes de Trabajo",
