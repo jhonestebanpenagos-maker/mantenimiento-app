@@ -11,7 +11,7 @@ AREAS_DATA = {
         "Agua Cristal", "B&B", "Calderas", "Cuarto de Lubricación", "Equipos Auxiliares",
         "Laboratorio Fisico Quimico", "Laboratorio Microbiológico", "Linea 1", "Linea 2",
         "Linea 3", "Linea 10", "Linea 8 Jugos", "Oficinas Técnicas", "Pasillo Técnico",
-        "Ptap", "Ptar", "Sala de Jarabe Simple", "Sala de Jarabe Terminado",
+        "Ptap", "Ptar", "Sala de CIP", "Sala de Jarabe Simple", "Sala de Jarabe Terminado",
         "Sala de Jarabes Jugos", "Sub Estación Eléctrica", "Taller de Mantenimiento"
     ],
     "Administración": ["Administración", "Auditorio", "Casino", "Portería Vehicular", "Servicios Generales"],
