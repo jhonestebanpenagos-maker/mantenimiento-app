@@ -32,6 +32,28 @@ def render():
     jump = st.session_state.get('jump_target')
     jump_id = st.session_state.get('jump_id')
 
+    # ── Modo edición directa (botón "Editar" de la ficha del activo) ──
+    if jump == "activo_editar" and jump_id:
+        st.session_state.editar_activo_id = int(jump_id)
+        st.session_state.jump_target = None
+        st.session_state.jump_id = None
+
+    if st.session_state.get('editar_activo_id'):
+        edit_id = int(st.session_state.editar_activo_id)
+        activo_edit = df_act[df_act['id'] == edit_id] if not df_act.empty else pd.DataFrame()
+        if not activo_edit.empty:
+            st.title("✏️ EDITAR ACTIVO")
+            _render_edit(df_act, preselect_id=edit_id)
+            st.markdown("---")
+            if st.button("⬅️ Cancelar y volver a la lista", use_container_width=True):
+                st.session_state.editar_activo_id = None
+                st.rerun()
+            return
+        else:
+            st.session_state.editar_activo_id = None
+            st.error(f"Activo #{edit_id} no encontrado.")
+            st.markdown("---")
+
     if jump == "activo" and jump_id:
         st.session_state.jump_target = None
         st.session_state.jump_id = None
@@ -348,7 +370,7 @@ def _render_ficha_activo(activo):
 
     st.markdown("---")
     if st.button("✏️ Editar información del activo", use_container_width=True):
-        navegar_a("Inventario Activos")
+        navegar_a("Inventario Activos", jump_target="activo_editar", jump_id=int(activo['id']))
 
 # ==============================================================================
 # ➕ NUEVO ACTIVO
@@ -507,11 +529,14 @@ def _render_activo_creado():
 # ==============================================================================
 # ✏️ EDITAR / QR (ZONA DE PELIGRO NATIVA)
 # ==============================================================================
-def _render_edit(df_act):
+def _render_edit(df_act, preselect_id=None):
     if not df_act.empty:
-        all_assets = df_act['nombre'].values
-        sel_asset = st.selectbox("🔍 Buscar Equipo para Modificar", all_assets)
-        dat = df_act[df_act['nombre'] == sel_asset].iloc[0]
+        if preselect_id is not None:
+            dat = df_act[df_act['id'] == int(preselect_id)].iloc[0]
+        else:
+            all_assets = df_act['nombre'].values
+            sel_asset = st.selectbox("🔍 Buscar Equipo para Modificar", all_assets)
+            dat = df_act[df_act['nombre'] == sel_asset].iloc[0]
         id_suffix = dat['id']
 
         st.markdown("---")
@@ -577,9 +602,9 @@ def _guardar_edicion_activo(dat, edit_nom, edit_area, edit_sub, edit_det, edit_c
                 "nombre": edit_nom, "area": edit_area, "ubicacion": final_edit_ubic,
                 "categoria": edit_cat, "foto_url": final_edit_url, "detalles": final_specs_json
             }, "id", dat['id'])
-            st.toast(f"✅ Activo '{edit_nom}' actualizado correctamente")
-            time.sleep(0.5)
-            st.rerun()
+            st.session_state.editar_activo_id = None
+            agregar_notificacion("success", f"✅ Activo '{edit_nom}' actualizado correctamente")
+            navegar_a("Inventario Activos", jump_target="activo", jump_id=int(dat['id']))
     except Exception as e:
         error_amigable(e, "actualizar activo")
 
