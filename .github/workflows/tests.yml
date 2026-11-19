@@ -21,6 +21,8 @@ jobs:
 
       - name: Instalar dependencias de test
         run: pip install -r requirements-dev.txt
-
+      - name: Verificar sintaxis Python
+        run: python -m compileall -q app.py auth.py config.py bot_telegram.py resumen_semanal.py pdf_utils.py views utils
+        
       - name: Correr tests
         run: pytest tests/ -q
