@@ -87,10 +87,10 @@ if "id_activo_qr" in query_params:
     activo = cargar_activo_qr(id_qr)
 
     if activo:
-       nombre = html.escape(str(activo.get("nombre", "Sin nombre")))
-       area = html.escape(str(activo.get("area", "N/A")))
-       ubicacion = html.escape(str(activo.get("ubicacion", "N/A")))
-       categoria = html.escape(str(activo.get("categoria", "N/A")))
+        nombre = html.escape(str(activo.get("nombre", "Sin nombre")))
+        area = html.escape(str(activo.get("area", "N/A")))
+        ubicacion = html.escape(str(activo.get("ubicacion", "N/A")))
+        categoria = html.escape(str(activo.get("categoria", "N/A")))
         st.markdown(f"<h1 style='text-align: center;'>ORIÓN: {nombre}</h1>", unsafe_allow_html=True)
         st.markdown(f"""
             <div class="card-style">
