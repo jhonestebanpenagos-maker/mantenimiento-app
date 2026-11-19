@@ -3,10 +3,70 @@
 # ==============================================================================
 import streamlit as st
 import pandas as pd
+import os
 import time
 import plotly.express as px
 import plotly.graph_objects as go
 from datetime import datetime
+
+
+# ==============================================================================
+# 🕐 ZONA HORARIA DE LA OPERACIÓN
+# ==============================================================================
+MESES_ES = ["ene", "feb", "mar", "abr", "may", "jun",
+            "jul", "ago", "sep", "oct", "nov", "dic"]
+
+
+def ahora_local():
+    """Momento actual en la zona horaria de la operación (naive, comparable con
+    las fechas que se guardan en la base de datos).
+
+    El servidor corre en UTC: usar datetime.now() puro desplaza los cortes de
+    semana y los contadores de días ~5 horas respecto a la planta.
+    La zona se configura con la variable de entorno APP_TZ.
+    """
+    from zoneinfo import ZoneInfo
+    tz_name = os.environ.get("APP_TZ", "America/Bogota")
+    try:
+        return datetime.now(ZoneInfo(tz_name)).replace(tzinfo=None)
+    except Exception:
+        return datetime.now()
+
+
+def _etiqueta_semana(lunes):
+    """Etiqueta corta en español para una semana (identificada por su lunes)."""
+    return f"{lunes.day} {MESES_ES[lunes.month - 1]}"
+
+
+def ultima_actividad_dashboard(df):
+    """Fecha del dato más reciente del tablero (creación o cierre de OT).
+
+    Sirve para que el tablero muestre 'Datos al …' y avise si quedó
+    desactualizado en lugar de aparentar silenciosamente que 'no pasa nada'.
+    """
+    fechas = []
+    for col in ('fecha_creacion', 'fecha_cierre'):
+        if col in df.columns:
+            s = pd.to_datetime(df[col], errors='coerce')
+            try:
+                if getattr(s.dt, 'tz', None) is not None:
+                    s = s.dt.tz_localize(None)
+            except Exception:
+                pass
+            if s.notna().any():
+                fechas.append(s.max())
+    return max(fechas) if fechas else None
+
+
+def _sin_zona(serie):
+    """Convierte a datetime naive (quita zona horaria si la hubiera)."""
+    s = pd.to_datetime(serie, errors='coerce')
+    try:
+        if getattr(s.dt, 'tz', None) is not None:
+            s = s.dt.tz_localize(None)
+    except Exception:
+        pass
+    return s
 
 
 def _df_to_records(df):
@@ -56,7 +116,7 @@ def _calcular_kpis(ordenes_hash, df_ordenes_data, df_act_data, df_planes_data):
     df_act = pd.DataFrame(df_act_data)
     if df_ordenes.empty:
         return None
-    now = datetime.now()
+    now = ahora_local()
     map_act = dict(zip(df_act['id'], df_act['nombre'])) if not df_act.empty else {}
     total = len(df_ordenes)
     df_k = df_ordenes[df_ordenes['estado'] == 'Concluida'].copy()
@@ -133,7 +193,7 @@ def _calcular_tops(ordenes_hash, df_ordenes_data):
     df = pd.DataFrame(df_ordenes_data)
     if df.empty:
         return [], []
-    now = datetime.now()
+    now = ahora_local()
     df['fecha_dt'] = pd.to_datetime(df['fecha_creacion'])
     df_abiertas = df[df['estado'] != 'Concluida'].copy()
     if df_abiertas.empty:
@@ -154,37 +214,41 @@ def _calcular_tops(ordenes_hash, df_ordenes_data):
 
 @st.cache_data(ttl=300, show_spinner=False)
 def _calcular_tendencia_semanal(ordenes_hash, df_ordenes_data):
-    """Calcula OTs creadas vs cerradas por semana (ultimas 12 semanas)."""
+    """Calcula OTs creadas vs cerradas por semana (ultimas 12 semanas).
+
+    Usa el lunes de cada semana ISO como clave y RELLENA las semanas sin
+    actividad con ceros para que el eje nunca se corte ni parezca congelado.
+    La semana en curso se marca como parcial ('en_curso').
+    """
     df = pd.DataFrame(df_ordenes_data)
     if df.empty:
         return pd.DataFrame()
 
-    now = datetime.now()
+    now = ahora_local()
     inicio = now - pd.Timedelta(weeks=12)
 
-    df['fecha_creacion'] = pd.to_datetime(df['fecha_creacion'], errors='coerce')
-    df['fecha_cierre'] = pd.to_datetime(df['fecha_cierre'], errors='coerce')
+    df['fecha_creacion'] = _sin_zona(df['fecha_creacion'])
+    df['fecha_cierre'] = _sin_zona(df['fecha_cierre'])
 
     df_creadas = df[df['fecha_creacion'] >= inicio].copy()
-    df_creadas['semana'] = df_creadas['fecha_creacion'].dt.isocalendar().week.astype(int)
-    df_creadas['anio'] = df_creadas['fecha_creacion'].dt.isocalendar().year.astype(int)
-    creadas = df_creadas.groupby(['anio', 'semana']).size().reset_index(name='Creadas')
+    df_creadas['lunes'] = df_creadas['fecha_creacion'].dt.to_period('W').dt.start_time
+    creadas = df_creadas.groupby('lunes').size().reset_index(name='Creadas')
 
     df_cerradas = df[df['fecha_cierre'].notna() & (df['fecha_cierre'] >= inicio)].copy()
-    df_cerradas['semana'] = df_cerradas['fecha_cierre'].dt.isocalendar().week.astype(int)
-    df_cerradas['anio'] = df_cerradas['fecha_cierre'].dt.isocalendar().year.astype(int)
-    cerradas = df_cerradas.groupby(['anio', 'semana']).size().reset_index(name='Cerradas')
+    df_cerradas['lunes'] = df_cerradas['fecha_cierre'].dt.to_period('W').dt.start_time
+    cerradas = df_cerradas.groupby('lunes').size().reset_index(name='Cerradas')
 
-    semanas = pd.concat([creadas[['anio', 'semana']], cerradas[['anio', 'semana']]]).drop_duplicates()
-    semanas = semanas.sort_values(['anio', 'semana']).reset_index(drop=True)
-    semanas = semanas.merge(creadas, on=['anio', 'semana'], how='left')
-    semanas = semanas.merge(cerradas, on=['anio', 'semana'], how='left')
+    # Eje completo de semanas ISO (incluye semanas sin actividad → 0)
+    lunes_actual = pd.Timestamp(now).to_period('W').start_time
+    lunes_inicio = pd.Timestamp(inicio).to_period('W').start_time
+    eje = pd.DataFrame({'lunes': pd.date_range(lunes_inicio, lunes_actual, freq='7D')})
+
+    semanas = eje.merge(creadas, on='lunes', how='left').merge(cerradas, on='lunes', how='left')
     semanas['Creadas'] = semanas['Creadas'].fillna(0).astype(int)
     semanas['Cerradas'] = semanas['Cerradas'].fillna(0).astype(int)
-
-    semanas['Semana'] = semanas.apply(
-        lambda r: pd.Timestamp.fromisocalendar(int(r['anio']), int(r['semana']), 1).strftime('%d %b'),
-        axis=1
+    semanas['en_curso'] = semanas['lunes'] == lunes_actual
+    semanas['Semana'] = semanas['lunes'].apply(
+        lambda d: _etiqueta_semana(d) + ('*' if d == lunes_actual else '')
     )
     semanas['Backlog'] = (semanas['Creadas'] - semanas['Cerradas']).cumsum()
 
@@ -315,7 +379,7 @@ def graficar_tendencia_semanal(df_ordenes):
         return
 
     st.markdown("### 📈 Tendencia Semanal de OTs")
-    st.caption("Creadas vs Cerradas por semana — ¿estamos cerrando mas de lo que entra?")
+    st.caption("Creadas vs Cerradas por semana (lunes a domingo) — ¿estamos cerrando mas de lo que entra? * = semana en curso (parcial).")
 
     fig = go.Figure()
 
@@ -355,12 +419,27 @@ def graficar_tendencia_semanal(df_ordenes):
 
     st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
 
-    ultima = semanas.iloc[-1]
-    balance = int(ultima['Creadas'] - ultima['Cerradas'])
-    if balance <= 0:
-        st.success("✅ Ultima semana: {} cerradas vs {} creadas — vas bien.".format(ultima['Cerradas'], ultima['Creadas']))
-    else:
-        st.warning("⚠️ Ultima semana: {} creadas vs {} cerradas — +{} acumuladas.".format(ultima['Creadas'], ultima['Cerradas'], balance))
+    # Veredicto sobre la última semana COMPLETA (comparar la semana en curso
+    # a media semana hacía parecer que 'no avanza' cuando solo está incompleta).
+    completas = semanas[~semanas['en_curso']]
+    actual = semanas[semanas['en_curso']]
+    if not completas.empty:
+        ultima = completas.iloc[-1]
+        balance = int(ultima['Creadas'] - ultima['Cerradas'])
+        if balance <= 0:
+            st.success(
+                "✅ Semana del {}: {} cerradas vs {} creadas — vas bien.".format(
+                    ultima['Semana'], int(ultima['Cerradas']), int(ultima['Creadas'])))
+        else:
+            st.warning(
+                "⚠️ Semana del {}: {} creadas vs {} cerradas — +{} acumuladas.".format(
+                    ultima['Semana'], int(ultima['Creadas']), int(ultima['Cerradas']), balance))
+    if not actual.empty:
+        act = actual.iloc[-1]
+        dias = (ahora_local().date() - act['lunes'].date()).days + 1
+        st.caption(
+            "🕐 Semana en curso (desde el {}, día {} de 7): {} creadas vs {} cerradas — dato parcial.".format(
+                act['lunes'].strftime('%d/%m'), dias, int(act['Creadas']), int(act['Cerradas'])))
 
 
 def mostrar_tops_ordenes(df_ordenes):

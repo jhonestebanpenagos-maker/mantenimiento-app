@@ -40,24 +40,43 @@ def _query_catalogo(table_name):
 
 # 2. Caché rápido para Órdenes y Bitácoras (Se limpia constantemente)
 @st.cache_data(ttl=60, show_spinner=False)
-def _query_dinamico(table_name, filters_tuple, order_by, limit):
+def _query_dinamico(table_name, filters_tuple, order_by, limit, desc=False):
     try:
         query = supabase.table(table_name).select("*")
         if filters_tuple:
             for key, value in filters_tuple:
                 if value is not None:
                     query = query.eq(key, value)
-        query = query.order(order_by)
+        query = query.order(order_by, desc=desc)
         if limit:
             query = query.limit(limit)
         res = query.execute()
-        return res.data if res.data else []
+        data = res.data if res.data else []
+        # ⚠️ Si se alcanzó el límite, la tabla es más grande que lo pedido:
+        # registramos el recorte para que no pase desapercibido en tableros.
+        if limit and len(data) >= limit:
+            logger.warning(
+                f"Tabla '{table_name}' recortada a {limit} filas "
+                f"(orden: {order_by} {'desc' if desc else 'asc'}). "
+                f"Podrían faltar registros en el tablero."
+            )
+        # Devolvemos siempre en orden ascendente natural (desc se usa solo
+        # para QUEDARSE con los registros más recientes, no para invertir la vista).
+        if desc:
+            data = list(reversed(data))
+        return data
     except Exception as e:
         logger.error(f"Error en dinámico '{table_name}': {e}")
         return []
 
-def run_query(table_name, filters=None, order_by="id", limit=5000):
-    """Lee datos. Decide automáticamente si usar caché estático o dinámico."""
+def run_query(table_name, filters=None, order_by="id", limit=5000, desc=False):
+    """Lee datos. Decide automáticamente si usar caché estático o dinámico.
+
+    Con ``desc=True`` se conservan los ``limit`` registros MÁS recientes
+    (últimos id/fecha) en lugar de los más antiguos. Sin esto, una tabla con
+    más de ``limit`` filas "congelaba" el tablero en la fecha de la fila
+    #limit y ocultaba silenciosamente todo lo nuevo.
+    """
     CATALOGOS = ["usuarios", "activos", "repuestos", "planes_mantenimiento"]
     
     # Si es un catálogo (y no tiene filtros raros), usa el caché de 1 hora
@@ -73,7 +92,7 @@ def run_query(table_name, filters=None, order_by="id", limit=5000):
         
     # Si es operativo (ordenes, bitácora) o tiene filtros, usar caché dinámico
     filters_tuple = tuple(filters.items()) if filters else None
-    return pd.DataFrame(_query_dinamico(table_name, filters_tuple, order_by, limit))
+    return pd.DataFrame(_query_dinamico(table_name, filters_tuple, order_by, limit, desc))
 
 # =============================================================================
 # 🔍 CONSULTA CON FILTRADO SERVIDOR (OPTIMIZACIÓN)

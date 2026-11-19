@@ -12,7 +12,7 @@ from utils.charts import (
     mostrar_metricas_inteligentes, graficar_tendencia_semanal,
     mostrar_tops_ordenes, mostrar_kpis_industriales, graficar_estado_barras,
     graficar_criticidad, graficar_torta_tipo, graficar_ordenes_por_tecnico,
-    semaforo_tecnicos
+    semaforo_tecnicos, ultima_actividad_dashboard, ahora_local
 )
 from utils.excel_gen import generar_excel_historial
 
@@ -38,8 +38,17 @@ def _cargar_datos_dashboard():
     que sumaban varios segundos en el primer render del tablero)."""
     from concurrent.futures import ThreadPoolExecutor
     tablas = ["ordenes", "usuarios", "solicitudes", "activos", "planes_mantenimiento"]
+
+    def _cargar(nombre):
+        # Órdenes: si la tabla supera el límite de filas, quedarse con los
+        # registros MÁS RECIENTES. Antes se conservaban los más antiguos y el
+        # tablero se congelaba en la fecha de la fila #límite.
+        if nombre == "ordenes":
+            return run_query(nombre, desc=True)
+        return run_query(nombre)
+
     with ThreadPoolExecutor(max_workers=len(tablas)) as pool:
-        resultados = list(pool.map(run_query, tablas))
+        resultados = list(pool.map(_cargar, tablas))
     df_ordenes, df_users, df_solicitudes, df_activos, df_planes = resultados
     return df_ordenes, df_users, df_solicitudes, df_activos, df_planes
 
@@ -72,6 +81,21 @@ def render():
     # ── Carga de datos ──
     with st.spinner("Cargando tablero..."):
         df, df_users, df_solicitudes, df_act_sla, df_planes = _cargar_datos_dashboard()
+
+    # ── Frescura de los datos: sin esto, un tablero 'congelado' parece real ──
+    if not df.empty:
+        ultima = ultima_actividad_dashboard(df)
+        if ultima is not None:
+            horas = (ahora_local() - ultima).total_seconds() / 3600
+            st.caption("🕒 Datos al: " + ultima.strftime('%d/%m/%Y %H:%M'))
+            if horas > 48:
+                st.warning(
+                    "⚠️ La actividad más reciente en OT tiene " + str(int(horas // 24))
+                    + " días. Si esperabas movimientos más recientes, revisa que la "
+                    + "captura de órdenes (buzón/interceptor) siga activa."
+                )
+        if len(df) >= 5000:
+            st.caption("ℹ️ El tablero muestra las 5.000 OT más recientes (límite de consulta).")
 
     # ── SLA ──
     verificar_sla_y_alertar(df, df_users, df_act_sla)
