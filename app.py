@@ -6,6 +6,7 @@
 import streamlit as st
 import pandas as pd
 import time
+import html
 from datetime import datetime, timedelta
 
 # ==============================================================================
@@ -86,13 +87,17 @@ if "id_activo_qr" in query_params:
     activo = cargar_activo_qr(id_qr)
 
     if activo:
-        st.markdown(f"<h1 style='text-align: center;'>ORIÓN: {activo['nombre']}</h1>", unsafe_allow_html=True)
+       nombre = html.escape(str(activo.get("nombre", "Sin nombre")))
+       area = html.escape(str(activo.get("area", "N/A")))
+       ubicacion = html.escape(str(activo.get("ubicacion", "N/A")))
+       categoria = html.escape(str(activo.get("categoria", "N/A")))
+        st.markdown(f"<h1 style='text-align: center;'>ORIÓN: {nombre}</h1>", unsafe_allow_html=True)
         st.markdown(f"""
             <div class="card-style">
                 <span class="chart-header">Ficha Técnica</span>
-                <p><strong>📍 Área:</strong> {activo.get('area', 'N/A')}</p>
-                <p><strong>🏢 Ubicación:</strong> {activo['ubicacion']}</p>
-                <p><strong>🔧 Categoría:</strong> {activo.get('categoria', 'N/A')}</p>
+                <p><strong>📍 Área:</strong> {area}</p>
+                <p><strong>🏢 Ubicación:</strong> {ubicacion}</p>
+                <p><strong>🔧 Categor\u00eda:</strong> {categoria}</p>
             </div>
         """, unsafe_allow_html=True)
 
