@@ -91,7 +91,7 @@ if "id_activo_qr" in query_params:
        area = html.escape(str(activo.get("area", "N/A")))
        ubicacion = html.escape(str(activo.get("ubicacion", "N/A")))
        categoria = html.escape(str(activo.get("categoria", "N/A")))
-          st.markdown(f"<h1 style='text-align: center;'>ORIÓN: {nombre}</h1>", unsafe_allow_html=True)
+        st.markdown(f"<h1 style='text-align: center;'>ORIÓN: {nombre}</h1>", unsafe_allow_html=True)
         st.markdown(f"""
             <div class="card-style">
                 <span class="chart-header">Ficha Técnica</span>
